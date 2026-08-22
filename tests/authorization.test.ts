@@ -54,6 +54,82 @@ describe("granular authorization", () => {
     expect((await app.request("/users", { method: "PATCH" })).status).toBe(200);
   });
 
+  it("stores table preferences only under the authenticated user", async () => {
+    const executions: Array<{
+      sql: string;
+      params: unknown[] | undefined;
+    }> = [];
+    const database = {
+      provider: "d1",
+      orm: {},
+      query: async () => [],
+      first: async (_sql: string, params?: unknown[]) => {
+        expect(params).toEqual(["usr_actor", "core.users"]);
+        return {
+          configJson: JSON.stringify({
+            version: 1,
+            columnOrder: ["name"],
+            columnVisibility: { name: true },
+            columnSizing: { name: 240 },
+            sorting: [],
+          }),
+          schemaVersion: 1,
+          updatedAt: 123,
+        };
+      },
+      execute: async (sql: string, params?: unknown[]) => {
+        executions.push({ sql, params });
+        return { rowsAffected: 1 };
+      },
+      atomic: async () => [],
+      close: async () => undefined,
+    } as DatabasePort;
+    const app = new Hono<HonoEnv>();
+    app.use("*", async (context, next) => {
+      context.set("db", database);
+      context.set("principal", {
+        userId: "usr_actor",
+        authMethod: "cookie",
+      });
+      await next();
+    });
+    app.route("/", managementRoutes);
+
+    const getResponse = await app.request("/me/table-preferences/core.users");
+    expect(getResponse.status).toBe(200);
+    expect(await getResponse.json()).toMatchObject({
+      tableId: "core.users",
+      config: { columnOrder: ["name"] },
+    });
+
+    const config = {
+      version: 1,
+      columnOrder: ["email", "name"],
+      columnVisibility: { email: true, name: false },
+      columnSizing: { email: 320, name: 240 },
+      sorting: [{ id: "email", desc: false }],
+    };
+    const putResponse = await app.request("/me/table-preferences/core.users", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(config),
+    });
+    expect(putResponse.status).toBe(200);
+    expect(executions[0]?.params?.slice(0, 4)).toEqual([
+      "usr_actor",
+      "core.users",
+      1,
+      JSON.stringify(config),
+    ]);
+
+    const deleteResponse = await app.request(
+      "/me/table-preferences/core.users",
+      { method: "DELETE" },
+    );
+    expect(deleteResponse.status).toBe(204);
+    expect(executions[1]?.params).toEqual(["usr_actor", "core.users"]);
+  });
+
   it("updates all editable user fields and hashes the password atomically", async () => {
     const atomicBatches: SqlStatement[][] = [];
     const database = {

@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { DataTable } from "../../components/ui/data-table.js";
+import { ConfigurableDataTable } from "../../components/ui/configurable-data-table.js";
 import { Modal } from "../../components/ui/modal.js";
 import { PermissionChecklist } from "../../components/permissions/PermissionChecklist.js";
 import {
@@ -124,14 +124,18 @@ export default function GroupsPage() {
       {groups.isPending ? (
         <Skeleton className="h-72" />
       ) : (
-        <DataTable
+        <ConfigurableDataTable
+          tableId="core.groups"
           rows={rows}
           onOpen={setSelected}
           columns={[
             {
               key: "name",
               label: t("common.name"),
-              className: "w-1/3",
+              size: 260,
+              minSize: 140,
+              maxSize: 600,
+              sortValue: (row) => groupName(row),
               render: (row) => (
                 <span className="font-medium">{groupName(row)}</span>
               ),
@@ -139,12 +143,19 @@ export default function GroupsPage() {
             {
               key: "members",
               label: t("groups.members"),
-              className: "w-28",
+              size: 140,
+              minSize: 96,
+              maxSize: 240,
+              sortValue: (row) => row.memberCount,
               render: (row) => row.memberCount,
             },
             {
               key: "permissions",
               label: t("groups.permissions"),
+              size: 220,
+              minSize: 140,
+              maxSize: 360,
+              sortValue: (row) => row.permissionKeys.length,
               render: (row) =>
                 t("groups.permissionCount", {
                   count: row.permissionKeys.length,
@@ -153,7 +164,10 @@ export default function GroupsPage() {
             {
               key: "type",
               label: t("groups.type"),
-              className: "w-36",
+              size: 160,
+              minSize: 110,
+              maxSize: 240,
+              sortValue: (row) => (Boolean(row.isAdmin) ? 0 : 1),
               render: (row) => (
                 <Badge tone={Boolean(row.isAdmin) ? "warning" : "neutral"}>
                   {t(

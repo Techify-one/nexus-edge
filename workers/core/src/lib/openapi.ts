@@ -47,6 +47,23 @@ export const OPENAPI_DOCUMENT = {
               "Optional new password. Omit it to keep the current password.",
           },
           active: { type: "boolean" },
+          status: {
+            type: "string",
+            enum: ["active", "inactive", "pending"],
+          },
+          phone: { type: "string", maxLength: 40 },
+          telegramId: { type: "string", maxLength: 64 },
+          jobTitle: { type: "string", maxLength: 120 },
+          birthDate: { type: "string", format: "date" },
+          cpf: { type: "string", pattern: "^[0-9]{11}$" },
+          tags: { type: "array", maxItems: 50, items: { type: "string" } },
+          sectors: {
+            type: "array",
+            maxItems: 50,
+            items: { type: "string" },
+          },
+          notes: { type: "string", maxLength: 5000 },
+          schedule: { $ref: "#/components/schemas/WeekSchedule" },
           groupIds: {
             type: "array",
             maxItems: 50,
@@ -62,11 +79,92 @@ export const OPENAPI_DOCUMENT = {
           email: { type: "string", format: "email" },
           password: { type: "string", minLength: 8, maxLength: 200 },
           active: { type: "boolean", default: true },
+          status: {
+            type: "string",
+            enum: ["active", "inactive", "pending"],
+          },
+          phone: { type: "string", maxLength: 40 },
+          telegramId: { type: "string", maxLength: 64 },
+          jobTitle: { type: "string", maxLength: 120 },
+          birthDate: { type: "string", format: "date" },
+          cpf: { type: "string", pattern: "^[0-9]{11}$" },
+          tags: { type: "array", maxItems: 50, items: { type: "string" } },
+          sectors: {
+            type: "array",
+            maxItems: 50,
+            items: { type: "string" },
+          },
+          notes: { type: "string", maxLength: 5000 },
+          schedule: { $ref: "#/components/schemas/WeekSchedule" },
           groupIds: {
             type: "array",
             maxItems: 50,
             items: { type: "string" },
             default: [],
+          },
+        },
+      },
+      WeekSchedule: {
+        type: "object",
+        required: ["dailyHours", "entryTimes"],
+        properties: {
+          dailyHours: {
+            type: "array",
+            minItems: 7,
+            maxItems: 7,
+            items: {
+              type: "string",
+              pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+            },
+          },
+          entryTimes: {
+            type: "array",
+            minItems: 7,
+            maxItems: 7,
+            items: { type: "string" },
+          },
+        },
+      },
+      TablePreferenceConfig: {
+        type: "object",
+        additionalProperties: false,
+        required: [
+          "version",
+          "columnOrder",
+          "columnVisibility",
+          "columnSizing",
+          "sorting",
+        ],
+        properties: {
+          version: { type: "integer", const: 1 },
+          columnOrder: {
+            type: "array",
+            maxItems: 64,
+            items: { type: "string" },
+          },
+          columnVisibility: {
+            type: "object",
+            additionalProperties: { type: "boolean" },
+          },
+          columnSizing: {
+            type: "object",
+            additionalProperties: {
+              type: "integer",
+              minimum: 48,
+              maximum: 2000,
+            },
+          },
+          sorting: {
+            type: "array",
+            maxItems: 8,
+            items: {
+              type: "object",
+              required: ["id", "desc"],
+              properties: {
+                id: { type: "string" },
+                desc: { type: "boolean" },
+              },
+            },
           },
         },
       },
@@ -113,6 +211,28 @@ export const OPENAPI_DOCUMENT = {
         },
       },
     },
+    "/api/v1/me/table-preferences/{tableId}": {
+      get: {
+        parameters: [{ name: "tableId", in: "path", required: true }],
+        responses: { "200": { description: "Personal table preference" } },
+      },
+      put: {
+        parameters: [{ name: "tableId", in: "path", required: true }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/TablePreferenceConfig" },
+            },
+          },
+        },
+        responses: { "200": { description: "Preference saved" } },
+      },
+      delete: {
+        parameters: [{ name: "tableId", in: "path", required: true }],
+        responses: { "204": { description: "Preference reset" } },
+      },
+    },
     "/api/v1/me/api-keys": {
       get: { responses: { "200": { description: "Personal keys" } } },
       post: {
@@ -133,6 +253,15 @@ export const OPENAPI_DOCUMENT = {
           },
         },
         responses: { "201": { description: "User created" } },
+      },
+    },
+    "/api/v1/users/profile-options": {
+      get: {
+        responses: {
+          "200": {
+            description: "Reusable user tags and sectors with usage counts",
+          },
+        },
       },
     },
     "/api/v1/users/{userId}": {
@@ -163,6 +292,14 @@ export const OPENAPI_DOCUMENT = {
           { name: "X-Reauth-Token", in: "header", required: true },
         ],
         responses: { "204": { description: "User access removed" } },
+      },
+    },
+    "/api/v1/users/{userId}/schedule-history": {
+      get: {
+        parameters: [{ name: "userId", in: "path", required: true }],
+        responses: {
+          "200": { description: "Effective work schedule history" },
+        },
       },
     },
     "/api/v1/invitations": {

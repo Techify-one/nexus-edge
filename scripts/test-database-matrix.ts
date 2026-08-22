@@ -1,10 +1,17 @@
 import { readdirSync, readFileSync } from "node:fs";
 
-const d1 = readFileSync("workers/core/migrations/d1/0001_init.sql", "utf8");
-const postgres = readFileSync(
-  "workers/core/migrations/postgres/0001_init.sql",
-  "utf8",
-);
+const coreMigrationNames = (dialect: "d1" | "postgres") =>
+  readdirSync(`workers/core/migrations/${dialect}`)
+    .filter((name) => name.endsWith(".sql"))
+    .sort();
+const migrationSql = (dialect: "d1" | "postgres") =>
+  coreMigrationNames(dialect)
+    .map((name) =>
+      readFileSync(`workers/core/migrations/${dialect}/${name}`, "utf8"),
+    )
+    .join("\n");
+const d1 = migrationSql("d1");
+const postgres = migrationSql("postgres");
 const tables = (sql: string) =>
   [...sql.matchAll(/CREATE TABLE IF NOT EXISTS\s+"?([a-zA-Z_]+)"?/gu)]
     .map((match) => match[1])
@@ -15,10 +22,6 @@ if (JSON.stringify(left) !== JSON.stringify(right))
   throw new Error(
     `Schema parity failed. D1=${left.join(",")} PG=${right.join(",")}`,
   );
-const coreMigrationNames = (dialect: "d1" | "postgres") =>
-  readdirSync(`workers/core/migrations/${dialect}`)
-    .filter((name) => name.endsWith(".sql"))
-    .sort();
 const d1Migrations = coreMigrationNames("d1");
 const postgresMigrations = coreMigrationNames("postgres");
 if (JSON.stringify(d1Migrations) !== JSON.stringify(postgresMigrations))

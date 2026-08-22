@@ -21,6 +21,55 @@ export const user = sqliteTable("user", {
   createdAt: instant("created_at").notNull(),
   updatedAt: instant("updated_at").notNull(),
 });
+export const userProfiles = sqliteTable("user_profiles", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  phone: text("phone"),
+  telegramId: text("telegram_id"),
+  jobTitle: text("job_title"),
+  birthDate: text("birth_date"),
+  cpf: text("cpf"),
+  tagsJson: text("tags_json").notNull().default("[]"),
+  sectorsJson: text("sectors_json").notNull().default("[]"),
+  notes: text("notes"),
+  status: text("status").notNull().default("active"),
+  createdAt: instant("created_at").notNull(),
+  updatedAt: instant("updated_at").notNull(),
+});
+export const userWorkSchedules = sqliteTable(
+  "user_work_schedules",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    dailyHoursJson: text("daily_hours_json").notNull(),
+    entryTimesJson: text("entry_times_json").notNull(),
+    effectiveAt: instant("effective_at").notNull(),
+    createdAt: instant("created_at").notNull(),
+  },
+  (t) => [
+    index("user_work_schedules_user_effective_idx").on(
+      t.userId,
+      t.effectiveAt,
+      t.createdAt,
+    ),
+  ],
+);
+export const userTablePreferences = sqliteTable(
+  "user_table_preferences",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    tableId: text("table_id").notNull(),
+    schemaVersion: integer("schema_version").notNull().default(1),
+    configJson: text("config_json").notNull(),
+    updatedAt: instant("updated_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.tableId] })],
+);
 export const session = sqliteTable(
   "session",
   {

@@ -26,7 +26,7 @@
 
 ## CRUD interface
 
-`frontend/src/components/ui/data-table.tsx` is the shared contract. It uses `table-layout: fixed`, compact height, truncation, click/Enter/Space to open, and a separate actions cell. Users, groups, leads, API keys, webhooks, and plugins implement search, Add, edit, and delete/revoke. Action buttons and editable fields follow the user's concrete permission. Auditing is deliberately read-only.
+`frontend/src/components/ui/configurable-data-table.tsx` is the mandatory contract for new and migrated record-list tables. It provides stable per-user column order, visibility, sorting, live independent sizing, reset, and server persistence, plus compact rows and click/Enter/Space opening. The icon-only column menu lives in the fixed `Ações` header. See `docs/DATA-TABLE-STANDARD.md` for the implementation contract and migration policy. `data-table.tsx` remains legacy-only while existing screens are migrated incrementally. Action buttons and editable fields follow the user's concrete permission. Auditing is deliberately read-only.
 
 ## Deliberate v1 limitations
 

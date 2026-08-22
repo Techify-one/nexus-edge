@@ -9,6 +9,10 @@ export type Column<T> = {
   render: (row: T) => ReactNode;
 };
 
+/**
+ * @deprecated Legacy tables only. New tables and tables changed by feature work
+ * must use ConfigurableDataTable. See docs/DATA-TABLE-STANDARD.md.
+ */
 export function DataTable<T extends { id: string }>({
   rows,
   columns,

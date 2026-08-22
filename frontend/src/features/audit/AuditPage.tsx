@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
 import { useState } from "react";
-import { DataTable } from "../../components/ui/data-table.js";
+import { ConfigurableDataTable } from "../../components/ui/configurable-data-table.js";
 import { Modal } from "../../components/ui/modal.js";
 import {
   Badge,
@@ -51,7 +51,8 @@ export default function AuditPage() {
       {entries.isPending ? (
         <Skeleton className="h-72" />
       ) : (
-        <DataTable
+        <ConfigurableDataTable
+          tableId="core.audit"
           rows={entries.data?.items ?? []}
           onOpen={setSelected}
           emptyTitle={t("audit.noEvents")}
@@ -60,12 +61,19 @@ export default function AuditPage() {
             {
               key: "createdAt",
               label: t("common.date"),
-              className: "w-44",
+              size: 200,
+              minSize: 140,
+              maxSize: 320,
+              sortValue: (row) => new Date(row.createdAt).getTime(),
               render: (row) => formatDateTime(row.createdAt),
             },
             {
               key: "action",
               label: t("audit.action"),
+              size: 220,
+              minSize: 140,
+              maxSize: 480,
+              sortValue: (row) => row.action,
               render: (row) => (
                 <span className="font-medium">{row.action}</span>
               ),
@@ -73,13 +81,20 @@ export default function AuditPage() {
             {
               key: "resource",
               label: t("audit.resource"),
+              size: 300,
+              minSize: 180,
+              maxSize: 640,
+              sortValue: (row) => `${row.resourceType} ${row.resourceId ?? ""}`,
               render: (row) =>
                 `${row.resourceType}${row.resourceId ? ` · ${row.resourceId}` : ""}`,
             },
             {
               key: "auth",
               label: t("audit.authentication"),
-              className: "w-32",
+              size: 160,
+              minSize: 110,
+              maxSize: 280,
+              sortValue: (row) => row.authMethod ?? t("common.system"),
               render: (row) => (
                 <Badge>{row.authMethod ?? t("common.system")}</Badge>
               ),
@@ -87,7 +102,10 @@ export default function AuditPage() {
             {
               key: "requestId",
               label: "Request ID",
-              className: "w-48",
+              size: 240,
+              minSize: 160,
+              maxSize: 480,
+              sortValue: (row) => row.requestId,
               render: (row) => <code>{row.requestId}</code>,
             },
           ]}

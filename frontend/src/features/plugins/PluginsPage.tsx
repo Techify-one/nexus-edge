@@ -4,7 +4,7 @@ import { PackagePlus, Pencil, Search, Trash2, UploadCloud } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { DataTable } from "../../components/ui/data-table.js";
+import { ConfigurableDataTable } from "../../components/ui/configurable-data-table.js";
 import { Modal } from "../../components/ui/modal.js";
 import {
   Badge,
@@ -350,36 +350,54 @@ export default function PluginsPage() {
       {plugins.isPending ? (
         <Skeleton className="h-72" />
       ) : (
-        <DataTable
+        <ConfigurableDataTable
+          tableId="core.plugins"
           rows={rows}
           onOpen={setSelected}
           columns={[
             {
               key: "name",
               label: t("common.name"),
+              size: 260,
+              minSize: 140,
+              maxSize: 600,
+              sortValue: (row) => row.name,
               render: (row) => <span className="font-medium">{row.name}</span>,
             },
             {
               key: "version",
               label: t("common.version"),
-              className: "w-28",
+              size: 140,
+              minSize: 96,
+              maxSize: 240,
+              sortValue: (row) => row.installedVersion,
               render: (row) => row.installedVersion,
             },
             {
               key: "provider",
               label: t("plugins.database"),
-              className: "w-28",
+              size: 140,
+              minSize: 96,
+              maxSize: 240,
+              sortValue: (row) => row.databaseProvider,
               render: (row) => row.databaseProvider,
             },
             {
               key: "worker",
               label: t("plugins.worker"),
+              size: 280,
+              minSize: 160,
+              maxSize: 600,
+              sortValue: (row) => row.workerName,
               render: (row) => <code>{row.workerName}</code>,
             },
             {
               key: "status",
               label: t("common.status"),
-              className: "w-28",
+              size: 160,
+              minSize: 110,
+              maxSize: 280,
+              sortValue: (row) => row.status,
               render: (row) => (
                 <Badge
                   tone={row.status === "installed" ? "success" : "warning"}
@@ -432,7 +450,8 @@ export default function PluginsPage() {
       {operations.isPending ? (
         <Skeleton className="h-48" />
       ) : (
-        <DataTable
+        <ConfigurableDataTable
+          tableId="core.plugin-operations"
           rows={operationRows}
           onOpen={(row) => {
             setResumeTarget(row);
@@ -446,6 +465,10 @@ export default function PluginsPage() {
             {
               key: "plugin",
               label: "Plugin",
+              size: 240,
+              minSize: 140,
+              maxSize: 520,
+              sortValue: (row) => row.pluginId,
               render: (row) => (
                 <span className="font-medium">{row.pluginId}</span>
               ),
@@ -453,13 +476,19 @@ export default function PluginsPage() {
             {
               key: "version",
               label: t("common.version"),
-              className: "w-28",
+              size: 140,
+              minSize: 96,
+              maxSize: 240,
+              sortValue: (row) => row.targetVersion,
               render: (row) => row.targetVersion,
             },
             {
               key: "state",
               label: t("plugins.stage"),
-              className: "w-36",
+              size: 180,
+              minSize: 120,
+              maxSize: 320,
+              sortValue: (row) => row.state,
               render: (row) => (
                 <Badge
                   tone={
@@ -477,6 +506,10 @@ export default function PluginsPage() {
             {
               key: "operation",
               label: t("plugins.operationId"),
+              size: 320,
+              minSize: 180,
+              maxSize: 720,
+              sortValue: (row) => row.operationId,
               render: (row) => <code>{row.operationId}</code>,
             },
           ]}

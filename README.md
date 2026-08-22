@@ -12,7 +12,7 @@ Nexus Edge is a lightweight, modular runtime for distributed applications. This 
 - CRM in a separate Worker, accessible only through the Core gateway;
 - webhooks with an outbox, Queue delivery, HMAC signatures, retries, and SSRF protection;
 - first-party Installer with additive migrations, a global lock, persisted states, and dynamic bindings;
-- responsive SPA. Every CRUD screen has search, an add button, one compact table row per record, click-to-open behavior, and edit/delete actions;
+- responsive SPA. New and migrated CRUD tables use per-user column order, visibility, sorting, live independent resizing, and a fixed actions/settings column;
 - Portuguese and English UI with typed catalogs, browser detection, persisted preference, and locale-aware date formatting;
 - equivalent migrations, tests, CI, OpenAPI, and safe deployment scripts.
 
@@ -46,6 +46,8 @@ docs/                     architecture, operations, and backup
 Follow [DEPLOY-CODEX.md](./DEPLOY-CODEX.md) to publish. The file is written so another Codex session can deploy without rediscovering the architecture.
 
 Follow [docs/INTERNATIONALIZATION.md](./docs/INTERNATIONALIZATION.md) to add languages.
+
+Follow [docs/DATA-TABLE-STANDARD.md](./docs/DATA-TABLE-STANDARD.md) whenever creating a table or changing an existing record-list table. The repository rules make this configurable, per-user table contract mandatory for agent-driven work.
 
 The initial D1 environment is documented in `docs/DEPLOYMENT-STATUS.md`. `pnpm deploy:direct` is an official-API alternative when a Wrangler subprocess is unavailable. It reads deployment credentials from environment variables and preserves existing application secrets, installer credentials, and `PLUGIN_*` bindings when replacement values are omitted; the deployment token is never copied into the Worker automatically.
 

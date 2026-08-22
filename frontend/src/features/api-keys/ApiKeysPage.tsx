@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { KeyRound, Plus, Search, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { DataTable } from "../../components/ui/data-table.js";
+import { ConfigurableDataTable } from "../../components/ui/configurable-data-table.js";
 import { Modal } from "../../components/ui/modal.js";
 import { PermissionChecklist } from "../../components/permissions/PermissionChecklist.js";
 import {
@@ -115,14 +115,18 @@ export default function ApiKeysPage() {
       {keys.isPending ? (
         <Skeleton className="h-72" />
       ) : (
-        <DataTable
+        <ConfigurableDataTable
+          tableId="core.api-keys"
           rows={rows}
           onOpen={setSelected}
           columns={[
             {
               key: "name",
               label: t("common.name"),
-              className: "w-1/3",
+              size: 260,
+              minSize: 140,
+              maxSize: 600,
+              sortValue: (row) => row.name || t("apiKeys.unnamed"),
               render: (row) => (
                 <span className="font-medium">
                   {row.name || t("apiKeys.unnamed")}
@@ -132,6 +136,10 @@ export default function ApiKeysPage() {
             {
               key: "prefix",
               label: t("apiKeys.identifier"),
+              size: 200,
+              minSize: 140,
+              maxSize: 360,
+              sortValue: (row) => row.start || row.prefix || "app_…",
               render: (row) => (
                 <code>{row.start || row.prefix || "app_…"}</code>
               ),
@@ -139,14 +147,20 @@ export default function ApiKeysPage() {
             {
               key: "expires",
               label: t("common.expires"),
-              className: "w-44",
+              size: 180,
+              minSize: 120,
+              maxSize: 320,
+              sortValue: (row) => row.expiresAt ?? "",
               render: (row) =>
                 row.expiresAt ? formatDate(row.expiresAt) : t("common.never"),
             },
             {
               key: "status",
               label: t("common.status"),
-              className: "w-28",
+              size: 140,
+              minSize: 100,
+              maxSize: 240,
+              sortValue: (row) => (row.enabled === false ? 1 : 0),
               render: (row) => (
                 <Badge tone={row.enabled === false ? "danger" : "success"}>
                   {t(

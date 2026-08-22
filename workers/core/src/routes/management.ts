@@ -5,6 +5,8 @@ import {
   groupCreateSchema,
   invitationCreateSchema,
   listQuerySchema,
+  tablePreferenceConfigSchema,
+  tablePreferenceIdSchema,
   userCreateSchema,
   userUpdateSchema,
 } from "@app/api-contracts";
@@ -13,7 +15,7 @@ import type { HonoEnv } from "../env.js";
 import { canPermission } from "../lib/ability.js";
 import { randomToken, hashToken } from "../lib/crypto.js";
 import { AppError, noStore, parseBody } from "../lib/http.js";
-import { dbTime, parseJson } from "../lib/values.js";
+import { countProfileOptions, dbTime, parseJson } from "../lib/values.js";
 import { requirePermission } from "../middleware/auth.js";
 import {
   requireRecentReauth,
@@ -205,6 +207,79 @@ managementRoutes.get("/me/permissions", async (c) => {
   );
 });
 
+const preferenceTableId = (value: string): string => {
+  const parsed = tablePreferenceIdSchema.safeParse(value);
+  if (!parsed.success)
+    throw new AppError(
+      400,
+      "INVALID_TABLE_ID",
+      "The table identifier is invalid.",
+    );
+  return parsed.data;
+};
+
+managementRoutes.get("/me/table-preferences/:tableId", async (c) => {
+  const tableId = preferenceTableId(c.req.param("tableId"));
+  const row = await c.get("db").first<{
+    configJson: unknown;
+    schemaVersion: number | string;
+    updatedAt: unknown;
+  }>(
+    `SELECT config_json AS "configJson", schema_version AS "schemaVersion",
+            updated_at AS "updatedAt"
+       FROM user_table_preferences
+      WHERE user_id = ? AND table_id = ?`,
+    [c.get("principal").userId, tableId],
+  );
+  if (!row)
+    return c.json({ tableId, config: null, updatedAt: null }, 200, noStore);
+  const config = tablePreferenceConfigSchema.safeParse(
+    parseJson<unknown>(row.configJson, null),
+  );
+  return c.json(
+    {
+      tableId,
+      config: config.success ? config.data : null,
+      updatedAt: row.updatedAt,
+    },
+    200,
+    noStore,
+  );
+});
+
+managementRoutes.put("/me/table-preferences/:tableId", async (c) => {
+  const tableId = preferenceTableId(c.req.param("tableId"));
+  const config = await parseBody(c, tablePreferenceConfigSchema);
+  const updatedAt = dbTime(c.get("db"));
+  await c.get("db").execute(
+    `INSERT INTO user_table_preferences(user_id, table_id, schema_version, config_json, updated_at)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(user_id, table_id) DO UPDATE SET
+       schema_version = excluded.schema_version,
+       config_json = excluded.config_json,
+       updated_at = excluded.updated_at`,
+    [
+      c.get("principal").userId,
+      tableId,
+      config.version,
+      JSON.stringify(config),
+      updatedAt,
+    ],
+  );
+  return c.json({ tableId, config, updatedAt }, 200, noStore);
+});
+
+managementRoutes.delete("/me/table-preferences/:tableId", async (c) => {
+  const tableId = preferenceTableId(c.req.param("tableId"));
+  await c
+    .get("db")
+    .execute(
+      "DELETE FROM user_table_preferences WHERE user_id = ? AND table_id = ?",
+      [c.get("principal").userId, tableId],
+    );
+  return c.body(null, 204);
+});
+
 managementRoutes.get("/me/plugin-navigation", async (c) => {
   const plugins = await c
     .get("db")
@@ -301,8 +376,19 @@ managementRoutes.get(
   async (c) => {
     const query = listQuerySchema.parse(c.req.query());
     const rows = await c.get("db").query<Record<string, unknown>>(
-      `SELECT u.id, u.name, u.email, u.active, u.created_at AS "createdAt"
+      `SELECT u.id, u.name, u.email, u.active, u.created_at AS "createdAt",
+              p.phone, p.telegram_id AS "telegramId", p.job_title AS "jobTitle",
+              p.birth_date AS "birthDate", p.cpf, p.tags_json AS "tagsJson",
+              p.sectors_json AS "sectorsJson", p.notes,
+              COALESCE(p.status, CASE WHEN u.active THEN 'active' ELSE 'inactive' END) AS status,
+              s.daily_hours_json AS "dailyHoursJson", s.entry_times_json AS "entryTimesJson",
+              s.effective_at AS "scheduleEffectiveAt"
        FROM "user" u
+       LEFT JOIN user_profiles p ON p.user_id = u.id
+       LEFT JOIN user_work_schedules s ON s.id = (
+         SELECT ws.id FROM user_work_schedules ws WHERE ws.user_id = u.id
+          ORDER BY ws.effective_at DESC, ws.created_at DESC LIMIT 1
+       )
       WHERE (? IS NULL OR lower(u.name) LIKE lower(?) OR lower(u.email) LIKE lower(?))
       ORDER BY u.created_at DESC, u.id DESC LIMIT ?`,
       [
@@ -320,6 +406,20 @@ managementRoutes.get(
     return c.json({
       items: rows.map((row) => ({
         ...row,
+        tags: parseJson<string[]>(row.tagsJson, []),
+        sectors: parseJson<string[]>(row.sectorsJson, []),
+        schedule: row.dailyHoursJson
+          ? {
+              dailyHours: parseJson<string[]>(row.dailyHoursJson, []),
+              entryTimes: parseJson<string[]>(row.entryTimesJson, []),
+              effectiveAt: row.scheduleEffectiveAt,
+            }
+          : null,
+        tagsJson: undefined,
+        sectorsJson: undefined,
+        dailyHoursJson: undefined,
+        entryTimesJson: undefined,
+        scheduleEffectiveAt: undefined,
         groups: memberships
           .filter((membership) => membership.userId === row.id)
           .map((membership) => ({
@@ -329,6 +429,27 @@ managementRoutes.get(
       })),
       nextCursor: null,
     });
+  },
+);
+
+managementRoutes.get(
+  "/users/profile-options",
+  requirePermission("core.user.read"),
+  async (c) => {
+    const rows = await c
+      .get("db")
+      .query<{ tagsJson: unknown; sectorsJson: unknown }>(
+        `SELECT tags_json AS "tagsJson", sectors_json AS "sectorsJson"
+           FROM user_profiles`,
+      );
+    return c.json(
+      {
+        tags: countProfileOptions(rows.map((row) => row.tagsJson)),
+        sectors: countProfileOptions(rows.map((row) => row.sectorsJson)),
+      },
+      200,
+      noStore,
+    );
   },
 );
 
@@ -363,14 +484,50 @@ managementRoutes.post(
     const userId = created.user.id;
     const now = dbTime(db);
     const groupIds = [...new Set(input.groupIds)];
+    const status = input.status ?? (input.active ? "active" : "inactive");
+    const active = status === "active";
     try {
       await commitWithEvent(
         c,
         [
           {
             sql: 'UPDATE "user" SET active = ?, updated_at = ? WHERE id = ?',
-            params: [input.active, now, userId],
+            params: [active, now, userId],
           },
+          {
+            sql: `INSERT INTO user_profiles(user_id, phone, telegram_id, job_title, birth_date, cpf, tags_json, sectors_json, notes, status, created_at, updated_at)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            params: [
+              userId,
+              input.phone || null,
+              input.telegramId || null,
+              input.jobTitle || null,
+              input.birthDate || null,
+              input.cpf || null,
+              JSON.stringify(input.tags ?? []),
+              JSON.stringify(input.sectors ?? []),
+              input.notes || null,
+              status,
+              now,
+              now,
+            ],
+          },
+          ...(input.schedule
+            ? [
+                {
+                  sql: `INSERT INTO user_work_schedules(id, user_id, daily_hours_json, entry_times_json, effective_at, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?)`,
+                  params: [
+                    createId("schedule"),
+                    userId,
+                    JSON.stringify(input.schedule.dailyHours),
+                    JSON.stringify(input.schedule.entryTimes),
+                    now,
+                    now,
+                  ],
+                },
+              ]
+            : []),
           { sql: "DELETE FROM session WHERE user_id = ?", params: [userId] },
           ...groupIds.map((groupId) => ({
             sql: insertIgnore(
@@ -390,7 +547,8 @@ managementRoutes.post(
           data: {
             name: input.name,
             email: input.email,
-            active: input.active,
+            active,
+            status,
             groupIds,
           },
         },
@@ -405,12 +563,13 @@ managementRoutes.post(
       id: userId,
       name: input.name,
       email: input.email,
-      active: input.active,
+      active,
       groupIds,
     };
     await saveIdempotency(c, "users.create", state, 201, response);
     await audit(c, "core.user.created", "core.user", userId, {
-      active: input.active,
+      active,
+      status,
       groupIds,
     });
     return c.json(response, 201);
@@ -441,7 +600,32 @@ managementRoutes.patch(
     const resultingAdministrator = input.groupIds
       ? await validateGroupAssignment(c, input.groupIds)
       : Boolean(current.isAdmin);
-    const resultingActive = input.active ?? Boolean(current.active);
+    const currentProfile = await db.first<{
+      phone: string | null;
+      telegramId: string | null;
+      jobTitle: string | null;
+      birthDate: string | null;
+      cpf: string | null;
+      tagsJson: string;
+      sectorsJson: string;
+      notes: string | null;
+      status: "active" | "inactive" | "pending";
+    }>(
+      `SELECT phone, telegram_id AS "telegramId", job_title AS "jobTitle",
+              birth_date AS "birthDate", cpf, tags_json AS "tagsJson",
+              sectors_json AS "sectorsJson", notes, status
+         FROM user_profiles WHERE user_id = ?`,
+      [userId],
+    );
+    const resultingStatus =
+      input.status ??
+      (input.active !== undefined
+        ? input.active
+          ? "active"
+          : "inactive"
+        : (currentProfile?.status ??
+          (Boolean(current.active) ? "active" : "inactive")));
+    const resultingActive = resultingStatus === "active";
     await protectLastActiveAdministrator(
       c,
       current,
@@ -469,6 +653,21 @@ managementRoutes.patch(
     const passwordHash = input.password
       ? await (await c.get("auth").$context).password.hash(input.password)
       : undefined;
+    const latestSchedule = input.schedule
+      ? await db.first<{ dailyHoursJson: string; entryTimesJson: string }>(
+          `SELECT daily_hours_json AS "dailyHoursJson", entry_times_json AS "entryTimesJson"
+             FROM user_work_schedules WHERE user_id = ?
+            ORDER BY effective_at DESC, created_at DESC`,
+          [userId],
+        )
+      : null;
+    const scheduleChanged = Boolean(
+      input.schedule &&
+      (latestSchedule?.dailyHoursJson !==
+        JSON.stringify(input.schedule.dailyHours) ||
+        latestSchedule?.entryTimesJson !==
+          JSON.stringify(input.schedule.entryTimes)),
+    );
     const statements = [
       {
         sql: 'UPDATE "user" SET name = ?, email = ?, active = ?, updated_at = ? WHERE id = ?',
@@ -480,6 +679,63 @@ managementRoutes.patch(
           userId,
         ],
       },
+      {
+        sql: `INSERT INTO user_profiles(user_id, phone, telegram_id, job_title, birth_date, cpf, tags_json, sectors_json, notes, status, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ON CONFLICT(user_id) DO UPDATE SET
+                phone = excluded.phone, telegram_id = excluded.telegram_id,
+                job_title = excluded.job_title, birth_date = excluded.birth_date,
+                cpf = excluded.cpf, tags_json = excluded.tags_json,
+                sectors_json = excluded.sectors_json, notes = excluded.notes,
+                status = excluded.status, updated_at = excluded.updated_at`,
+        params: [
+          userId,
+          input.phone === undefined
+            ? (currentProfile?.phone ?? null)
+            : input.phone || null,
+          input.telegramId === undefined
+            ? (currentProfile?.telegramId ?? null)
+            : input.telegramId || null,
+          input.jobTitle === undefined
+            ? (currentProfile?.jobTitle ?? null)
+            : input.jobTitle || null,
+          input.birthDate === undefined
+            ? (currentProfile?.birthDate ?? null)
+            : input.birthDate || null,
+          input.cpf === undefined
+            ? (currentProfile?.cpf ?? null)
+            : input.cpf || null,
+          JSON.stringify(
+            input.tags ?? parseJson<string[]>(currentProfile?.tagsJson, []),
+          ),
+          JSON.stringify(
+            input.sectors ??
+              parseJson<string[]>(currentProfile?.sectorsJson, []),
+          ),
+          input.notes === undefined
+            ? (currentProfile?.notes ?? null)
+            : input.notes || null,
+          resultingStatus,
+          now,
+          now,
+        ],
+      },
+      ...(scheduleChanged && input.schedule
+        ? [
+            {
+              sql: `INSERT INTO user_work_schedules(id, user_id, daily_hours_json, entry_times_json, effective_at, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?)`,
+              params: [
+                createId("schedule"),
+                userId,
+                JSON.stringify(input.schedule.dailyHours),
+                JSON.stringify(input.schedule.entryTimes),
+                now,
+                now,
+              ],
+            },
+          ]
+        : []),
       ...(input.groupIds
         ? [
             {
@@ -509,10 +765,13 @@ managementRoutes.patch(
             { sql: "DELETE FROM session WHERE user_id = ?", params: [userId] },
           ]
         : []),
+      ...(!resultingActive && Boolean(current.active) && !passwordHash
+        ? [{ sql: "DELETE FROM session WHERE user_id = ?", params: [userId] }]
+        : []),
     ];
     const eventType =
-      input.active !== undefined && input.active !== Boolean(current.active)
-        ? input.active
+      resultingActive !== Boolean(current.active)
+        ? resultingActive
           ? "core.user.activated"
           : "core.user.deactivated"
         : "core.user.updated";
@@ -524,6 +783,7 @@ managementRoutes.patch(
         name: input.name ?? current.name,
         email: input.email ?? current.email,
         active: resultingActive,
+        status: resultingStatus,
         groupIds: input.groupIds,
         passwordChanged: Boolean(input.password),
       },
@@ -551,6 +811,43 @@ managementRoutes.patch(
   },
 );
 
+managementRoutes.get(
+  "/users/:userId/schedule-history",
+  requirePermission("core.user.read"),
+  async (c) => {
+    const userId = c.req.param("userId");
+    if (
+      !(await c
+        .get("db")
+        .first<{ id: string }>('SELECT id FROM "user" WHERE id = ?', [userId]))
+    )
+      throw new AppError(404, "USER_NOT_FOUND", "User not found.");
+    const rows = await c.get("db").query<{
+      id: string;
+      dailyHoursJson: string;
+      entryTimesJson: string;
+      effectiveAt: string | number | Date;
+      createdAt: string | number | Date;
+    }>(
+      `SELECT id, daily_hours_json AS "dailyHoursJson",
+              entry_times_json AS "entryTimesJson", effective_at AS "effectiveAt",
+              created_at AS "createdAt"
+         FROM user_work_schedules WHERE user_id = ?
+        ORDER BY effective_at DESC, created_at DESC LIMIT 100`,
+      [userId],
+    );
+    return c.json({
+      items: rows.map((row) => ({
+        id: row.id,
+        dailyHours: parseJson<string[]>(row.dailyHoursJson, []),
+        entryTimes: parseJson<string[]>(row.entryTimesJson, []),
+        effectiveAt: row.effectiveAt,
+        createdAt: row.createdAt,
+      })),
+    });
+  },
+);
+
 managementRoutes.delete(
   "/users/:userId",
   requirePermission("core.user.delete"),
@@ -566,6 +863,10 @@ managementRoutes.delete(
         {
           sql: 'UPDATE "user" SET active = ?, updated_at = ? WHERE id = ?',
           params: [false, dbTime(db), userId],
+        },
+        {
+          sql: "UPDATE user_profiles SET status = 'inactive', updated_at = ? WHERE user_id = ?",
+          params: [dbTime(db), userId],
         },
         { sql: "DELETE FROM session WHERE user_id = ?", params: [userId] },
         {

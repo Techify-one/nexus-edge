@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { DataTable } from "../../components/ui/data-table.js";
+import { ConfigurableDataTable } from "../../components/ui/configurable-data-table.js";
 import { Modal } from "../../components/ui/modal.js";
 import {
   Badge,
@@ -202,32 +202,46 @@ export default function WebhooksPage() {
       {endpoints.isPending ? (
         <Skeleton className="h-72" />
       ) : (
-        <DataTable
+        <ConfigurableDataTable
+          tableId="core.webhook-endpoints"
           rows={rows}
           onOpen={setSelected}
           columns={[
             {
               key: "name",
               label: t("common.name"),
-              className: "w-1/4",
+              size: 240,
+              minSize: 140,
+              maxSize: 600,
+              sortValue: (row) => row.name,
               render: (row) => <span className="font-medium">{row.name}</span>,
             },
             {
               key: "url",
               label: t("webhooks.destination"),
+              size: 360,
+              minSize: 200,
+              maxSize: 800,
+              sortValue: (row) => row.url,
               render: (row) => row.url,
             },
             {
               key: "events",
               label: t("webhooks.events"),
-              className: "w-32",
+              size: 160,
+              minSize: 110,
+              maxSize: 280,
+              sortValue: (row) => row.eventTypes.length,
               render: (row) =>
                 t("webhooks.eventTypes", { count: row.eventTypes.length }),
             },
             {
               key: "status",
               label: t("common.status"),
-              className: "w-28",
+              size: 140,
+              minSize: 100,
+              maxSize: 240,
+              sortValue: (row) => (Boolean(row.enabled) ? 0 : 1),
               render: (row) => (
                 <Badge tone={Boolean(row.enabled) ? "success" : "danger"}>
                   {t(
@@ -285,7 +299,8 @@ export default function WebhooksPage() {
       <h2 className="mb-3 mt-8 text-lg font-bold">
         {t("webhooks.recentDeliveries")}
       </h2>
-      <DataTable
+      <ConfigurableDataTable
+        tableId="core.webhook-deliveries"
         rows={deliveries.data?.items ?? []}
         onOpen={() => undefined}
         emptyTitle={t("webhooks.noDeliveries")}
@@ -294,23 +309,37 @@ export default function WebhooksPage() {
           {
             key: "event",
             label: t("webhooks.event"),
+            size: 260,
+            minSize: 160,
+            maxSize: 560,
+            sortValue: (row) => row.eventId,
             render: (row) => <code>{row.eventId}</code>,
           },
           {
             key: "host",
             label: t("webhooks.destination"),
+            size: 280,
+            minSize: 160,
+            maxSize: 600,
+            sortValue: (row) => row.host,
             render: (row) => row.host,
           },
           {
             key: "attempts",
             label: t("webhooks.attempts"),
-            className: "w-28",
+            size: 140,
+            minSize: 96,
+            maxSize: 240,
+            sortValue: (row) => row.attemptCount,
             render: (row) => row.attemptCount,
           },
           {
             key: "status",
             label: t("common.status"),
-            className: "w-32",
+            size: 160,
+            minSize: 110,
+            maxSize: 280,
+            sortValue: (row) => row.status,
             render: (row) => (
               <Badge
                 tone={

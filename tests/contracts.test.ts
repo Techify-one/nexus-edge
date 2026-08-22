@@ -11,11 +11,14 @@ import {
   firstAdminSchema,
   invitationAcceptSchema,
   listQuerySchema,
+  tablePreferenceConfigSchema,
+  tablePreferenceIdSchema,
   userCreateSchema,
   userUpdateSchema,
 } from "../packages/api-contracts/src/index.js";
 import { CORE_PERMISSIONS } from "../packages/db-schema/src/common/index.js";
 import { isPermissionAvailable } from "../workers/core/src/services/permissions.js";
+import { countProfileOptions } from "../workers/core/src/lib/values.js";
 
 describe("contracts", () => {
   it("converts permissions into action/subject", () =>
@@ -38,6 +41,24 @@ describe("contracts", () => {
   it("normalizes empty searches so records remain visible", () => {
     expect(listQuerySchema.parse({ search: "" }).search).toBeUndefined();
     expect(listQuerySchema.parse({ search: "  " }).search).toBeUndefined();
+  });
+  it("validates bounded personal table preferences", () => {
+    const preference = {
+      version: 1 as const,
+      columnOrder: ["name", "email", "status"],
+      columnVisibility: { name: true, email: false, status: true },
+      columnSizing: { name: 240, email: 320, status: 140 },
+      sorting: [{ id: "name", desc: false }],
+    };
+    expect(tablePreferenceIdSchema.parse("core.users")).toBe("core.users");
+    expect(tablePreferenceConfigSchema.parse(preference)).toEqual(preference);
+    expect(tablePreferenceIdSchema.safeParse("../users").success).toBe(false);
+    expect(
+      tablePreferenceConfigSchema.safeParse({
+        ...preference,
+        columnSizing: { name: 10 },
+      }).success,
+    ).toBe(false);
   });
   it("creates the first administrator without a token and with an 8-character password", () => {
     const result = firstAdminSchema.parse({
@@ -107,6 +128,54 @@ describe("contracts", () => {
       false,
     );
     expect(userUpdateSchema.safeParse({}).success).toBe(false);
+  });
+  it("validates user profile fields and a complete weekly schedule", () => {
+    const profile = {
+      phone: "64993467452",
+      telegramId: "6690214875",
+      jobTitle: "Desenvolvedor",
+      birthDate: "2003-10-04",
+      cpf: "71148138137",
+      tags: ["PJ"],
+      sectors: ["DEV"],
+      notes: "Observação interna",
+      status: "pending" as const,
+      schedule: {
+        dailyHours: [
+          "08:00",
+          "08:00",
+          "08:00",
+          "08:00",
+          "08:00",
+          "00:00",
+          "00:00",
+        ],
+        entryTimes: ["08:30", "", "", "", "", "", ""],
+      },
+    };
+    expect(userUpdateSchema.parse(profile)).toEqual(profile);
+    expect(userUpdateSchema.safeParse({ ...profile, cpf: "123" }).success).toBe(
+      false,
+    );
+    expect(
+      userUpdateSchema.safeParse({
+        ...profile,
+        schedule: { ...profile.schedule, dailyHours: ["08:00"] },
+      }).success,
+    ).toBe(false);
+  });
+  it("collects reusable profile options and counts each user once", () => {
+    expect(
+      countProfileOptions([
+        '["PJ","CLT","pj"]',
+        '["pj","DEV"]',
+        "invalid-json",
+      ]),
+    ).toEqual([
+      { value: "PJ", usageCount: 2 },
+      { value: "CLT", usageCount: 1 },
+      { value: "DEV", usageCount: 1 },
+    ]);
   });
   it("seeds only Core permissions before plugins are installed", () => {
     expect(CORE_PERMISSIONS.every((key) => key.startsWith("core."))).toBe(true);

@@ -4,6 +4,9 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-08-21",
   "compatibility_flags": ["nodejs_compat"],
+  "secrets": {
+    "required": ["BETTER_AUTH_SECRET", "WEBHOOK_ENCRYPTION_KEY"],
+  },
   "workers_dev": true,
   "preview_urls": false,
   "assets": {
