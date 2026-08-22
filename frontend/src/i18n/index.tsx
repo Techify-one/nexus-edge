@@ -347,6 +347,10 @@ const ptBR = {
   "plugins.installed": "Plugin instalado.",
   "plugins.uninstalled": "Plugin desinstalado; as tabelas foram preservadas.",
   "plugins.uninstallConfirm": "Desinstalar {{name}} {{version}}?",
+  "plugins.recordDeleted":
+    "Registro do plugin excluído; tabelas e histórico foram preservados.",
+  "plugins.deleteRecordConfirm":
+    "Excluir {{name}} da lista de plugins? As tabelas e o histórico serão preservados.",
   "plugins.state.validating": "Validando",
   "plugins.state.migrating": "Aplicando migrations",
   "plugins.state.deploying": "Publicando",
@@ -705,6 +709,10 @@ const en: Record<TranslationKey, string> = {
   "plugins.installed": "Plugin installed.",
   "plugins.uninstalled": "Plugin uninstalled; database tables were preserved.",
   "plugins.uninstallConfirm": "Uninstall {{name}} {{version}}?",
+  "plugins.recordDeleted":
+    "Plugin record deleted; tables and history were preserved.",
+  "plugins.deleteRecordConfirm":
+    "Delete {{name}} from the plugin list? Tables and history will be preserved.",
   "plugins.state.validating": "Validating",
   "plugins.state.migrating": "Running migrations",
   "plugins.state.deploying": "Deploying",

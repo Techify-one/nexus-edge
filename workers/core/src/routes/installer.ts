@@ -655,12 +655,38 @@ installerRoutes.delete(
     const pluginId = c.req.param("pluginId");
     const plugin = await c
       .get("db")
-      .first<{ workerName: string }>(
-        `SELECT worker_name AS "workerName" FROM plugins WHERE id = ? AND status = 'installed'`,
+      .first<{ workerName: string; status: string }>(
+        `SELECT worker_name AS "workerName", status FROM plugins WHERE id = ?`,
         [pluginId],
       );
     if (!plugin)
       throw new AppError(404, "PLUGIN_NOT_FOUND", "Plugin not found.");
+    if (plugin.status === "uninstalled") {
+      const deleted = await c
+        .get("db")
+        .execute(
+          "DELETE FROM plugins WHERE id = ? AND status = 'uninstalled'",
+          [pluginId],
+        );
+      if (!deleted.rowsAffected)
+        throw new AppError(
+          409,
+          "PLUGIN_STATE_CONFLICT",
+          "The plugin state changed before its record could be deleted.",
+        );
+      await audit(c, "core.plugin.record_deleted", "core.plugin", pluginId, {
+        tablesPreserved: true,
+        migrationsPreserved: true,
+        operationHistoryPreserved: true,
+      });
+      return c.body(null, 204);
+    }
+    if (plugin.status !== "installed")
+      throw new AppError(
+        409,
+        "PLUGIN_STATE_CONFLICT",
+        `The plugin cannot be removed while its status is ${plugin.status}.`,
+      );
     await c
       .get("db")
       .execute(

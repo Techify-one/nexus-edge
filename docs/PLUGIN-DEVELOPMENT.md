@@ -218,6 +218,12 @@ For a production/staging install, verify all of the following:
 Installation and removal use the authenticated administrator session and do not
 ask for the account password again.
 
+Removal is intentionally two-step. The first delete action uninstalls an
+installed plugin, removes its Worker, binding, and permission exposure, and
+keeps an `uninstalled` row visible. A second delete action removes that catalog
+row. Both actions preserve plugin tables, migration hashes, operation history,
+and audit history.
+
 The Installer persists each stage. If a stage fails, keep the operation ID and
 select exactly the same `.plugin.zip` to resume. Package hashes cover the
 manifest, Worker, and both migration sets. A rebuilt or edited package is a new

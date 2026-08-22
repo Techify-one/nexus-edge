@@ -328,7 +328,20 @@ export const OPENAPI_DOCUMENT = {
       get: { responses: { "200": { description: "Delivery history" } } },
     },
     "/api/v1/plugins": {
-      get: { responses: { "200": { description: "Installed plugins" } } },
+      get: { responses: { "200": { description: "Plugin registry records" } } },
+    },
+    "/api/v1/plugins/{pluginId}": {
+      delete: {
+        parameters: [{ name: "pluginId", in: "path", required: true }],
+        responses: {
+          "204": {
+            description:
+              "Installed plugin uninstalled, or uninstalled registry record deleted",
+          },
+          "404": { description: "Plugin record not found" },
+          "409": { description: "Plugin is in a transitional state" },
+        },
+      },
     },
     "/api/v1/plugin-operations": {
       get: { responses: { "200": { description: "Installer operations" } } },

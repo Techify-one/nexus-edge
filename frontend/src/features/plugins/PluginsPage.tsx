@@ -278,8 +278,14 @@ export default function PluginsPage() {
   const remove = useMutation({
     mutationFn: (plugin: Plugin) =>
       api(`/api/v1/plugins/${plugin.id}`, { method: "DELETE" }),
-    onSuccess: () => {
-      toast.success(t("plugins.uninstalled"));
+    onSuccess: (_result, plugin) => {
+      toast.success(
+        t(
+          plugin.status === "uninstalled"
+            ? "plugins.recordDeleted"
+            : "plugins.uninstalled",
+        ),
+      );
       setSelected(null);
       void client.invalidateQueries({ queryKey: ["plugins"] });
       void client.invalidateQueries({ queryKey: ["plugin-operations"] });
@@ -391,7 +397,7 @@ export default function PluginsPage() {
             canUpdate || canDelete
               ? (row) => (
                   <div className="flex justify-end gap-1">
-                    {canUpdate && (
+                    {canUpdate && row.status === "installed" && (
                       <Button
                         variant="ghost"
                         className="px-2"
@@ -407,13 +413,22 @@ export default function PluginsPage() {
                         className="px-2 text-red-600"
                         onClick={() =>
                           confirm(
-                            t("plugins.uninstallConfirm", {
-                              name: row.name,
-                              version: row.installedVersion,
-                            }),
+                            t(
+                              row.status === "uninstalled"
+                                ? "plugins.deleteRecordConfirm"
+                                : "plugins.uninstallConfirm",
+                              {
+                                name: row.name,
+                                version: row.installedVersion,
+                              },
+                            ),
                           ) && remove.mutate(row)
                         }
-                        aria-label={`${t("common.delete")} ${row.name}`}
+                        aria-label={`${t(
+                          row.status === "uninstalled"
+                            ? "common.delete"
+                            : "plugins.uninstall",
+                        )} ${row.name}`}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -692,7 +707,7 @@ export default function PluginsPage() {
               </div>
             </dl>
             <div className="flex justify-end gap-2">
-              {canUpdate && (
+              {canUpdate && selected.status === "installed" && (
                 <Button
                   variant="secondary"
                   onClick={() => {
@@ -709,15 +724,24 @@ export default function PluginsPage() {
                   variant="danger"
                   onClick={() =>
                     confirm(
-                      t("plugins.uninstallConfirm", {
-                        name: selected.name,
-                        version: selected.installedVersion,
-                      }),
+                      t(
+                        selected.status === "uninstalled"
+                          ? "plugins.deleteRecordConfirm"
+                          : "plugins.uninstallConfirm",
+                        {
+                          name: selected.name,
+                          version: selected.installedVersion,
+                        },
+                      ),
                     ) && remove.mutate(selected)
                   }
                 >
                   <Trash2 className="h-4 w-4" />
-                  {t("plugins.uninstall")}
+                  {t(
+                    selected.status === "uninstalled"
+                      ? "common.delete"
+                      : "plugins.uninstall",
+                  )}
                 </Button>
               )}
             </div>

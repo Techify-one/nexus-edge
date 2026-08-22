@@ -31,6 +31,7 @@ const crmPackageBody = () => {
 
 const installerApp = (options?: {
   operation?: Record<string, unknown>;
+  plugin?: Record<string, unknown>;
   executedSql?: string[];
   atomicSql?: string[];
 }) => {
@@ -38,10 +39,13 @@ const installerApp = (options?: {
     provider: "d1",
     orm: {},
     query: async () => [],
-    first: async <T extends Record<string, unknown>>(sql: string) =>
-      sql.includes("FROM plugin_operations") && options?.operation
-        ? (options.operation as T)
-        : null,
+    first: async <T extends Record<string, unknown>>(sql: string) => {
+      if (sql.includes("FROM plugin_operations") && options?.operation)
+        return options.operation as T;
+      if (sql.includes("FROM plugins") && options?.plugin)
+        return options.plugin as T;
+      return null;
+    },
     execute: async (sql: string) => {
       options?.executedSql?.push(sql);
       return { rowsAffected: 1 };
@@ -181,6 +185,40 @@ describe("CRM plugin installer", () => {
         failureReason: "cloudflare_api_400_10021",
       }),
     );
+  });
+
+  it("deletes an already-uninstalled plugin record without touching preserved data", async () => {
+    const executedSql: string[] = [];
+    const response = await installerApp({
+      executedSql,
+      plugin: {
+        workerName: "app-plugin-crm",
+        status: "uninstalled",
+      },
+    }).request("/plugins/crm", { method: "DELETE" });
+
+    expect(response.status).toBe(204);
+    expect(executedSql).toContainEqual(
+      expect.stringContaining("DELETE FROM plugins"),
+    );
+    expect(executedSql).not.toContainEqual(
+      expect.stringContaining("DELETE FROM plugin_migrations"),
+    );
+    expect(executedSql).not.toContainEqual(
+      expect.stringContaining("DELETE FROM plugin_operations"),
+    );
+  });
+
+  it("reports a conflict instead of not-found for transitional plugin states", async () => {
+    const response = await installerApp({
+      plugin: {
+        workerName: "app-plugin-crm",
+        status: "uninstalling",
+      },
+    }).request("/plugins/crm", { method: "DELETE" });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ code: "PLUGIN_STATE_CONFLICT" });
   });
 });
 
