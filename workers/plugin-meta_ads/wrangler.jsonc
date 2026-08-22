@@ -1,0 +1,21 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "app-plugin-meta-ads",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-21",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "vars": {
+    "DATABASE_PROVIDER": "d1",
+    "META_API_VERSION": "v25.0",
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "nexus-edge-db",
+      "database_id": "replace-with-d1-database-id",
+      "migrations_dir": "migrations/d1",
+    },
+  ],
+}

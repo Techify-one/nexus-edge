@@ -316,6 +316,67 @@ export const OPENAPI_DOCUMENT = {
       get: { responses: { "200": { description: "Leads" } } },
       post: { responses: { "201": { description: "Lead created" } } },
     },
+    "/api/v1/p/meta_ads/accounts": {
+      get: {
+        responses: { "200": { description: "Configured Meta ad accounts" } },
+      },
+      post: {
+        responses: {
+          "201": { description: "Meta ad account verified and created" },
+        },
+      },
+    },
+    "/api/v1/p/meta_ads/campaigns": {
+      get: {
+        responses: {
+          "200": { description: "Meta campaigns for configured accounts" },
+        },
+      },
+    },
+    "/api/v1/p/meta_ads/adsets": {
+      get: {
+        responses: {
+          "200": { description: "Meta ad sets for configured campaigns" },
+        },
+      },
+    },
+    "/api/v1/p/meta_ads/ads": {
+      get: {
+        responses: {
+          "200": { description: "Meta ads for configured campaigns" },
+        },
+      },
+    },
+    "/api/v1/p/meta_ads/insights": {
+      get: {
+        responses: { "200": { description: "Meta ad performance insights" } },
+      },
+    },
+    "/api/v1/p/meta_ads/insights/query": {
+      post: {
+        responses: {
+          "200": { description: "Batched Meta ad performance insights" },
+        },
+      },
+    },
+    "/api/v1/plugins/meta_ads/runtime-secrets/META_ACCESS_TOKEN": {
+      get: {
+        responses: {
+          "200": { description: "Meta token configuration status" },
+        },
+      },
+      put: {
+        responses: { "200": { description: "Meta token configured" } },
+      },
+      delete: {
+        responses: { "204": { description: "Meta token deleted" } },
+      },
+    },
+    "/api/v1/p/meta_ads/status": {
+      post: {
+        responses: { "200": { description: "Meta object status updated" } },
+      },
+    },
     "/api/v1/webhooks/endpoints": {
       get: { responses: { "200": { description: "Redacted endpoints" } } },
       post: {

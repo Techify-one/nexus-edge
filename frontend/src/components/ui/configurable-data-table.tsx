@@ -472,7 +472,7 @@ export function ConfigurableDataTable<T extends { id: string }>({
 
   const visibleColumns = table.getVisibleLeafColumns();
   const visibleDataColumnCount = visibleColumns.length;
-  const actionsWidth = 128;
+  const actionsWidth = 144;
 
   return (
     <div>
@@ -518,7 +518,7 @@ export function ConfigurableDataTable<T extends { id: string }>({
                       );
                     })}
                   </SortableContext>
-                  <th className="w-32 px-4 py-3 text-right">
+                  <th className="sticky right-0 z-20 w-36 border-l bg-slate-50 px-4 py-3 text-right shadow-[-6px_0_10px_-10px_rgba(15,23,42,0.45)]">
                     <div className="flex items-center justify-end gap-1.5">
                       <span>{t("common.actions")}</span>
                       {isSaving && (
@@ -593,7 +593,7 @@ export function ConfigurableDataTable<T extends { id: string }>({
                   tabIndex={0}
                   onKeyDown={(event) => keyOpen(event, row.original)}
                   onClick={() => onOpen(row.original)}
-                  className="h-14 cursor-pointer border-t transition hover:bg-indigo-50/50 focus:bg-indigo-50/50"
+                  className="group h-14 cursor-pointer border-t transition hover:bg-indigo-50/50 focus:bg-indigo-50/50"
                 >
                   {row.getVisibleCells().map((cell) => (
                     <td
@@ -605,7 +605,7 @@ export function ConfigurableDataTable<T extends { id: string }>({
                     </td>
                   ))}
                   <td
-                    className="w-32 px-4 py-2 text-right"
+                    className="sticky right-0 z-10 w-36 border-l bg-white px-4 py-2 text-right shadow-[-6px_0_10px_-10px_rgba(15,23,42,0.45)] transition group-hover:bg-indigo-50 group-focus:bg-indigo-50"
                     onClick={(event) => event.stopPropagation()}
                   >
                     {actions?.(row.original)}

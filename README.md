@@ -65,15 +65,20 @@ per-user Core preference storage as Core tables.
 
 ## Main commands
 
-| Command                   | Result                                                    |
-| ------------------------- | --------------------------------------------------------- |
-| `pnpm preflight`          | checks required files and reports placeholders/secrets    |
-| `pnpm provision:d1`       | applies migrations and creates `app_settings` in D1       |
-| `pnpm provision:postgres` | applies all ordered migrations through `DATABASE_URL`     |
-| `pnpm build:frontend`     | builds the production SPA                                 |
-| `pnpm build:plugins`      | builds and packages `artifacts/crm.plugin.zip`            |
-| `pnpm deploy:core`        | publishes Core + assets and preserves existing `PLUGIN_*` |
-| `pnpm openapi:check`      | verifies the minimum API map                              |
+| Command                   | Result                                                 |
+| ------------------------- | ------------------------------------------------------ |
+| `pnpm preflight`          | checks required files and reports placeholders/secrets |
+| `pnpm provision:d1`       | applies migrations and creates `app_settings` in D1    |
+| `pnpm provision:postgres` | applies all ordered migrations through `DATABASE_URL`  |
+| `pnpm build:frontend`     | builds the production SPA                              |
+| `pnpm build:plugins`      | builds and packages `artifacts/crm.plugin.zip`         |
+| `pnpm deploy:core`        | publishing primitive used by GitHub Actions            |
+| `pnpm openapi:check`      | verifies the minimum API map                           |
+
+Production releases are triggered by committing the intended changes and
+pushing them to `main`. The GitHub Actions workflow validates, migrates,
+publishes, and smoke-tests the production Worker. Do not invoke a local deploy
+command for an ordinary production release; see [DEPLOYMENT.md](./DEPLOYMENT.md).
 
 ## Operational security
 

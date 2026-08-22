@@ -1,0 +1,28 @@
+{
+  "id": "meta_ads",
+  "name": "Meta Ads",
+  "version": "1.0.1",
+  "apiVersion": 1,
+  "coreMinVersion": "1.0.0",
+  "compatibilityDate": "2026-08-21",
+  "compatibilityFlags": ["nodejs_compat"],
+  "databaseDialects": ["d1", "postgres"],
+  "tablePrefix": "meta_ads_",
+  "permissions": [
+    "meta_ads.account.read",
+    "meta_ads.account.create",
+    "meta_ads.account.update",
+    "meta_ads.account.delete",
+    "meta_ads.campaign.read",
+    "meta_ads.campaign.update",
+    "meta_ads.adset.read",
+    "meta_ads.adset.update",
+    "meta_ads.ad.read",
+    "meta_ads.ad.update",
+    "meta_ads.insight.read"
+  ],
+  "menu": [
+    { "title": "Meta Ads", "routeKey": "meta_ads.dashboard" },
+    { "title": "Contas de anúncios", "routeKey": "meta_ads.accounts" }
+  ]
+}

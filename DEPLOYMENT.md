@@ -1,11 +1,44 @@
 # Cloudflare Workers deployment
 
-This is the authoritative deployment runbook. Run all commands from the repository root and stop on any error; never silently switch between D1 and PostgreSQL.
+This is the authoritative deployment runbook. The normal production release is
+performed by GitHub Actions, not from a developer machine. Stop on any error and
+never silently switch between D1 and PostgreSQL.
 
-## 1. Prerequisites and decisions
+## Production release workflow
+
+The production source of truth is `.github/workflows/ci.yml`. Production uses
+the `main` branch, D1, `workers/core/wrangler.production.jsonc`, the Worker
+`modular-workers-core`, and the canonical origin
+`https://modular-workers-core.francisconeto.workers.dev`.
+
+For every ordinary production deployment, including an implementation request
+that asks for deployment immediately afterward:
+
+1. Complete the implementation and the required checks.
+2. Commit only the changes intended for that release.
+3. Push the commit to `main` on GitHub.
+4. Wait for the `CI` workflow's `validate` and `deploy-production` jobs.
+5. Confirm that the workflow's production smoke tests pass.
+
+The workflow installs locked dependencies, runs the full validation suite,
+applies remote D1 migrations, configures the Installer secrets from GitHub
+environment secrets, invokes `pnpm deploy:core`, and verifies `/health` and
+`/api/v1/setup/status` at the canonical origin.
+
+Do not run `pnpm deploy:core`, `pnpm deploy:direct`, or `wrangler deploy`
+locally for an ordinary production release. Those commands are retained as
+deployment implementation or exceptional recovery tools. Use them only when
+the owner explicitly requests a manual recovery or a non-production target. If
+GitHub Actions fails, stop and report or fix the failing commit, then push the
+fix; never bypass the failed workflow with a direct publish.
+
+## 1. Initial provisioning and exceptional environments
 
 1. Install Node.js 24+ and pnpm 11.19+.
-2. Authenticate Wrangler (`pnpm exec wrangler login`) or set `CLOUDFLARE_API_TOKEN` for CI.
+2. Configure the production GitHub environment secrets
+   `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. Authenticate Wrangler
+   locally only for explicitly requested provisioning or exceptional manual
+   operations.
 3. Select exactly one provider: `d1` or `postgres`.
 4. Define the final application URL, for example `https://nexus-edge.example.com`.
 5. Generate independent random values for `APP_INSTALLATION_ID`, `BETTER_AUTH_SECRET`, and `WEBHOOK_ENCRYPTION_KEY`.
@@ -89,10 +122,15 @@ pnpm exec wrangler secret put CF_ACCOUNT_ID --config "$CORE_CONFIG"
 
 Use a separate Cloudflare token per environment with only the permissions required for Workers Scripts/settings. `CF_ACCOUNT_ID` is not inherently secret, but this runbook accepts it as one for simpler configuration. In PostgreSQL mode, the Hyperdrive ID is in the config; the Core never receives the database password.
 
-## 5. Publish the Core and SPA
+## 5. Publishing implementation and manual exception
 
-Before every release, apply pending migrations for the selected provider. The
-commands are idempotent and preserve the current `app_settings` row:
+For the normal D1 production release, do not run the commands in this section
+locally. The GitHub Actions workflow applies pending migrations and invokes the
+safe Core publishing script after validation.
+
+For an explicitly requested manual recovery or non-production target, apply
+pending migrations for the selected provider first. The commands are idempotent
+and preserve the current `app_settings` row:
 
 ```bash
 APP_INSTALLATION_ID="install_..." pnpm provision:d1
@@ -103,7 +141,10 @@ APP_INSTALLATION_ID="install_..." pnpm provision:d1
 CF_API_TOKEN="..." CF_ACCOUNT_ID="..." CORE_WORKER_NAME=nexus-edge-core CORE_WRANGLER_CONFIG="$CORE_CONFIG" pnpm deploy:core
 ```
 
-The script builds the SPA, reads existing `PLUGIN_*` Service Bindings, publishes, and reapplies/verifies them. This prevents a new Core release from removing plugins installed through the panel.
+The script builds the SPA, reads existing `PLUGIN_*` Service Bindings,
+publishes, and reapplies/verifies them. This prevents a new Core release from
+removing plugins installed through the panel. In production this script is
+called by GitHub Actions, not by the developer performing the release.
 
 `pnpm deploy:direct` uses `CLOUDFLARE_API_TOKEN` only to publish. It inherits the Worker's existing `CF_API_TOKEN` and `CF_ACCOUNT_ID` installer secrets unless separate replacement values are explicitly supplied; it never copies the deployment credential into runtime automatically.
 
@@ -169,7 +210,8 @@ the independent `core.plugin.export` permission and are recorded in Audit.
 - a test webhook arrives with the correct `X-App-Signature` and event;
 - `/api/docs` and `/api/v1/openapi.json` respond for an authenticated user;
 - auditing contains setup, user, group, plugin, and webhook events;
-- another `pnpm deploy:core` preserves `PLUGIN_CRM`.
+- another GitHub-driven production deployment preserves `PLUGIN_CRM` through
+  the workflow's `pnpm deploy:core` step.
 
 ## 8. Rollback, backup, and provider
 

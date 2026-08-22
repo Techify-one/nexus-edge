@@ -66,6 +66,10 @@ export async function uploadPluginWorker(
           main_module: "worker.mjs",
           compatibility_date: manifest.compatibilityDate,
           compatibility_flags: manifest.compatibilityFlags,
+          // Runtime credentials are configured as private Worker secrets after
+          // installation. Preserve them during package updates; their values
+          // are never readable through the Cloudflare settings API.
+          keep_bindings: ["secret_text", "secret_key"],
           bindings,
         }),
       ],
@@ -99,6 +103,52 @@ export async function hardenPluginWorker(
   );
   if (state.enabled || state.previews_enabled)
     throw new Error("Plugin public subdomain hardening verification failed");
+}
+
+export async function pluginSecretConfigured(
+  env: CoreEnv,
+  workerName: string,
+  secretName: string,
+): Promise<boolean> {
+  const settings = await cf<{ bindings: Binding[] }>(
+    env,
+    `/workers/scripts/${encodeURIComponent(workerName)}/settings`,
+    { method: "GET" },
+  );
+  return (settings.bindings ?? []).some(
+    (binding) =>
+      binding.name === secretName &&
+      (binding.type === "secret_text" || binding.type === "secret_key"),
+  );
+}
+
+export async function putPluginSecret(
+  env: CoreEnv,
+  workerName: string,
+  secretName: string,
+  value: string,
+): Promise<void> {
+  await cf(env, `/workers/scripts/${encodeURIComponent(workerName)}/secrets`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      name: secretName,
+      text: value,
+      type: "secret_text",
+    }),
+  });
+}
+
+export async function deletePluginSecret(
+  env: CoreEnv,
+  workerName: string,
+  secretName: string,
+): Promise<void> {
+  await cf(
+    env,
+    `/workers/scripts/${encodeURIComponent(workerName)}/secrets/${encodeURIComponent(secretName)}`,
+    { method: "DELETE" },
+  );
 }
 
 export async function getCoreBindings(env: CoreEnv): Promise<Binding[]> {

@@ -5,9 +5,12 @@ import type { SqlStatement } from "@app/database";
 import semver from "semver";
 import type { HonoEnv } from "../env.js";
 import {
+  deletePluginSecret,
   deletePluginWorker,
   hardenPluginWorker,
   mergeCoreServiceBinding,
+  pluginSecretConfigured,
+  putPluginSecret,
   removeCoreServiceBinding,
   uploadPluginWorker,
 } from "../installer/cloudflare.js";
@@ -27,10 +30,11 @@ import {
   portablePackageZip,
   verifyPortablePackage,
 } from "../installer/package-archive.js";
-import { AppError } from "../lib/http.js";
+import { AppError, noStore } from "../lib/http.js";
 import { canPermission } from "../lib/ability.js";
 import { dbTime } from "../lib/values.js";
 import { requirePermission } from "../middleware/auth.js";
+import { validateRecentReauth } from "../middleware/reauth.js";
 import { audit } from "../services/audit.js";
 import { commitWithEvent } from "../services/events.js";
 import { idempotencyLookup, saveIdempotency } from "../services/idempotency.js";
@@ -169,6 +173,30 @@ const safeFailureSummary = (
 const bindingName = (id: string): string => `PLUGIN_${id.toUpperCase()}`;
 const workerName = (id: string): string =>
   `app-plugin-${id.replaceAll("_", "-")}`;
+const allowedRuntimeSecrets = new Map([
+  ["meta_ads", new Set(["META_ACCESS_TOKEN"])],
+]);
+
+const runtimeSecretTarget = async (
+  c: Context<HonoEnv>,
+  access: "read" | "update",
+) => {
+  const pluginId = c.req.param("pluginId") ?? "";
+  const secretName = c.req.param("secretName") ?? "";
+  if (!allowedRuntimeSecrets.get(pluginId)?.has(secretName))
+    throw new AppError(404, "PLUGIN_SECRET_NOT_FOUND", "Secret not found.");
+  if (!canPermission(c.get("ability"), `${pluginId}.account.${access}`))
+    throw new AppError(403, "FORBIDDEN", "Permission denied.");
+  const plugin = await c
+    .get("db")
+    .first<{ workerName: string; status: string }>(
+      `SELECT worker_name AS "workerName", status FROM plugins WHERE id = ?`,
+      [pluginId],
+    );
+  if (!plugin || plugin.status !== "installed")
+    throw new AppError(404, "PLUGIN_NOT_INSTALLED", "Plugin is not installed.");
+  return { pluginId, secretName, workerName: plugin.workerName };
+};
 const insertIgnore = (provider: "d1" | "postgres"): string =>
   provider === "d1"
     ? "INSERT OR IGNORE INTO permissions(id,key,created_at) VALUES (?, ?, ?)"
@@ -357,6 +385,68 @@ installerRoutes.get(
              FROM plugins p ORDER BY p.name`,
       ),
     }),
+);
+
+installerRoutes.get(
+  "/plugins/:pluginId/runtime-secrets/:secretName",
+  async (c) => {
+    const target = await runtimeSecretTarget(c, "read");
+    return c.json(
+      {
+        configured: await pluginSecretConfigured(
+          c.env,
+          target.workerName,
+          target.secretName,
+        ),
+      },
+      200,
+      noStore,
+    );
+  },
+);
+
+installerRoutes.put(
+  "/plugins/:pluginId/runtime-secrets/:secretName",
+  async (c) => {
+    const target = await runtimeSecretTarget(c, "update");
+    await validateRecentReauth(c);
+    const body = (await c.req.json().catch(() => null)) as {
+      value?: unknown;
+    } | null;
+    const value = typeof body?.value === "string" ? body.value.trim() : "";
+    if (value.length < 20 || value.length > 8_192)
+      throw new AppError(
+        400,
+        "VALIDATION_ERROR",
+        "The secret value is invalid.",
+      );
+    await putPluginSecret(c.env, target.workerName, target.secretName, value);
+    await audit(
+      c,
+      "core.plugin.runtime_secret_configured",
+      "core.plugin",
+      target.pluginId,
+      { secretName: target.secretName },
+    );
+    return c.json({ configured: true }, 200, noStore);
+  },
+);
+
+installerRoutes.delete(
+  "/plugins/:pluginId/runtime-secrets/:secretName",
+  async (c) => {
+    const target = await runtimeSecretTarget(c, "update");
+    await validateRecentReauth(c);
+    await deletePluginSecret(c.env, target.workerName, target.secretName);
+    await audit(
+      c,
+      "core.plugin.runtime_secret_deleted",
+      "core.plugin",
+      target.pluginId,
+      { secretName: target.secretName },
+    );
+    return c.body(null, 204);
+  },
 );
 
 installerRoutes.get(

@@ -78,6 +78,7 @@ gatewayRoutes.all("/:pluginId/*", async (c) => {
       method: c.req.method,
       headers,
       body: ["GET", "HEAD"].includes(c.req.method) ? null : c.req.raw.body,
+      signal: c.req.raw.signal,
     }),
   );
   if (

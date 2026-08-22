@@ -11,6 +11,7 @@
   "include": ["src"],
   "references": [
     { "path": "../workers/core" },
-    { "path": "../workers/plugin-crm" }
+    { "path": "../workers/plugin-crm" },
+    { "path": "../workers/plugin-meta_ads" }
   ]
 }

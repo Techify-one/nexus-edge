@@ -3,6 +3,7 @@ import { gzipSync } from "fflate";
 
 const pluginBundles = [
   "workers/plugin-crm/dist/index.js",
+  "workers/plugin-meta_ads/dist/index.js",
   "workers/plugin-template/dist/index.js",
 ];
 const unsupportedDynamicRequires = [
@@ -30,9 +31,13 @@ for (const bundlePath of pluginBundles) {
       `${bundlePath} contains unsupported dynamic Node.js requires: ${unsupported.join(", ")}`,
     );
 }
-const workerBytes = gzipSync(readFileSync(pluginBundles[0]!)).byteLength;
-if (workerBytes > 3 * 1024 * 1024)
-  throw new Error(`CRM gzip exceeds 3 MiB: ${workerBytes}`);
-process.stdout.write(
-  `CRM worker gzip: ${(workerBytes / 1024).toFixed(1)} KiB (3072 KiB limit).\n`,
-);
+for (const bundlePath of pluginBundles.filter(
+  (path) => !path.includes("plugin-template"),
+)) {
+  const workerBytes = gzipSync(readFileSync(bundlePath)).byteLength;
+  if (workerBytes > 3 * 1024 * 1024)
+    throw new Error(`${bundlePath} gzip exceeds 3 MiB: ${workerBytes}`);
+  process.stdout.write(
+    `${bundlePath} gzip: ${(workerBytes / 1024).toFixed(1)} KiB (3072 KiB limit).\n`,
+  );
+}

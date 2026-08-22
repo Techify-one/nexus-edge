@@ -10,6 +10,11 @@ type PluginPage = LazyExoticComponent<ComponentType>;
 export const pluginUiRegistry = {
   "crm.home": lazy(() => import("./crm/CrmHomePage.js")),
   "crm.leads": lazy(() => import("./crm/LeadListPage.js")),
+  "meta_ads.home": lazy(() => import("./meta_ads/MetaAdsHomePage.js")),
+  "meta_ads.dashboard": lazy(
+    () => import("./meta_ads/MetaAdsDashboardPage.js"),
+  ),
+  "meta_ads.accounts": lazy(() => import("./meta_ads/MetaAdsAccountsPage.js")),
 } satisfies Record<string, PluginPage>;
 
 export type PluginRouteKey = keyof typeof pluginUiRegistry;

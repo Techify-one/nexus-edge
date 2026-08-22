@@ -10,7 +10,7 @@
   "scripts": {
     "build": "pnpm build:frontend && pnpm build:plugins && pnpm --filter @app/plugin-template build",
     "build:frontend": "pnpm --filter @app/frontend build",
-    "build:plugins": "pnpm --filter @app/plugin-crm build && node --import tsx scripts/package-plugin.ts crm",
+    "build:plugins": "pnpm --filter @app/plugin-crm build && node --import tsx scripts/package-plugin.ts crm && pnpm --filter @app/plugin-meta-ads build && node --import tsx scripts/package-plugin.ts meta_ads",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run",
     "test:watch": "vitest",

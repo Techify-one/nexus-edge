@@ -54,7 +54,13 @@ export const pluginManifestSchema = z
   });
 
 export type PluginManifest = z.infer<typeof pluginManifestSchema>;
-export const CORE_ROUTE_KEYS = new Set(["crm.home", "crm.leads"]);
+export const CORE_ROUTE_KEYS = new Set([
+  "crm.home",
+  "crm.leads",
+  "meta_ads.home",
+  "meta_ads.dashboard",
+  "meta_ads.accounts",
+]);
 
 export function validateManifestPolicy(
   manifest: PluginManifest,

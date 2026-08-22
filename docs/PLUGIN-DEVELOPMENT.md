@@ -292,8 +292,9 @@ true when the Installer or deployment code changes:
   `Content-Type` header manually;
 - merge the new service binding with all existing Core bindings and verify it
   through a fresh settings read;
-- use `pnpm deploy:core` so Core releases preserve and verify all dynamic
-  `PLUGIN_*` bindings;
+- release Core to production by pushing the intended commit to `main`; the
+  GitHub Actions deployment uses `pnpm deploy:core` to preserve and verify all
+  dynamic `PLUGIN_*` bindings;
 - disable and verify both public subdomain and preview exposure before
   registration;
 - release the Installer lock atomically whenever a stage or package-hash check

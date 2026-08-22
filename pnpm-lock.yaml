@@ -327,6 +327,21 @@ importers:
         specifier: 4.4.3
         version: 4.4.3
 
+  workers/plugin-meta_ads:
+    dependencies:
+      '@app/core-contract':
+        specifier: workspace:*
+        version: link:../../packages/core-contract
+      '@app/database':
+        specifier: workspace:*
+        version: link:../../packages/database
+      hono:
+        specifier: 4.13.3
+        version: 4.13.3
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+
   workers/plugin-template:
     dependencies:
       '@app/core-contract':

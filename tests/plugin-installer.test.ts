@@ -6,7 +6,12 @@ import { Hono } from "hono";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { sha256, stableJson } from "../packages/webhook-contract/src/index.js";
 import type { CoreEnv, HonoEnv } from "../workers/core/src/env.js";
-import { replaceCoreBindings } from "../workers/core/src/installer/cloudflare.js";
+import {
+  deletePluginSecret,
+  pluginSecretConfigured,
+  putPluginSecret,
+  replaceCoreBindings,
+} from "../workers/core/src/installer/cloudflare.js";
 import { AppError } from "../workers/core/src/lib/http.js";
 import { archivePackageStatements } from "../workers/core/src/installer/package-archive.js";
 import type { PluginManifest } from "../workers/core/src/installer/manifest.js";
@@ -590,5 +595,62 @@ describe("Cloudflare plugin bindings", () => {
     );
 
     expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("writes, detects, and deletes Worker secrets without reading values", async () => {
+    const requests: Array<{ url: string; method: string; body: unknown }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        requests.push({
+          url: String(input),
+          method: init?.method || "GET",
+          body: init?.body ? JSON.parse(String(init.body)) : null,
+        });
+        if (init?.method === "GET")
+          return Response.json({
+            success: true,
+            result: {
+              bindings: [{ name: "META_ACCESS_TOKEN", type: "secret_text" }],
+            },
+          });
+        return Response.json({ success: true, result: {} });
+      }),
+    );
+    const env = {
+      CF_API_TOKEN: "test-token",
+      CF_ACCOUNT_ID: "test-account",
+    } as CoreEnv;
+
+    await putPluginSecret(
+      env,
+      "app-plugin-meta-ads",
+      "META_ACCESS_TOKEN",
+      "private-meta-token",
+    );
+    expect(
+      await pluginSecretConfigured(
+        env,
+        "app-plugin-meta-ads",
+        "META_ACCESS_TOKEN",
+      ),
+    ).toBe(true);
+    await deletePluginSecret(env, "app-plugin-meta-ads", "META_ACCESS_TOKEN");
+
+    expect(requests).toEqual([
+      expect.objectContaining({
+        method: "PUT",
+        body: {
+          name: "META_ACCESS_TOKEN",
+          text: "private-meta-token",
+          type: "secret_text",
+        },
+      }),
+      expect.objectContaining({ method: "GET", body: null }),
+      expect.objectContaining({
+        method: "DELETE",
+        url: expect.stringContaining("/secrets/META_ACCESS_TOKEN"),
+      }),
+    ]);
   });
 });
