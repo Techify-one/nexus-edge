@@ -2,8 +2,9 @@ import { readFileSync } from "node:fs";
 import { createMongoAbility } from "@casl/ability";
 import type { DatabasePort, SqlStatement } from "@app/database";
 import { Hono } from "hono";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CoreEnv, HonoEnv } from "../workers/core/src/env.js";
+import { replaceCoreBindings } from "../workers/core/src/installer/cloudflare.js";
 import { AppError } from "../workers/core/src/lib/http.js";
 import { installerRoutes } from "../workers/core/src/routes/installer.js";
 
@@ -180,5 +181,38 @@ describe("CRM plugin installer", () => {
         failureReason: "cloudflare_api_400_10021",
       }),
     );
+  });
+});
+
+describe("Cloudflare plugin bindings", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("patches Worker bindings as multipart JSON", async () => {
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit) => {
+        expect(init?.method).toBe("PATCH");
+        expect(new Headers(init?.headers).has("Content-Type")).toBe(false);
+        expect(init?.body).toBeInstanceOf(FormData);
+        const bindingsPart = (init?.body as FormData).get("bindings");
+        expect(bindingsPart).toBeInstanceOf(Blob);
+        expect((bindingsPart as Blob).type).toBe("application/json");
+        expect(JSON.parse(await (bindingsPart as Blob).text())).toEqual([
+          { type: "service", name: "PLUGIN_CRM", service: "plugin-crm" },
+        ]);
+        return Response.json({ success: true, result: {} });
+      },
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await replaceCoreBindings(
+      {
+        CF_API_TOKEN: "test-token",
+        CF_ACCOUNT_ID: "test-account",
+        CORE_WORKER_NAME: "test-core",
+      } as CoreEnv,
+      [{ type: "service", name: "PLUGIN_CRM", service: "plugin-crm" }],
+    );
+
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 });

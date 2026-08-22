@@ -114,13 +114,18 @@ export async function replaceCoreBindings(
   env: CoreEnv,
   bindings: Binding[],
 ): Promise<void> {
+  const body = new FormData();
+  body.set(
+    "bindings",
+    new Blob([JSON.stringify(bindings)], { type: "application/json" }),
+    "bindings",
+  );
   await cf(
     env,
     `/workers/scripts/${encodeURIComponent(env.CORE_WORKER_NAME)}/settings`,
     {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ bindings }),
+      body,
     },
   );
 }

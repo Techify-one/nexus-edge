@@ -33,13 +33,18 @@ async function replaceBindings(bindings: Binding[]): Promise<void> {
     throw new Error(
       "CF_API_TOKEN and CF_ACCOUNT_ID are required to preserve dynamic bindings.",
     );
+  const form = new FormData();
+  form.set(
+    "bindings",
+    new Blob([JSON.stringify(bindings)], { type: "application/json" }),
+    "bindings",
+  );
   const response = await fetch(api, {
     method: "PATCH",
     headers: {
       Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
     },
-    body: JSON.stringify({ bindings }),
+    body: form,
   });
   const body = (await response.json()) as Envelope<unknown>;
   if (!response.ok || !body.success)
