@@ -1,4 +1,4 @@
-# Cloudflare Workers deployment — Codex instructions
+# Cloudflare Workers deployment
 
 This is the authoritative deployment runbook. Run all commands from the repository root and stop on any error; never silently switch between D1 and PostgreSQL.
 

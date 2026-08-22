@@ -14,7 +14,8 @@ const requiredFiles = [
   "workers/plugin-crm/migrations/d1/0001_init.sql",
   "workers/plugin-crm/migrations/postgres/0001_init.sql",
   "frontend/src/main.tsx",
-  "DEPLOY-CODEX.md",
+  "CONTRIBUTING.md",
+  "DEPLOYMENT.md",
 ];
 const missing = requiredFiles.filter((file) => !existsSync(file));
 if (missing.length)

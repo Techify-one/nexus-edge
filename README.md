@@ -43,11 +43,17 @@ tests/                    contracts, security, and migrations
 docs/                     architecture, operations, and backup
 ```
 
-Follow [DEPLOY-CODEX.md](./DEPLOY-CODEX.md) to publish. The file is written so another Codex session can deploy without rediscovering the architecture.
+Follow [CONTRIBUTING.md](./CONTRIBUTING.md) for the repository-wide engineering
+rules and [DEPLOYMENT.md](./DEPLOYMENT.md) to publish. Both documents describe
+commands, invariants, and verification criteria without depending on a specific
+development tool.
 
 Follow [docs/INTERNATIONALIZATION.md](./docs/INTERNATIONALIZATION.md) to add languages.
 
-Follow [docs/DATA-TABLE-STANDARD.md](./docs/DATA-TABLE-STANDARD.md) whenever creating a table or changing an existing record-list table. The repository rules make this configurable, per-user table contract mandatory for agent-driven work.
+Follow [docs/DATA-TABLE-STANDARD.md](./docs/DATA-TABLE-STANDARD.md) whenever
+creating a table or changing an existing record-list table. The repository rules
+make this configurable, per-user table contract mandatory for every
+implementation workflow.
 
 Follow [docs/PLUGIN-DEVELOPMENT.md](./docs/PLUGIN-DEVELOPMENT.md) and then copy
 [workers/plugin-template](./workers/plugin-template) when creating a plugin.

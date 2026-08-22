@@ -131,7 +131,8 @@ For every new or migrated table:
 
 ## Request wording
 
-Because `AGENTS.md` makes this standard mandatory, the owner can simply ask:
+Because `CONTRIBUTING.md` makes this standard mandatory, a request can be as
+simple as:
 
 > Crie uma tabela de pedidos.
 
@@ -139,6 +140,7 @@ or:
 
 > Ajuste a tabela existente de leads.
 
-For a fully explicit request outside an agent that reads this repository's instructions, use:
+For a fully explicit request in a context that has not loaded the repository
+rules, use:
 
 > Crie/ajuste a tabela de `<recurso>` seguindo `docs/DATA-TABLE-STANDARD.md`, com preferências separadas por usuário.

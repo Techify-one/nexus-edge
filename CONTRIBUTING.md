@@ -1,6 +1,32 @@
-# Codex instructions — Cloudflare deployment
+# Repository contribution rules
 
-This repository contains a complete Cloudflare Workers application. Before changing or publishing any resource, read `DEPLOY-CODEX.md`; it is the authoritative runbook.
+This repository contains a complete Cloudflare Workers application. These rules
+apply equally to people, scripts, CI jobs, and automated development tools.
+Before changing or publishing any resource, read `DEPLOYMENT.md`; it is the
+authoritative runbook.
+
+## Tool neutrality
+
+Repository documentation and engineering workflows must remain independent of
+editors, coding assistants, and automation vendors.
+
+- Keep every required instruction in standard tracked Markdown files with
+  ordinary relative links.
+- Do not require proprietary instruction files, prompts, plugins, skills,
+  memory stores, connectors, or hidden tool state.
+- Express build, test, migration, packaging, and deployment procedures as
+  versioned repository commands that a person, terminal, or CI runner can
+  execute.
+- Keep environment-specific values in environment variables or an external
+  secret manager. Documentation must explain the required inputs without
+  depending on one product's credential interface.
+- Treat `CONTRIBUTING.md`, `DEPLOYMENT.md`, and the documents under `docs/` as
+  the shared source of truth. Tool-specific local configuration may point to
+  them, but it must not replace, contradict, or be required to understand them.
+- Do not add vendor-specific documentation entry points to the repository.
+
+`tests/documentation-neutrality.test.ts` enforces neutral filenames and checks
+tracked documentation for tool-vendor references.
 
 ## Operating rules
 
