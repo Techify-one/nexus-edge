@@ -116,9 +116,9 @@ export async function replaceCoreBindings(
 ): Promise<void> {
   const body = new FormData();
   body.set(
-    "bindings",
-    new Blob([JSON.stringify(bindings)], { type: "application/json" }),
-    "bindings",
+    "settings",
+    new Blob([JSON.stringify({ bindings })], { type: "application/json" }),
+    "settings",
   );
   await cf(
     env,

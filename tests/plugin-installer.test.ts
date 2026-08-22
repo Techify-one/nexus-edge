@@ -193,12 +193,14 @@ describe("Cloudflare plugin bindings", () => {
         expect(init?.method).toBe("PATCH");
         expect(new Headers(init?.headers).has("Content-Type")).toBe(false);
         expect(init?.body).toBeInstanceOf(FormData);
-        const bindingsPart = (init?.body as FormData).get("bindings");
-        expect(bindingsPart).toBeInstanceOf(Blob);
-        expect((bindingsPart as Blob).type).toBe("application/json");
-        expect(JSON.parse(await (bindingsPart as Blob).text())).toEqual([
-          { type: "service", name: "PLUGIN_CRM", service: "plugin-crm" },
-        ]);
+        const settingsPart = (init?.body as FormData).get("settings");
+        expect(settingsPart).toBeInstanceOf(Blob);
+        expect((settingsPart as Blob).type).toBe("application/json");
+        expect(JSON.parse(await (settingsPart as Blob).text())).toEqual({
+          bindings: [
+            { type: "service", name: "PLUGIN_CRM", service: "plugin-crm" },
+          ],
+        });
         return Response.json({ success: true, result: {} });
       },
     );

@@ -35,9 +35,9 @@ async function replaceBindings(bindings: Binding[]): Promise<void> {
     );
   const form = new FormData();
   form.set(
-    "bindings",
-    new Blob([JSON.stringify(bindings)], { type: "application/json" }),
-    "bindings",
+    "settings",
+    new Blob([JSON.stringify({ bindings })], { type: "application/json" }),
+    "settings",
   );
   const response = await fetch(api, {
     method: "PATCH",
