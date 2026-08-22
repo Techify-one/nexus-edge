@@ -14,6 +14,7 @@ const requiredFiles = [
   "workers/plugin-crm/migrations/d1/0001_init.sql",
   "workers/plugin-crm/migrations/postgres/0001_init.sql",
   "frontend/src/main.tsx",
+  "AGENTS.md",
   "CONTRIBUTING.md",
   "DEPLOYMENT.md",
 ];

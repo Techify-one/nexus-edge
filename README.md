@@ -43,10 +43,12 @@ tests/                    contracts, security, and migrations
 docs/                     architecture, operations, and backup
 ```
 
-Follow [CONTRIBUTING.md](./CONTRIBUTING.md) for the repository-wide engineering
-rules and [DEPLOYMENT.md](./DEPLOYMENT.md) to publish. Both documents describe
+Automated development tools should start with the open-format
+[AGENTS.md](./AGENTS.md). People and tools should follow
+[CONTRIBUTING.md](./CONTRIBUTING.md) for the repository-wide engineering rules
+and [DEPLOYMENT.md](./DEPLOYMENT.md) to publish. These documents describe
 commands, invariants, and verification criteria without depending on a specific
-development tool.
+vendor.
 
 Follow [docs/INTERNATIONALIZATION.md](./docs/INTERNATIONALIZATION.md) to add languages.
 

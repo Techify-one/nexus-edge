@@ -10,6 +10,7 @@ replace the template's Wrangler dry-run build with a raw Node/esbuild bundle.
 
 Before creating plugin UI, read:
 
+- `AGENTS.md`
 - `CONTRIBUTING.md`
 - `docs/PLUGIN-DEVELOPMENT.md`
 - `docs/DATA-TABLE-STANDARD.md`

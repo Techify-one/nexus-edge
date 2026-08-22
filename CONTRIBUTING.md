@@ -20,13 +20,16 @@ editors, coding assistants, and automation vendors.
 - Keep environment-specific values in environment variables or an external
   secret manager. Documentation must explain the required inputs without
   depending on one product's credential interface.
-- Treat `CONTRIBUTING.md`, `DEPLOYMENT.md`, and the documents under `docs/` as
-  the shared source of truth. Tool-specific local configuration may point to
-  them, but it must not replace, contradict, or be required to understand them.
+- Use the open `AGENTS.md` format as the portable discovery entry point. Treat
+  it, `CONTRIBUTING.md`, `DEPLOYMENT.md`, and the documents under `docs/` as the
+  shared source of truth.
+- Tools that do not discover `AGENTS.md` automatically may be configured locally
+  to load it. Local adapters must not replace, contradict, or be required to
+  understand the tracked documentation.
 - Do not add vendor-specific documentation entry points to the repository.
 
-`tests/documentation-neutrality.test.ts` enforces neutral filenames and checks
-tracked documentation for tool-vendor references.
+`tests/documentation-neutrality.test.ts` enforces the portable entry point and
+checks tracked documentation for tool-vendor references.
 
 ## Operating rules
 

@@ -12,9 +12,9 @@ const markdownFiles = (): string[] =>
     .filter((path) => /\.mdx?$/iu.test(path) && existsSync(path));
 
 describe("tool-neutral documentation", () => {
-  it("does not use vendor-specific instruction entry points", () => {
+  it("uses the open instruction entry point without vendor-specific files", () => {
     const filenames = markdownFiles().map((path) => path.toLowerCase());
-    expect(filenames).not.toContain("agents.md");
+    expect(filenames).toContain("agents.md");
     expect(filenames).not.toContain("claude.md");
     expect(filenames).not.toContain("deploy-codex.md");
   });
