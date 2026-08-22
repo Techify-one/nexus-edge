@@ -153,4 +153,32 @@ describe("CRM plugin installer", () => {
       expect.stringContaining("UPDATE installer_lock SET operation_id = NULL"),
     );
   });
+
+  it("returns only a safe Cloudflare failure code to administrators", async () => {
+    const response = await installerApp({
+      operation: {
+        operationId: "pop_diagnostic",
+        pluginId: "crm",
+        type: "install",
+        targetVersion: "1.0.0",
+        state: "failed",
+        manifestSha256: "manifest",
+        workerSha256: "worker",
+        d1MigrationsSha256: "d1",
+        postgresMigrationsSha256: "postgres",
+        lastError: JSON.stringify({
+          from: "deploying",
+          detail: "Cloudflare API failed (400): 10021",
+        }),
+      },
+    }).request("/plugin-operations/pop_diagnostic");
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual(
+      expect.objectContaining({
+        failureStage: "deploying",
+        failureReason: "cloudflare_api_400_10021",
+      }),
+    );
+  });
 });

@@ -48,6 +48,39 @@ type PackageParts = {
   rawBytes: number;
 };
 
+const safeFailureSummary = (
+  lastError: string | null,
+): { failureStage: string; failureReason: string } | null => {
+  if (!lastError) return null;
+  try {
+    const failure = JSON.parse(lastError) as {
+      from?: unknown;
+      detail?: unknown;
+    };
+    const failureStage =
+      typeof failure.from === "string" ? failure.from : "unknown";
+    const detail = typeof failure.detail === "string" ? failure.detail : "";
+    if (detail === "CF_API_TOKEN and CF_ACCOUNT_ID must be configured")
+      return { failureStage, failureReason: "installer_credentials_missing" };
+    const cloudflare =
+      /^Cloudflare API failed \((\d{3})\): ([0-9,]+|unknown)$/u.exec(detail);
+    if (cloudflare)
+      return {
+        failureStage,
+        failureReason: `cloudflare_api_${cloudflare[1]}_${cloudflare[2]}`,
+      };
+    if (detail.startsWith("Plugin smoke test failed"))
+      return { failureStage, failureReason: "plugin_smoke_test_failed" };
+    if (detail.includes("Service Binding is not available"))
+      return { failureStage, failureReason: "service_binding_pending" };
+    if (detail.startsWith("Migration hash mismatch"))
+      return { failureStage, failureReason: "migration_hash_mismatch" };
+    return { failureStage, failureReason: "unexpected_stage_failure" };
+  } catch {
+    return { failureStage: "unknown", failureReason: "invalid_failure_record" };
+  }
+};
+
 const bindingName = (id: string): string => `PLUGIN_${id.toUpperCase()}`;
 const workerName = (id: string): string =>
   `app-plugin-${id.replaceAll("_", "-")}`;
@@ -226,6 +259,7 @@ installerRoutes.get(
   requirePermission("core.plugin.read"),
   async (c) => {
     const operation = await getOperation(c);
+    const failure = safeFailureSummary(operation.lastError);
     return c.json({
       operationId: operation.operationId,
       pluginId: operation.pluginId,
@@ -237,6 +271,7 @@ installerRoutes.get(
         operation.state === "failed"
           ? "The stage failed. Select the same package again to resume."
           : undefined,
+      ...(failure ?? {}),
     });
   },
 );
