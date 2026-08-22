@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "esbuild src/index.ts --bundle --format=esm --platform=node --target=es2022 --outfile=dist/index.js --sourcemap",
+    "build": "wrangler deploy --dry-run --outdir dist --config wrangler.jsonc",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "wrangler dev --config wrangler.jsonc"
   },
