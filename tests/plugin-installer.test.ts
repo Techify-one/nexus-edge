@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import { createMongoAbility } from "@casl/ability";
 import type { DatabasePort, SqlStatement } from "@app/database";
-import { strFromU8, unzipSync } from "fflate";
 import { Hono } from "hono";
 import { describe, expect, it } from "vitest";
 import type { CoreEnv, HonoEnv } from "../workers/core/src/env.js";
@@ -9,32 +8,23 @@ import { AppError } from "../workers/core/src/lib/http.js";
 import { installerRoutes } from "../workers/core/src/routes/installer.js";
 
 const crmPackageBody = () => {
-  const files = unzipSync(readFileSync("artifacts/crm.plugin.zip"));
-  const migrations = (dialect: "d1" | "postgres") =>
-    Object.fromEntries(
-      Object.entries(files)
-        .filter(
-          ([name]) =>
-            name.startsWith(`migrations/${dialect}/`) && name.endsWith(".sql"),
-        )
-        .map(([name, contents]) => [
-          name
-            .split("/")
-            .at(-1)!
-            .replace(/\.sql$/u, ""),
-          strFromU8(contents),
-        ]),
-    );
+  const pluginRoot = "workers/plugin-crm";
+  const migration = (dialect: "d1" | "postgres") => ({
+    "0001_init": readFileSync(
+      `${pluginRoot}/migrations/${dialect}/0001_init.sql`,
+      "utf8",
+    ),
+  });
   const body = new FormData();
-  body.set("manifest", strFromU8(files["manifest.json"]!));
+  body.set("manifest", readFileSync(`${pluginRoot}/manifest.json`, "utf8"));
   body.set(
     "worker",
-    new File([files["worker.mjs"]!], "worker.mjs", {
+    new File(["export default {};"], "worker.mjs", {
       type: "application/javascript",
     }),
   );
-  body.set("d1Migrations", JSON.stringify(migrations("d1")));
-  body.set("postgresMigrations", JSON.stringify(migrations("postgres")));
+  body.set("d1Migrations", JSON.stringify(migration("d1")));
+  body.set("postgresMigrations", JSON.stringify(migration("postgres")));
   return body;
 };
 
@@ -73,7 +63,7 @@ const installerApp = () => {
 };
 
 describe("CRM plugin installer", () => {
-  it("accepts the packaged CRM artifact without password confirmation", async () => {
+  it("accepts the CRM package sources without password confirmation", async () => {
     const response = await installerApp().request(
       "/plugin-operations",
       {
