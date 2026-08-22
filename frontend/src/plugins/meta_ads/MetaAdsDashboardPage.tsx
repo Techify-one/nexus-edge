@@ -622,11 +622,11 @@ export default function MetaAdsDashboardPage() {
             >
               {t("metaAds.filters.hideTestData")}
               <span
-                className={`relative h-6 w-11 shrink-0 rounded-full transition ${hideTestData ? "bg-indigo-600" : "bg-slate-300"}`}
+                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition ${hideTestData ? "bg-indigo-600" : "bg-slate-300"}`}
                 aria-hidden
               >
                 <span
-                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${hideTestData ? "translate-x-5" : "translate-x-0.5"}`}
+                  className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${hideTestData ? "translate-x-5" : "translate-x-0"}`}
                 />
               </span>
             </button>

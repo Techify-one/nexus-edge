@@ -170,6 +170,10 @@ describe("Meta Ads plugin", () => {
       "xl:grid-cols-[0.8fr_1.15fr_1.05fr_1.2fr_0.75fr]",
     );
     expect(dashboard).toContain('role="switch"');
+    expect(dashboard).toContain(
+      "relative inline-flex h-6 w-11 shrink-0 items-center",
+    );
+    expect(dashboard).toContain("absolute left-0.5 top-0.5 h-5 w-5");
     expect(dashboard).toContain("metaAds.hideTestData");
     expect(dashboard).toContain("setSearchParams(params, { replace: true })");
     expect(dashboard).toContain('method: "POST"');
