@@ -38,8 +38,8 @@ and rely only on tracked documentation and executable repository commands.
 `AGENTS.md`, `CONTRIBUTING.md`, `DEPLOYMENT.md`, and `docs/` are the complete
 shared source of truth. Do not require proprietary prompts, plugins, skills,
 memory stores, connectors, or hidden state. A tool that does not discover
-`AGENTS.md` automatically should be configured locally to load this file; do not
-commit a duplicate vendor-specific instruction file.
+`AGENTS.md` automatically may use a committed compatibility adapter only when
+the adapter imports this file without duplicating or extending its rules.
 
 Nested directories may add another `AGENTS.md` only for genuinely local rules.
 The closest file applies to that subtree and must not weaken repository-wide

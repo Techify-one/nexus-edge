@@ -23,13 +23,14 @@ editors, coding assistants, and automation vendors.
 - Use the open `AGENTS.md` format as the portable discovery entry point. Treat
   it, `CONTRIBUTING.md`, `DEPLOYMENT.md`, and the documents under `docs/` as the
   shared source of truth.
-- Tools that do not discover `AGENTS.md` automatically may be configured locally
-  to load it. Local adapters must not replace, contradict, or be required to
-  understand the tracked documentation.
-- Do not add vendor-specific documentation entry points to the repository.
+- Tools that do not discover `AGENTS.md` automatically may use a minimal
+  compatibility adapter. A tracked adapter must only import `AGENTS.md`; it must
+  not duplicate, extend, replace, or contradict the shared instructions.
+- Do not add vendor-specific rules, prompts, or workflows to the repository.
 
-`tests/documentation-neutrality.test.ts` enforces the portable entry point and
-checks tracked documentation for tool-vendor references.
+`tests/documentation-neutrality.test.ts` enforces the portable entry point,
+validates import-only compatibility adapters, and checks shared documentation
+for tool-vendor references.
 
 ## Operating rules
 

@@ -12,11 +12,17 @@ const markdownFiles = (): string[] =>
     .filter((path) => /\.mdx?$/iu.test(path) && existsSync(path));
 
 describe("tool-neutral documentation", () => {
-  it("uses the open instruction entry point without vendor-specific files", () => {
+  it("uses the open instruction entry point", () => {
     const filenames = markdownFiles().map((path) => path.toLowerCase());
     expect(filenames).toContain("agents.md");
-    expect(filenames).not.toContain("claude.md");
     expect(filenames).not.toContain("deploy-codex.md");
+  });
+
+  it("keeps compatibility adapters import-only", () => {
+    expect(readFileSync("CLAUDE.md", "utf8")).toBe("@AGENTS.md\n");
+    expect(readFileSync(".agents/rules/project.md", "utf8")).toBe(
+      "@../../AGENTS.md\n",
+    );
   });
 
   it("does not reference coding-assistant vendors", () => {
