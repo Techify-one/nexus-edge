@@ -76,10 +76,10 @@ export type ConfigurableColumn<T> = {
   key: string;
   label: string;
   render: (row: T) => ReactNode;
-  sortValue?: (row: T) => string | number | null | undefined;
-  size?: number;
-  minSize?: number;
-  maxSize?: number;
+  sortValue: (row: T) => string | number | null | undefined;
+  size: number;
+  minSize: number;
+  maxSize: number;
   hideable?: boolean;
 };
 
@@ -111,7 +111,7 @@ const defaultPreference = <T,>(
   columnSizing: Object.fromEntries(
     columns.map((column) => [
       column.key,
-      clamp(column.size ?? 180, column.minSize ?? 72, column.maxSize ?? 800),
+      clamp(column.size, column.minSize, column.maxSize),
     ]),
   ),
   sorting: [],
@@ -124,11 +124,7 @@ const normalizedPreference = <T,>(
   const defaults = defaultPreference(columns);
   if (!stored || stored.version !== 1) return defaults;
   const ids = new Set(defaults.columnOrder);
-  const sortable = new Set(
-    columns
-      .filter((column) => Boolean(column.sortValue))
-      .map((column) => column.key),
-  );
+  const sortable = new Set(columns.map((column) => column.key));
   const storedOrder = stored.columnOrder.filter(
     (id, index, values) => ids.has(id) && values.indexOf(id) === index,
   );
@@ -153,8 +149,8 @@ const normalizedPreference = <T,>(
         stored.columnSizing[column.key] ??
           defaults.columnSizing[column.key] ??
           180,
-        column.minSize ?? 72,
-        column.maxSize ?? 800,
+        column.minSize,
+        column.maxSize,
       ),
     ]),
   );
@@ -294,7 +290,7 @@ export function ConfigurableDataTable<T extends { id: string }>({
   const preferenceSignature = columns
     .map(
       (column) =>
-        `${column.key}:${column.size ?? 180}:${column.minSize ?? 72}:${column.maxSize ?? 800}:${column.hideable !== false}`,
+        `${column.key}:${column.size}:${column.minSize}:${column.maxSize}:${column.hideable !== false}`,
     )
     .join("|");
   const defaults = useMemo(
@@ -411,14 +407,14 @@ export function ConfigurableDataTable<T extends { id: string }>({
       columns.map((column) => ({
         id: column.key,
         header: column.label,
-        accessorFn: column.sortValue ?? (() => null),
+        accessorFn: column.sortValue,
         cell: ({ row }) => column.render(row.original),
-        enableSorting: Boolean(column.sortValue),
+        enableSorting: true,
         enableHiding: column.hideable !== false,
         enableResizing: true,
-        size: column.size ?? 180,
-        minSize: column.minSize ?? 72,
-        maxSize: column.maxSize ?? 800,
+        size: column.size,
+        minSize: column.minSize,
+        maxSize: column.maxSize,
         sortFn: "alphanumeric",
       })),
     [columns],

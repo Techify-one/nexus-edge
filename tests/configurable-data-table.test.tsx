@@ -58,14 +58,18 @@ describe("configurable data table", () => {
                 label: "Name",
                 size: 200,
                 minSize: 80,
+                maxSize: 800,
                 render: (row) => row.name,
+                sortValue: (row) => row.name,
               },
               {
                 key: "email",
                 label: "Email",
                 size: 220,
                 minSize: 80,
+                maxSize: 800,
                 render: (row) => row.email,
+                sortValue: (row) => row.email,
               },
             ]}
           />
@@ -144,12 +148,18 @@ describe("configurable data table", () => {
                 label: "Name",
                 sortValue: (row) => row.name,
                 render: (row) => row.name,
+                size: 180,
+                minSize: 80,
+                maxSize: 600,
               },
               {
                 key: "email",
                 label: "Email",
                 sortValue: (row) => row.email,
                 render: (row) => row.email,
+                size: 240,
+                minSize: 120,
+                maxSize: 800,
               },
             ]}
           />

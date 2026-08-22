@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { DataTable } from "../../components/ui/data-table.js";
+import { ConfigurableDataTable } from "../../components/ui/configurable-data-table.js";
 import { Modal } from "../../components/ui/modal.js";
 import {
   Badge,
@@ -117,42 +117,59 @@ export default function LeadListPage() {
       {leads.isPending ? (
         <Skeleton className="h-72" />
       ) : (
-        <DataTable
+        <ConfigurableDataTable
+          tableId="plugin.crm.leads"
           rows={leads.data?.items ?? []}
           onOpen={setSelected}
           columns={[
             {
               key: "name",
               label: t("common.name"),
-              className: "w-1/4",
               render: (row) => <span className="font-medium">{row.name}</span>,
+              sortValue: (row) => row.name,
+              size: 240,
+              minSize: 140,
+              maxSize: 600,
             },
             {
               key: "company",
               label: t("leads.company"),
-              className: "w-1/4",
               render: (row) => row.company || "—",
+              sortValue: (row) => row.company ?? "",
+              size: 220,
+              minSize: 140,
+              maxSize: 600,
             },
             {
               key: "email",
               label: t("common.email"),
               render: (row) => row.email || "—",
+              sortValue: (row) => row.email ?? "",
+              size: 300,
+              minSize: 180,
+              maxSize: 800,
             },
             {
               key: "phone",
               label: t("leads.phone"),
-              className: "w-36",
               render: (row) => row.phone || "—",
+              sortValue: (row) => row.phone ?? "",
+              size: 180,
+              minSize: 120,
+              maxSize: 320,
             },
             {
               key: "status",
               label: t("common.status"),
-              className: "w-32",
               render: (row) => (
                 <Badge tone={tone(row.status)}>
                   {t(`leads.status.${row.status}`)}
                 </Badge>
               ),
+              sortValue: (row) => row.status,
+              size: 140,
+              minSize: 110,
+              maxSize: 240,
             },
           ]}
           actions={(row) => (

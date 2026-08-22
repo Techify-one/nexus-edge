@@ -8,7 +8,6 @@ const frontendSource = resolve(repositoryRoot, "frontend/src");
 
 const legacyUsageCeiling = new Map<string, number>([
   ["frontend/src/features/users/UsersPage.tsx", 1],
-  ["frontend/src/plugins/crm/LeadListPage.tsx", 1],
 ]);
 
 const rawTableCeiling = new Map<string, number>([
@@ -79,6 +78,43 @@ describe("repository data-table standard", () => {
     expect(source).toContain("/api/v1/me/table-preferences/");
     expect(source).toContain('aria-label={t("table.columns")}');
     expect(source).toContain('t("common.actions")');
+  });
+
+  it("requires plugin tables to use the plugin preference namespace", () => {
+    const pluginSource = resolve(frontendSource, "plugins");
+    const violations = sourceFiles(pluginSource).flatMap((path) => {
+      const source = readFileSync(path, "utf8");
+      const tableCount =
+        source.match(/<ConfigurableDataTable(?:\s|>)/gu)?.length ?? 0;
+      if (!tableCount) return [];
+      const pluginId = relative(pluginSource, path).split(/[\\/]/u)[0];
+      const expectedPrefix = `tableId="plugin.${pluginId}.`;
+      const namespacedIdCount = source.split(expectedPrefix).length - 1;
+      const manifestPath = resolve(
+        repositoryRoot,
+        `workers/plugin-${pluginId}/manifest.json`,
+      );
+      let manifestId = "";
+      try {
+        manifestId = String(
+          (JSON.parse(readFileSync(manifestPath, "utf8")) as { id?: unknown })
+            .id ?? "",
+        );
+      } catch {
+        return [`${relative(repositoryRoot, path)}: missing plugin manifest`];
+      }
+      if (manifestId !== pluginId)
+        return [
+          `${relative(repositoryRoot, path)}: UI namespace ${pluginId} does not match manifest ID ${manifestId}`,
+        ];
+      return namespacedIdCount === tableCount
+        ? []
+        : [
+            `${relative(repositoryRoot, path)}: ${tableCount} plugin tables but ${namespacedIdCount} IDs starting with ${expectedPrefix}`,
+          ];
+    });
+
+    expect(violations).toEqual([]);
   });
 
   it("keeps the groups list on the configurable table standard", () => {

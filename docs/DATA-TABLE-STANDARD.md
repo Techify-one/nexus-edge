@@ -8,7 +8,8 @@ This is the mandatory repository standard for application tables that list recor
 - Column type: `ConfigurableColumn<T>`
 - Preference API: `GET`, `PUT`, and `DELETE /api/v1/me/table-preferences/:tableId`
 - Persistence table: `user_table_preferences`, keyed by authenticated `user_id` plus `table_id`
-- Reference implementation: the main table in `frontend/src/features/users/UsersPage.tsx`
+- Core reference: the main table in `frontend/src/features/users/UsersPage.tsx`
+- Plugin reference: `frontend/src/plugins/crm/LeadListPage.tsx`
 
 Do not copy the component into a feature and do not build a parallel table abstraction. Extend the canonical component when a behavior should become standard everywhere.
 
@@ -20,7 +21,7 @@ Do not copy the component into a feature and do not build a parallel table abstr
 | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Column order  | Drag by the grip in the header. Save the resulting stable column-key order per user.                                                                                                                                       |
 | Visibility    | The icon-only settings trigger is inside the fixed `Ações` header. Its menu shows every hideable data column and prevents hiding the final visible data column.                                                            |
-| Sorting       | Every meaningful data column supplies `sortValue`. Header clicks cycle the single-column sort state, which is saved per user.                                                                                              |
+| Sorting       | Every data column supplies `sortValue`. Header clicks cycle the single-column sort state, which is saved per user.                                                                                                         |
 | Resizing      | Use `columnResizeMode: "onChange"`. The width follows the held pointer continuously and stops exactly at release. Use exact widths/`colgroup`; do not stretch the table in a way that changes a neighboring column.        |
 | Persistence   | Debounce writes to the authenticated preference API and flush pending state on page exit. Never make another user's preferences visible and never use shared/global state or `localStorage` as the source of truth.        |
 | Reset         | Delete the authenticated user's saved preference for that `tableId` and restore declared defaults.                                                                                                                         |
@@ -43,6 +44,20 @@ Each column `key` is also a persisted identifier. Keep it stable across label ch
 
 No table-specific preference endpoint or migration is needed. Use the shared authenticated API and existing `user_table_preferences` storage.
 
+## Plugin tables
+
+Plugins use exactly the same visual component and behavior as Core tables. There is no reduced or plugin-specific table variant.
+
+- Plugin frontend pages live under `frontend/src/plugins/<plugin-id>/` and are compiled into the Core SPA.
+- Import `ConfigurableDataTable` from the shared Core frontend component. Do not duplicate it under the plugin directory.
+- Use `tableId="plugin.<manifest-id>.<resource>"`. The manifest ID segment must match the plugin's `manifest.json` ID.
+- Continue using the shared Core preference API. Do not add a preference table to plugin migrations and do not expose a plugin preference route.
+- The authenticated Core user ID remains the owner of the preference, so two users automatically receive independent plugin-table layouts.
+- Keep the same fixed `Ações` column and icon-only settings trigger. Plugin branding must not move, restyle, or replace this control.
+- Register plugin pages in `frontend/src/plugins/registry.ts` and follow the UI checklist in `workers/plugin-template/README.md`.
+
+The CRM Leads page is the executable plugin reference and uses `tableId="plugin.crm.leads"`.
+
 ## Column definition rules
 
 Every data column must declare:
@@ -55,7 +70,7 @@ Every data column must declare:
 - `minSize`: smallest usable width;
 - `maxSize`: largest useful width.
 
-Use `hideable: false` only for a genuine business requirement. A non-sortable column is an exception and must include a nearby comment explaining why it has no meaningful order.
+Use `hideable: false` only for a genuine business requirement. Sorting and the three width values are enforced by the TypeScript component contract and must not be made optional.
 
 Starting-width guidance:
 
