@@ -5,6 +5,14 @@ import { bearer } from "better-auth/plugins";
 import type { DatabasePort } from "@app/database";
 import type { CoreEnv } from "../env.js";
 
+export const API_KEY_EXPIRATION = {
+  defaultExpiresIn: 60 * 60 * 24 * 90,
+  // Better Auth receives expiresIn in seconds, but its configured bounds are
+  // expressed in days.
+  minExpiresIn: 1,
+  maxExpiresIn: 365,
+} as const;
+
 export function createAuth(env: CoreEnv, db: DatabasePort) {
   return betterAuth({
     appName: "Nexus Edge",
@@ -59,11 +67,7 @@ export function createAuth(env: CoreEnv, db: DatabasePort) {
         defaultPrefix: "app_",
         requireName: true,
         startingCharactersConfig: { shouldStore: true, charactersLength: 12 },
-        keyExpiration: {
-          defaultExpiresIn: 60 * 60 * 24 * 90,
-          minExpiresIn: 60 * 60 * 24,
-          maxExpiresIn: 60 * 60 * 24 * 365,
-        },
+        keyExpiration: API_KEY_EXPIRATION,
         rateLimit: { enabled: true, timeWindow: 60_000, maxRequests: 120 },
       }),
     ],

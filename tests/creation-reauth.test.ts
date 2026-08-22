@@ -2,6 +2,7 @@ import { createMongoAbility } from "@casl/ability";
 import { Hono } from "hono";
 import { describe, expect, it } from "vitest";
 import type { HonoEnv } from "../workers/core/src/env.js";
+import { API_KEY_EXPIRATION } from "../workers/core/src/auth/factory.js";
 import { AppError } from "../workers/core/src/lib/http.js";
 import { OPENAPI_DOCUMENT } from "../workers/core/src/lib/openapi.js";
 import { managementRoutes } from "../workers/core/src/routes/management.js";
@@ -30,6 +31,14 @@ const appWithCreationRoutes = () => {
 };
 
 describe("creation authentication", () => {
+  it("configures API-key expiration bounds in Better Auth's expected units", () => {
+    expect(API_KEY_EXPIRATION).toEqual({
+      defaultExpiresIn: 90 * 24 * 60 * 60,
+      minExpiresIn: 1,
+      maxExpiresIn: 365,
+    });
+  });
+
   it.each(["/me/api-keys", "/webhooks/endpoints"])(
     "does not require password confirmation for POST %s",
     async (path) => {
