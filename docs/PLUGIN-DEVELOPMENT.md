@@ -224,11 +224,17 @@ keeps an `uninstalled` row visible. A second delete action removes that catalog
 row. Both actions preserve plugin tables, migration hashes, operation history,
 and audit history.
 
-The Installer persists each stage. If a stage fails, keep the operation ID and
-select exactly the same `.plugin.zip` to resume. Package hashes cover the
-manifest, Worker, and both migration sets. A rebuilt or edited package is a new
-artifact and must start a new operation; it cannot resume an older operation.
-Failed operations release the global Installer lock.
+The Installer persists each stage. Package hashes cover the manifest, Worker,
+and both migration sets. API operators can keep an operation ID and use exactly
+the same `.plugin.zip` to resume it. The panel starts a safe new operation when
+the package is selected again. A rebuilt or edited package is a new artifact
+and cannot resume an older operation. Failed operations release the global
+Installer lock.
+
+Persisted operation rows are internal Installer state and are not presented as
+an end-user history on the Plugins page. Starts, successes, failures,
+uninstalls, and catalog-record deletions are recorded in the Audit page; failure
+audits contain the operation ID and stage but not raw provider errors.
 
 Common failures:
 

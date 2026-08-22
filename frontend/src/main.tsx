@@ -52,10 +52,6 @@ const router = createBrowserRouter([
       { path: "settings/api-keys", element: lazyElement(ApiKeysPage) },
       { path: "settings/webhooks", element: lazyElement(WebhooksPage) },
       { path: "plugins", element: lazyElement(PluginsPage) },
-      {
-        path: "plugins/:pluginId/operations/:operationId",
-        element: lazyElement(PluginsPage),
-      },
       { path: "audit", element: lazyElement(AuditPage) },
       { path: "crm", element: lazyElement(pluginUiRegistry["crm.home"]) },
       {

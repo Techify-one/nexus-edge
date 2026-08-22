@@ -107,8 +107,10 @@ describe("CRM plugin installer", () => {
 
   it("releases the global lock when an installation stage fails", async () => {
     const atomicSql: string[] = [];
+    const executedSql: string[] = [];
     const response = await installerApp({
       atomicSql,
+      executedSql,
       operation: {
         operationId: "pop_failure",
         pluginId: "crm",
@@ -128,6 +130,9 @@ describe("CRM plugin installer", () => {
     expect(response.status).toBe(500);
     expect(atomicSql).toContainEqual(
       expect.stringContaining("UPDATE installer_lock SET operation_id = NULL"),
+    );
+    expect(executedSql).toContainEqual(
+      expect.stringContaining("INSERT INTO audit_log"),
     );
   });
 

@@ -439,6 +439,13 @@ installerRoutes.post("/plugin-operations/:operationId/advance", async (c) => {
         params: [operation.operationId],
       },
     ]);
+    await audit(
+      c,
+      "core.plugin.installation_failed",
+      "core.plugin",
+      operation.pluginId,
+      { operationId: operation.operationId, stage: from },
+    );
   };
   const fail = async (from: string, error: unknown) => {
     await recordFailure(

@@ -1,8 +1,7 @@
 import { gzipSync, strFromU8, unzipSync } from "fflate";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PackagePlus, Pencil, Search, Trash2, UploadCloud } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ConfigurableDataTable } from "../../components/ui/configurable-data-table.js";
 import { Modal } from "../../components/ui/modal.js";
@@ -38,15 +37,8 @@ type Plugin = {
 };
 type Operation = {
   operationId: string;
-  pluginId: string;
-  type: "install" | "update";
-  targetVersion: string;
   state: string;
-  lastError?: string;
-  hasError?: boolean | number;
-  createdAt?: string | number;
 };
-type OperationRow = Operation & { id: string };
 type PluginParts = {
   manifest: Manifest;
   manifestText: string;
@@ -146,44 +138,22 @@ const bodyFor = (parts: PluginParts) => {
 };
 
 export default function PluginsPage() {
-  const { t, formatDateTime } = useI18n();
+  const { t } = useI18n();
   const canCreate = can("core.plugin.create");
   const canUpdate = can("core.plugin.update");
   const canDelete = can("core.plugin.delete");
   const stateLabel = (state: string) =>
     stateKeys[state] ? t(stateKeys[state]) : state;
   const client = useQueryClient();
-  const navigate = useNavigate();
-  const { operationId } = useParams();
   const inputRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Plugin | null>(null);
   const [parts, setParts] = useState<PluginParts | null>(null);
   const [operation, setOperation] = useState<Operation | null>(null);
-  const [resumeTarget, setResumeTarget] = useState<OperationRow | null>(null);
   const plugins = useQuery({
     queryKey: ["plugins"],
     queryFn: () => api<{ items: Plugin[] }>("/api/v1/plugins"),
   });
-  const operations = useQuery({
-    queryKey: ["plugin-operations"],
-    queryFn: () => api<{ items: Operation[] }>("/api/v1/plugin-operations"),
-  });
-  const operationRows = useMemo<OperationRow[]>(
-    () =>
-      (operations.data?.items ?? []).map((item) => ({
-        ...item,
-        id: item.operationId,
-      })),
-    [operations.data],
-  );
-  useEffect(() => {
-    if (!operationId || !operationRows.length) return;
-    const target = operationRows.find(
-      (item) => item.operationId === operationId,
-    );
-    if (target) setResumeTarget(target);
-  }, [operationId, operationRows]);
   const rows = useMemo(
     () =>
       (plugins.data?.items ?? []).filter((plugin) =>
@@ -197,20 +167,20 @@ export default function PluginsPage() {
     if (!file) return;
     try {
       const selectedParts = await readPlugin(file);
-      const operationType = resumeTarget?.type
-        ? resumeTarget.type
-        : (plugins.data?.items ?? []).some(
-              (plugin) => plugin.id === selectedParts.manifest.id,
-            )
-          ? "update"
-          : "install";
+      const operationType = (plugins.data?.items ?? []).some(
+        (plugin) =>
+          plugin.id === selectedParts.manifest.id &&
+          plugin.status === "installed",
+      )
+        ? "update"
+        : "install";
       if (
         (operationType === "update" && !canUpdate) ||
         (operationType === "install" && !canCreate)
       )
         throw new Error(t("plugins.permissionRequired"));
       setParts(selectedParts);
-      setOperation(resumeTarget);
+      setOperation(null);
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : t("plugins.invalidPackage"),
@@ -218,29 +188,18 @@ export default function PluginsPage() {
     }
   };
   const install = useMutation({
-    mutationFn: async ({
-      packageParts,
-      resume,
-    }: {
-      packageParts: PluginParts;
-      resume?: OperationRow | undefined;
-    }) => {
+    mutationFn: async (packageParts: PluginParts) => {
       if (packageParts.rawBytes > 4 * 1024 * 1024)
         throw new Error(t("plugins.rawTooLarge"));
       if (packageParts.gzipBytes > 3 * 1024 * 1024)
         throw new Error(t("plugins.gzipTooLarge"));
-      let current = resume
-        ? await api<Operation>(
-            `/api/v1/plugin-operations/${resume.operationId}/resume`,
-            { method: "POST" },
-          )
-        : await api<Operation>("/api/v1/plugin-operations", {
-            method: "POST",
-            headers: {
-              "Idempotency-Key": idempotencyKey(),
-            },
-            body: bodyFor(packageParts),
-          });
+      let current = await api<Operation>("/api/v1/plugin-operations", {
+        method: "POST",
+        headers: {
+          "Idempotency-Key": idempotencyKey(),
+        },
+        body: bodyFor(packageParts),
+      });
       setOperation(current);
       while (!terminal.has(current.state)) {
         if (current.state === "registering")
@@ -261,10 +220,8 @@ export default function PluginsPage() {
     onSuccess: () => {
       toast.success(t("plugins.installed"));
       setParts(null);
-      setResumeTarget(null);
-      navigate("/app/plugins", { replace: true });
+      setOperation(null);
       void client.invalidateQueries({ queryKey: ["plugins"] });
-      void client.invalidateQueries({ queryKey: ["plugin-operations"] });
       void client.invalidateQueries({ queryKey: ["me", "ability"] });
       void client.invalidateQueries({
         queryKey: ["me", "plugin-navigation"],
@@ -272,7 +229,6 @@ export default function PluginsPage() {
     },
     onError: (error: Error) => {
       toast.error(error.message);
-      void client.invalidateQueries({ queryKey: ["plugin-operations"] });
     },
   });
   const remove = useMutation({
@@ -288,7 +244,6 @@ export default function PluginsPage() {
       );
       setSelected(null);
       void client.invalidateQueries({ queryKey: ["plugins"] });
-      void client.invalidateQueries({ queryKey: ["plugin-operations"] });
       void client.invalidateQueries({ queryKey: ["me", "ability"] });
       void client.invalidateQueries({
         queryKey: ["me", "plugin-navigation"],
@@ -305,7 +260,6 @@ export default function PluginsPage() {
           canCreate || canUpdate ? (
             <Button
               onClick={() => {
-                setResumeTarget(null);
                 setOperation(null);
                 inputRef.current?.click();
               }}
@@ -439,158 +393,15 @@ export default function PluginsPage() {
           }
         />
       )}
-      <h2 className="mb-3 mt-8 text-lg font-bold">
-        {t("plugins.recentOperations")}
-      </h2>
-      {operations.isPending ? (
-        <Skeleton className="h-48" />
-      ) : (
-        <ConfigurableDataTable
-          tableId="core.plugin-operations"
-          rows={operationRows}
-          onOpen={(row) => {
-            setResumeTarget(row);
-            navigate(
-              `/app/plugins/${row.pluginId}/operations/${row.operationId}`,
-            );
-          }}
-          emptyTitle={t("plugins.noOperations")}
-          emptyDescription={t("plugins.noOperationsDescription")}
-          columns={[
-            {
-              key: "plugin",
-              label: "Plugin",
-              size: 240,
-              minSize: 140,
-              maxSize: 520,
-              sortValue: (row) => row.pluginId,
-              render: (row) => (
-                <span className="font-medium">{row.pluginId}</span>
-              ),
-            },
-            {
-              key: "version",
-              label: t("common.version"),
-              size: 140,
-              minSize: 96,
-              maxSize: 240,
-              sortValue: (row) => row.targetVersion,
-              render: (row) => row.targetVersion,
-            },
-            {
-              key: "state",
-              label: t("plugins.stage"),
-              size: 180,
-              minSize: 120,
-              maxSize: 320,
-              sortValue: (row) => row.state,
-              render: (row) => (
-                <Badge
-                  tone={
-                    row.state === "installed"
-                      ? "success"
-                      : row.state === "failed"
-                        ? "danger"
-                        : "warning"
-                  }
-                >
-                  {stateLabel(row.state)}
-                </Badge>
-              ),
-            },
-            {
-              key: "operation",
-              label: t("plugins.operationId"),
-              size: 320,
-              minSize: 180,
-              maxSize: 720,
-              sortValue: (row) => row.operationId,
-              render: (row) => <code>{row.operationId}</code>,
-            },
-          ]}
-        />
-      )}
-      <Modal
-        open={Boolean(resumeTarget && !parts)}
-        onOpenChange={(open) => {
-          if (!open) {
-            setResumeTarget(null);
-            navigate("/app/plugins", { replace: true });
-          }
-        }}
-        title={t("plugins.installerOperation")}
-        description={resumeTarget?.operationId}
-      >
-        {resumeTarget && (
-          <div className="space-y-4 text-sm">
-            <dl className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <dt className="text-slate-500">Plugin</dt>
-                <dd>{resumeTarget.pluginId}</dd>
-              </div>
-              <div>
-                <dt className="text-slate-500">{t("common.version")}</dt>
-                <dd>{resumeTarget.targetVersion}</dd>
-              </div>
-              <div>
-                <dt className="text-slate-500">{t("plugins.state")}</dt>
-                <dd>
-                  <Badge
-                    tone={
-                      resumeTarget.state === "failed"
-                        ? "danger"
-                        : resumeTarget.state === "installed"
-                          ? "success"
-                          : "warning"
-                    }
-                  >
-                    {stateLabel(resumeTarget.state)}
-                  </Badge>
-                </dd>
-              </div>
-              <div>
-                <dt className="text-slate-500">{t("common.created")}</dt>
-                <dd>
-                  {resumeTarget.createdAt
-                    ? formatDateTime(resumeTarget.createdAt)
-                    : "—"}
-                </dd>
-              </div>
-            </dl>
-            {resumeTarget.state === "failed" && (
-              <p className="rounded-xl bg-amber-50 p-3 text-amber-800">
-                {t("plugins.failedHelp")}
-              </p>
-            )}
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setResumeTarget(null);
-                  navigate("/app/plugins", { replace: true });
-                }}
-              >
-                {t("common.close")}
-              </Button>
-              {resumeTarget.state === "failed" &&
-                (resumeTarget.type === "update" ? canUpdate : canCreate) && (
-                  <Button onClick={() => inputRef.current?.click()}>
-                    <UploadCloud className="h-4 w-4" />
-                    {t("plugins.selectAndResume")}
-                  </Button>
-                )}
-            </div>
-          </div>
-        )}
-      </Modal>
       <Modal
         open={Boolean(parts)}
         onOpenChange={(open) => {
-          if (!open && !install.isPending) setParts(null);
+          if (!open && !install.isPending) {
+            setParts(null);
+            setOperation(null);
+          }
         }}
-        title={
-          resumeTarget ? t("plugins.resumeTitle") : t("plugins.installTitle")
-        }
+        title={t("plugins.installTitle")}
         description={
           parts ? `${parts.manifest.name} ${parts.manifest.version}` : undefined
         }
@@ -600,10 +411,7 @@ export default function PluginsPage() {
             className="space-y-4"
             onSubmit={(event) => {
               event.preventDefault();
-              install.mutate({
-                packageParts: parts,
-                resume: resumeTarget ?? undefined,
-              });
+              install.mutate(parts);
             }}
           >
             <div className="grid gap-3 rounded-xl border bg-slate-50 p-4 text-sm sm:grid-cols-2">
@@ -666,11 +474,12 @@ export default function PluginsPage() {
               </Button>
               <Button busy={install.isPending}>
                 <UploadCloud className="h-4 w-4" />
-                {resumeTarget
-                  ? t("plugins.resume")
-                  : rows.some((row) => row.id === parts.manifest.id)
-                    ? t("plugins.update")
-                    : t("plugins.install")}
+                {rows.some(
+                  (row) =>
+                    row.id === parts.manifest.id && row.status === "installed",
+                )
+                  ? t("plugins.update")
+                  : t("plugins.install")}
               </Button>
             </div>
           </form>

@@ -139,4 +139,15 @@ describe("repository data-table standard", () => {
       expect(column).toContain("maxSize:");
     }
   });
+
+  it("keeps Installer operation history out of the Plugins page", () => {
+    const source = readFileSync(
+      resolve(repositoryRoot, "frontend/src/features/plugins/PluginsPage.tsx"),
+      "utf8",
+    );
+
+    expect(source).not.toContain('tableId="core.plugin-operations"');
+    expect(source).not.toContain('queryKey: ["plugin-operations"]');
+    expect(source).not.toContain("plugins.recentOperations");
+  });
 });
