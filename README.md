@@ -1,6 +1,6 @@
-# Nexus Cloudflare
+# Nexus Edge
 
-An API-first SaaS application for Cloudflare Workers with a Core Worker, React SPA, and plugins isolated through Service Bindings. The implementation follows the v11 functional specification and includes Better Auth authentication, CASL authorization, D1/PostgreSQL support, CRM, API keys, signed webhooks, auditing, and a plugin Installer.
+Nexus Edge is a lightweight, modular runtime for distributed applications. This implementation currently targets Cloudflare Workers, with a Core Worker, React SPA, and plugins isolated through Service Bindings. It follows the v11 functional specification and includes Better Auth authentication, CASL authorization, D1/PostgreSQL support, CRM, API keys, signed webhooks, auditing, and a plugin Installer.
 
 ## Included features
 

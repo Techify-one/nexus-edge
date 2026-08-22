@@ -7,7 +7,7 @@ import type { CoreEnv } from "../env.js";
 
 export function createAuth(env: CoreEnv, db: DatabasePort) {
   return betterAuth({
-    appName: "Modular Workers App",
+    appName: "Nexus Edge",
     baseURL: env.BETTER_AUTH_URL,
     basePath: "/api/auth",
     secret: env.BETTER_AUTH_SECRET,

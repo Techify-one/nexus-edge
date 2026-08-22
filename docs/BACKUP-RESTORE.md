@@ -5,8 +5,8 @@ Create a backup before migrations, plugin updates, or provider changes. Periodic
 ## D1
 
 ```bash
-pnpm exec wrangler d1 export app-db --remote --output backups/app-db-YYYYMMDD.sql --config workers/core/wrangler.jsonc
-pnpm exec wrangler d1 execute app-db-restore --remote --file backups/app-db-YYYYMMDD.sql --config workers/core/wrangler.jsonc
+pnpm exec wrangler d1 export nexus-edge-db --remote --output backups/nexus-edge-db-YYYYMMDD.sql --config workers/core/wrangler.jsonc
+pnpm exec wrangler d1 execute nexus-edge-db-restore --remote --file backups/nexus-edge-db-YYYYMMDD.sql --config workers/core/wrangler.jsonc
 ```
 
 Keep `backups/` outside version control and store the export encrypted. After restoring, point the Core to the restored database and validate `installation_id`, `database_provider`, and `schema_version` before allowing traffic.

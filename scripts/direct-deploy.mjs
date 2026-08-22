@@ -16,10 +16,10 @@ const betterAuthSecret = process.env.BETTER_AUTH_SECRET;
 const encryptionKey = process.env.WEBHOOK_ENCRYPTION_KEY;
 const installerToken = process.env.CF_API_TOKEN;
 const installerAccountId = process.env.CF_ACCOUNT_ID;
-const workerName = process.env.CORE_WORKER_NAME ?? "modular-workers-core";
+const workerName = process.env.CORE_WORKER_NAME ?? "nexus-edge-core";
 const publicUrl = required("APP_PUBLIC_URL");
-const queueName = process.env.WEBHOOK_QUEUE_NAME ?? "modular-workers-webhooks";
-const dlqName = process.env.WEBHOOK_DLQ_NAME ?? "modular-workers-webhooks-dlq";
+const queueName = process.env.WEBHOOK_QUEUE_NAME ?? "nexus-edge-webhooks";
+const dlqName = process.env.WEBHOOK_DLQ_NAME ?? "nexus-edge-webhooks-dlq";
 const apiRoot = `https://api.cloudflare.com/client/v4/accounts/${accountId}`;
 const assetsRoot = resolve("frontend/dist/client");
 const modulesRoot = resolve("frontend/dist/app_core");
@@ -177,7 +177,7 @@ const metadata = {
   main_module: "index.js",
   compatibility_date: "2026-08-21",
   compatibility_flags: ["nodejs_compat"],
-  annotations: { "workers/message": "Deploy modular-workers-app" },
+  annotations: { "workers/message": "Deploy Nexus Edge" },
   assets: {
     jwt: completionJwt,
     config: {

@@ -10,7 +10,7 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "app-db",
+      "database_name": "nexus-edge-db",
       "database_id": "replace-with-d1-database-id",
     },
   ],

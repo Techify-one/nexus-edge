@@ -7,7 +7,7 @@ This is the authoritative deployment runbook. Run all commands from the reposito
 1. Install Node.js 24+ and pnpm 11.19+.
 2. Authenticate Wrangler (`pnpm exec wrangler login`) or set `CLOUDFLARE_API_TOKEN` for CI.
 3. Select exactly one provider: `d1` or `postgres`.
-4. Define the final application URL, for example `https://app.example.com`.
+4. Define the final application URL, for example `https://nexus-edge.example.com`.
 5. Generate independent random values for `APP_INSTALLATION_ID`, `BETTER_AUTH_SECRET`, and `WEBHOOK_ENCRYPTION_KEY`.
 
 Do not reuse secrets between staging and production. Public bootstrap is available only while `app_settings.bootstrap_state` is not `complete`; the API rejects further attempts after completion.
@@ -32,7 +32,7 @@ The installable CRM artifact will be `artifacts/crm.plugin.zip`.
 1. Create the database and copy the returned `database_id`:
 
 ```bash
-pnpm exec wrangler d1 create app-db
+pnpm exec wrangler d1 create nexus-edge-db
 ```
 
 2. In `workers/core/wrangler.jsonc`, replace `replace-with-d1-database-id` with the ID in both `vars.D1_DATABASE_ID` and `d1_databases[0].database_id`.
@@ -40,8 +40,8 @@ pnpm exec wrangler d1 create app-db
 4. Create the Queue and DLQ:
 
 ```bash
-pnpm exec wrangler queues create app-webhooks
-pnpm exec wrangler queues create app-webhooks-dlq
+pnpm exec wrangler queues create nexus-edge-webhooks
+pnpm exec wrangler queues create nexus-edge-webhooks-dlq
 ```
 
 5. Export the same installation ID in the provisioning process:
@@ -100,7 +100,7 @@ APP_INSTALLATION_ID="install_..." pnpm provision:d1
 ```
 
 ```bash
-CF_API_TOKEN="..." CF_ACCOUNT_ID="..." CORE_WORKER_NAME=app-core CORE_WRANGLER_CONFIG="$CORE_CONFIG" pnpm deploy:core
+CF_API_TOKEN="..." CF_ACCOUNT_ID="..." CORE_WORKER_NAME=nexus-edge-core CORE_WRANGLER_CONFIG="$CORE_CONFIG" pnpm deploy:core
 ```
 
 The script builds the SPA, reads existing `PLUGIN_*` Service Bindings, publishes, and reapplies/verifies them. This prevents a new Core release from removing plugins installed through the panel.

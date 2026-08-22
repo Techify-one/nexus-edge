@@ -1,6 +1,6 @@
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
-  "name": "app-core",
+  "name": "nexus-edge-core",
   "main": "src/index.ts",
   "compatibility_date": "2026-08-21",
   "compatibility_flags": ["nodejs_compat"],
@@ -15,9 +15,9 @@
     "APP_VERSION": "1.0.0",
     "APP_INSTALLATION_ID": "set-by-provision-command",
     "DATABASE_PROVIDER": "postgres",
-    "BETTER_AUTH_URL": "https://app.example.com",
-    "TRUSTED_ORIGINS": "https://app.example.com",
-    "CORE_WORKER_NAME": "app-core",
+    "BETTER_AUTH_URL": "https://nexus-edge.example.com",
+    "TRUSTED_ORIGINS": "https://nexus-edge.example.com",
+    "CORE_WORKER_NAME": "nexus-edge-core",
     "HYPERDRIVE_ID": "replace-with-hyperdrive-id",
     "WEBHOOK_ALLOWED_DOMAINS": "",
     "API_RATE_LIMIT_MAX": "120",
@@ -28,14 +28,16 @@
     { "binding": "HYPERDRIVE", "id": "replace-with-hyperdrive-id" },
   ],
   "queues": {
-    "producers": [{ "binding": "WEBHOOK_QUEUE", "queue": "app-webhooks" }],
+    "producers": [
+      { "binding": "WEBHOOK_QUEUE", "queue": "nexus-edge-webhooks" },
+    ],
     "consumers": [
       {
-        "queue": "app-webhooks",
+        "queue": "nexus-edge-webhooks",
         "max_batch_size": 5,
         "max_batch_timeout": 5,
         "max_retries": 6,
-        "dead_letter_queue": "app-webhooks-dlq",
+        "dead_letter_queue": "nexus-edge-webhooks-dlq",
       },
     ],
   },

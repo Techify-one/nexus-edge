@@ -16,6 +16,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { queryClient } from "../../app/query-client.js";
 import { can } from "../../lib/ability.js";
 import { api } from "../../lib/api/core-client.js";
+import { APP_MARK, APP_NAME } from "../../lib/branding.js";
 import { Button } from "../ui/index.js";
 import { LanguageSwitcher } from "../i18n/LanguageSwitcher.js";
 import { useI18n, type TranslationKey } from "../../i18n/index.js";
@@ -92,11 +93,11 @@ export function AppShell() {
     <>
       <div className="flex h-16 items-center gap-3 border-b px-5">
         <div className="grid h-9 w-9 place-items-center rounded-xl bg-indigo-600 font-black text-white">
-          M
+          {APP_MARK}
         </div>
         <div>
-          <div className="font-bold">Modular</div>
-          <div className="text-xs text-slate-500">Workers App</div>
+          <div className="font-bold">{APP_NAME}</div>
+          <div className="text-xs text-slate-500">Edge Runtime</div>
         </div>
       </div>
       <nav className="space-y-1 p-3" aria-label={t("nav.main")}>

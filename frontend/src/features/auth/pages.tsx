@@ -11,6 +11,7 @@ import { useNavigate } from "react-router-dom";
 import { z } from "zod";
 import { toast } from "sonner";
 import { api, ApiError } from "../../lib/api/core-client.js";
+import { APP_MARK, APP_NAME } from "../../lib/branding.js";
 import { LanguageSwitcher } from "../../components/i18n/LanguageSwitcher.js";
 import { useI18n, type TranslationKey } from "../../i18n/index.js";
 import {
@@ -57,9 +58,12 @@ const AuthFrame = ({
       </div>
       <div className="mb-6 flex items-center gap-3">
         <div className="grid h-11 w-11 place-items-center rounded-2xl bg-indigo-600 text-lg font-black text-white">
-          M
+          {APP_MARK}
         </div>
         <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-indigo-600">
+            {APP_NAME}
+          </p>
           <h1 className="text-xl font-bold">{title}</h1>
           <p className="text-sm text-slate-500">{description}</p>
         </div>

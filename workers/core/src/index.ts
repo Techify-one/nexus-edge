@@ -68,7 +68,7 @@ app.get(
   apiReference({
     spec: { content: OPENAPI_DOCUMENT },
     theme: "default",
-    pageTitle: "Modular Workers API",
+    pageTitle: "Nexus Edge API",
   }),
 );
 

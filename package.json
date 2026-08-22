@@ -1,5 +1,5 @@
 {
-  "name": "nexus-cloudflare",
+  "name": "nexus-edge",
   "version": "1.0.0",
   "private": true,
   "type": "module",

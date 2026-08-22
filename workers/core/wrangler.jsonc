@@ -1,6 +1,6 @@
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
-  "name": "app-core",
+  "name": "nexus-edge-core",
   "main": "src/index.ts",
   "compatibility_date": "2026-08-21",
   "compatibility_flags": ["nodejs_compat"],
@@ -17,7 +17,7 @@
     "DATABASE_PROVIDER": "d1",
     "BETTER_AUTH_URL": "http://localhost:5173",
     "TRUSTED_ORIGINS": "http://localhost:5173",
-    "CORE_WORKER_NAME": "app-core",
+    "CORE_WORKER_NAME": "nexus-edge-core",
     "D1_DATABASE_ID": "replace-with-d1-database-id",
     "WEBHOOK_ALLOWED_DOMAINS": "",
     "API_RATE_LIMIT_MAX": "120",
@@ -27,20 +27,22 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "app-db",
+      "database_name": "nexus-edge-db",
       "database_id": "replace-with-d1-database-id",
       "migrations_dir": "migrations/d1",
     },
   ],
   "queues": {
-    "producers": [{ "binding": "WEBHOOK_QUEUE", "queue": "app-webhooks" }],
+    "producers": [
+      { "binding": "WEBHOOK_QUEUE", "queue": "nexus-edge-webhooks" },
+    ],
     "consumers": [
       {
-        "queue": "app-webhooks",
+        "queue": "nexus-edge-webhooks",
         "max_batch_size": 5,
         "max_batch_timeout": 5,
         "max_retries": 6,
-        "dead_letter_queue": "app-webhooks-dlq",
+        "dead_letter_queue": "nexus-edge-webhooks-dlq",
       },
     ],
   },

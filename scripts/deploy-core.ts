@@ -9,7 +9,7 @@ type Envelope<T> = {
 
 const token = process.env.CF_API_TOKEN;
 const accountId = process.env.CF_ACCOUNT_ID;
-const workerName = process.env.CORE_WORKER_NAME ?? "app-core";
+const workerName = process.env.CORE_WORKER_NAME ?? "nexus-edge-core";
 const config =
   process.env.CORE_WRANGLER_CONFIG ?? "workers/core/wrangler.jsonc";
 const api = `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${encodeURIComponent(workerName)}/settings`;

@@ -1,7 +1,7 @@
 export const OPENAPI_DOCUMENT = {
   openapi: "3.1.0",
   info: {
-    title: "Modular Workers App API",
+    title: "Nexus Edge API",
     version: "1.0.0",
     description:
       "API-first administration, CRM, webhooks and plugin installation.",
