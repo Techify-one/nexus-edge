@@ -2,6 +2,7 @@ import { gzipSync, strFromU8, unzipSync } from "fflate";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Copy,
+  Download,
   PackagePlus,
   Pencil,
   Search,
@@ -20,7 +21,12 @@ import {
   PageHeader,
   Skeleton,
 } from "../../components/ui/index.js";
-import { ApiError, api, idempotencyKey } from "../../lib/api/core-client.js";
+import {
+  ApiError,
+  api,
+  apiFile,
+  idempotencyKey,
+} from "../../lib/api/core-client.js";
 import { translate, useI18n, type TranslationKey } from "../../i18n/index.js";
 import { can } from "../../lib/ability.js";
 import {
@@ -45,6 +51,7 @@ type Plugin = {
   workerName: string;
   status: string;
   installedAt: string | number;
+  packageAvailable: boolean | number;
 };
 type Operation = {
   operationId: string;
@@ -153,6 +160,7 @@ export default function PluginsPage() {
   const canCreate = can("core.plugin.create");
   const canUpdate = can("core.plugin.update");
   const canDelete = can("core.plugin.delete");
+  const canExport = can("core.plugin.export");
   const stateLabel = (state: string) =>
     stateKeys[state] ? t(stateKeys[state]) : state;
   const client = useQueryClient();
@@ -318,6 +326,26 @@ export default function PluginsPage() {
     },
     onError: (error: Error) => toast.error(error.message),
   });
+  const downloadPackage = useMutation({
+    mutationFn: async (plugin: Plugin) => ({
+      plugin,
+      blob: await apiFile(
+        `/api/v1/plugins/${encodeURIComponent(plugin.id)}/package`,
+      ),
+    }),
+    onSuccess: ({ plugin, blob }) => {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${plugin.id}-${plugin.installedVersion}.plugin.zip`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+      toast.success(t("plugins.packageDownloaded"));
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
   return (
     <>
       <PageHeader
@@ -416,9 +444,25 @@ export default function PluginsPage() {
             },
           ]}
           actions={
-            canUpdate || canDelete
+            canExport || canUpdate || canDelete
               ? (row) => (
                   <div className="flex justify-end gap-1">
+                    {canExport && row.status === "installed" && (
+                      <Button
+                        variant="ghost"
+                        className="px-2"
+                        disabled={downloadPackage.isPending}
+                        onClick={() => downloadPackage.mutate(row)}
+                        aria-label={`${t("plugins.downloadPackage")} ${row.name}`}
+                        title={
+                          Boolean(row.packageAvailable)
+                            ? t("plugins.downloadPackage")
+                            : t("plugins.downloadUnavailable")
+                        }
+                      >
+                        <Download className="h-4 w-4" />
+                      </Button>
+                    )}
                     {canUpdate && row.status === "installed" && (
                       <Button
                         variant="ghost"
@@ -624,6 +668,21 @@ export default function PluginsPage() {
               </div>
             </dl>
             <div className="flex justify-end gap-2">
+              {canExport && selected.status === "installed" && (
+                <Button
+                  variant="secondary"
+                  busy={downloadPackage.isPending}
+                  title={
+                    Boolean(selected.packageAvailable)
+                      ? t("plugins.downloadPackage")
+                      : t("plugins.downloadUnavailable")
+                  }
+                  onClick={() => downloadPackage.mutate(selected)}
+                >
+                  <Download className="h-4 w-4" />
+                  {t("plugins.downloadPackage")}
+                </Button>
+              )}
               {canUpdate && selected.status === "installed" && (
                 <Button
                   variant="secondary"

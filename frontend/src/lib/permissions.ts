@@ -25,7 +25,7 @@ export const groupPermissions = <Permission extends { key: string }>(
   t: Translator,
 ) => {
   const actionOrder = new Map(
-    ["read", "create", "update", "delete", "test", "redeliver"].map(
+    ["read", "create", "update", "delete", "export", "test", "redeliver"].map(
       (action, index) => [action, index],
     ),
   );

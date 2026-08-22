@@ -128,6 +128,9 @@ build the Worker with Wrangler dry-run, package it with
 4. Review the version, sizes, migrations, menus, and permissions.
 5. Confirm the installation. The interface advances one stage per request and displays the persisted state.
 6. Verify `/app/crm/leads`, create/edit/delete one lead, and inspect `/app/audit`.
+7. Download the installed plugin package and verify that the ZIP can be selected
+   by the Installer on another Nexus without containing business data or Nexus
+   credentials.
 
 The Installer creates `app-plugin-crm`, applies only the active provider's
 migration, disables the public URL, and adds `PLUGIN_CRM` to the Core. On
@@ -143,6 +146,12 @@ in the panel starts a new safe operation. A rebuilt package has different hashes
 and must always start a new operation. Core Worker settings updates are
 multipart requests whose JSON part is named `settings`; `pnpm deploy:core`
 preserves and verifies all existing `PLUGIN_*` bindings.
+
+Successful installs and updates retain a validated portable copy of the package
+inputs. The download contains only `manifest.json`, `worker.mjs`, and paired D1
+and PostgreSQL schema migrations. Legacy installations must be updated or
+reinstalled once before download becomes available. Package downloads require
+the independent `core.plugin.export` permission and are recorded in Audit.
 
 ## 7. Production verification
 

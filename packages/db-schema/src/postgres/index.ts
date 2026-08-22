@@ -340,6 +340,17 @@ export const pluginMigrations = pgTable(
   },
   (t) => [primaryKey({ columns: [t.pluginId, t.dialect, t.migrationId] })],
 );
+export const pluginPackageChunks = pgTable(
+  "plugin_package_chunks",
+  {
+    operationId: text("operation_id").notNull(),
+    path: text("path").notNull(),
+    chunkIndex: integer("chunk_index").notNull(),
+    content: text("content").notNull(),
+    createdAt: instant("created_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.operationId, t.path, t.chunkIndex] })],
+);
 export const installerLock = pgTable("installer_lock", {
   id: text("id").primaryKey(),
   operationId: text("operation_id"),

@@ -1,14 +1,18 @@
 import { readFileSync } from "node:fs";
 import { createMongoAbility } from "@casl/ability";
 import type { DatabasePort, SqlStatement } from "@app/database";
+import { strFromU8, unzipSync } from "fflate";
 import { Hono } from "hono";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { sha256, stableJson } from "../packages/webhook-contract/src/index.js";
 import type { CoreEnv, HonoEnv } from "../workers/core/src/env.js";
 import { replaceCoreBindings } from "../workers/core/src/installer/cloudflare.js";
 import { AppError } from "../workers/core/src/lib/http.js";
+import { archivePackageStatements } from "../workers/core/src/installer/package-archive.js";
+import type { PluginManifest } from "../workers/core/src/installer/manifest.js";
 import { installerRoutes } from "../workers/core/src/routes/installer.js";
 
-const crmPackageBody = () => {
+const crmPackageParts = () => {
   const pluginRoot = "workers/plugin-crm";
   const migration = (dialect: "d1" | "postgres") => ({
     "0001_init": readFileSync(
@@ -16,16 +20,28 @@ const crmPackageBody = () => {
       "utf8",
     ),
   });
+  return {
+    manifest: JSON.parse(
+      readFileSync(`${pluginRoot}/manifest.json`, "utf8"),
+    ) as PluginManifest,
+    worker: "export default {};",
+    d1Migrations: migration("d1"),
+    postgresMigrations: migration("postgres"),
+  };
+};
+
+const crmPackageBody = (worker?: string) => {
+  const parts = crmPackageParts();
   const body = new FormData();
-  body.set("manifest", readFileSync(`${pluginRoot}/manifest.json`, "utf8"));
+  body.set("manifest", JSON.stringify(parts.manifest));
   body.set(
     "worker",
-    new File(["export default {};"], "worker.mjs", {
+    new File([worker ?? parts.worker], "worker.mjs", {
       type: "application/javascript",
     }),
   );
-  body.set("d1Migrations", JSON.stringify(migration("d1")));
-  body.set("postgresMigrations", JSON.stringify(migration("postgres")));
+  body.set("d1Migrations", JSON.stringify(parts.d1Migrations));
+  body.set("postgresMigrations", JSON.stringify(parts.postgresMigrations));
   return body;
 };
 
@@ -35,11 +51,19 @@ const installerApp = (options?: {
   executedSql?: string[];
   atomicSql?: string[];
   atomicStatements?: SqlStatement[];
+  packageChunks?: Array<{
+    path: string;
+    chunkIndex: number;
+    content: string;
+  }>;
 }) => {
   const db: DatabasePort = {
     provider: "d1",
     orm: {},
-    query: async () => [],
+    query: async <T extends Record<string, unknown>>(sql: string) =>
+      (sql.includes("FROM plugin_package_chunks")
+        ? (options?.packageChunks ?? [])
+        : []) as T[],
     first: async <T extends Record<string, unknown>>(sql: string) => {
       if (sql.includes("FROM plugin_operations") && options?.operation)
         return options.operation as T;
@@ -105,6 +129,31 @@ describe("CRM plugin installer", () => {
     expect(executedSql).toContainEqual(
       expect.stringContaining("state = 'failed'"),
     );
+  });
+
+  it("rejects a package containing a Nexus runtime credential", async () => {
+    const response = await installerApp().request(
+      "/plugin-operations",
+      {
+        method: "POST",
+        headers: { "Idempotency-Key": "plugin-secret-test-key" },
+        body: crmPackageBody(
+          'const credential = "runtime-secret-sentinel"; export default {};',
+        ),
+      },
+      {
+        APP_VERSION: "1.0.0",
+        APP_INSTALLATION_ID: "install_test",
+        BETTER_AUTH_SECRET: "runtime-secret-sentinel",
+        DATABASE_PROVIDER: "d1",
+        PLUGIN_COMPATIBILITY_FLAGS: "nodejs_compat",
+      } as CoreEnv,
+    );
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({
+      code: "PLUGIN_PACKAGE_CONTAINS_RUNTIME_VALUE",
+    });
   });
 
   it("releases the global lock when an installation stage fails", async () => {
@@ -235,8 +284,10 @@ describe("CRM plugin installer", () => {
 
   it("deletes an already-uninstalled plugin record without touching preserved data", async () => {
     const executedSql: string[] = [];
+    const atomicSql: string[] = [];
     const response = await installerApp({
       executedSql,
+      atomicSql,
       plugin: {
         workerName: "app-plugin-crm",
         status: "uninstalled",
@@ -244,15 +295,121 @@ describe("CRM plugin installer", () => {
     }).request("/plugins/crm", { method: "DELETE" });
 
     expect(response.status).toBe(204);
-    expect(executedSql).toContainEqual(
+    expect(atomicSql).toContainEqual(
       expect.stringContaining("DELETE FROM plugins"),
     );
-    expect(executedSql).not.toContainEqual(
+    expect(atomicSql).not.toContainEqual(
       expect.stringContaining("DELETE FROM plugin_migrations"),
     );
-    expect(executedSql).not.toContainEqual(
+    expect(atomicSql).not.toContainEqual(
       expect.stringContaining("DELETE FROM plugin_operations"),
     );
+  });
+
+  it("downloads only a verified portable package without Nexus data or credentials", async () => {
+    const parts = crmPackageParts();
+    const operationId = "pop_export";
+    const packageChunks = archivePackageStatements(operationId, parts, 1)
+      .slice(1)
+      .map((statement) => ({
+        path: String(statement.params?.[1]),
+        chunkIndex: Number(statement.params?.[2]),
+        content: String(statement.params?.[3]),
+      }));
+    const executedSql: string[] = [];
+    const response = await installerApp({
+      executedSql,
+      packageChunks,
+      plugin: {
+        installedVersion: parts.manifest.version,
+        status: "installed",
+        databaseRowSecret: "must-not-be-exported",
+      },
+      operation: {
+        operationId,
+        manifestSha256: await sha256(stableJson(parts.manifest)),
+        workerSha256: await sha256(parts.worker),
+        d1MigrationsSha256: await sha256(stableJson(parts.d1Migrations)),
+        postgresMigrationsSha256: await sha256(
+          stableJson(parts.postgresMigrations),
+        ),
+        lastError: "credential=must-not-be-exported",
+      },
+    }).request("/plugins/crm/package");
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toBe("application/zip");
+    expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(response.headers.get("Content-Disposition")).toBe(
+      'attachment; filename="crm-1.0.0.plugin.zip"',
+    );
+    const files = unzipSync(new Uint8Array(await response.arrayBuffer()));
+    expect(Object.keys(files).sort()).toEqual([
+      "manifest.json",
+      "migrations/d1/0001_init.sql",
+      "migrations/postgres/0001_init.sql",
+      "worker.mjs",
+    ]);
+    const archiveText = Object.values(files).map(strFromU8).join("\n");
+    expect(archiveText).not.toContain("must-not-be-exported");
+    expect(archiveText).not.toContain("BETTER_AUTH_SECRET");
+    expect(archiveText).not.toContain("CF_API_TOKEN");
+    expect(executedSql).toContainEqual(
+      expect.stringContaining("INSERT INTO audit_log"),
+    );
+
+    const importBody = new FormData();
+    importBody.set("manifest", strFromU8(files["manifest.json"]!));
+    importBody.set(
+      "worker",
+      new File([files["worker.mjs"]!.buffer as ArrayBuffer], "worker.mjs", {
+        type: "application/javascript",
+      }),
+    );
+    importBody.set(
+      "d1Migrations",
+      JSON.stringify({
+        "0001_init": strFromU8(files["migrations/d1/0001_init.sql"]!),
+      }),
+    );
+    importBody.set(
+      "postgresMigrations",
+      JSON.stringify({
+        "0001_init": strFromU8(files["migrations/postgres/0001_init.sql"]!),
+      }),
+    );
+    const importResponse = await installerApp({ executedSql: [] }).request(
+      "/plugin-operations",
+      {
+        method: "POST",
+        headers: { "Idempotency-Key": "portable-package-import" },
+        body: importBody,
+      },
+      {
+        APP_VERSION: "1.0.0",
+        DATABASE_PROVIDER: "d1",
+        PLUGIN_COMPATIBILITY_FLAGS: "nodejs_compat",
+      } as CoreEnv,
+    );
+    expect(importResponse.status).toBe(201);
+  });
+
+  it("refuses to export a legacy package that was not archived", async () => {
+    const response = await installerApp({
+      plugin: { installedVersion: "1.0.0", status: "installed" },
+      operation: {
+        operationId: "pop_legacy",
+        manifestSha256: "manifest",
+        workerSha256: "worker",
+        d1MigrationsSha256: "d1",
+        postgresMigrationsSha256: "postgres",
+      },
+    }).request("/plugins/crm/package");
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      code: "PLUGIN_PACKAGE_EXPORT_UNAVAILABLE",
+    });
   });
 
   it("reports a conflict instead of not-found for transitional plugin states", async () => {

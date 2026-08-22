@@ -67,4 +67,39 @@ describe("Core permission migration", () => {
         .get()?.count,
     ).toBe(0);
   });
+
+  it("grants plugin package export only to administrator groups", () => {
+    database = new DatabaseSync(":memory:");
+    database.exec(
+      readFileSync("workers/core/migrations/d1/0001_init.sql", "utf8"),
+    );
+    database.exec(`
+      INSERT INTO groups(id,name,is_admin,created_at,updated_at) VALUES
+        ('grp_admin','Admin',1,1,1),
+        ('grp_custom','Custom',0,1,1);
+    `);
+    const migration = readFileSync(
+      "workers/core/migrations/d1/0005_plugin_package_exports.sql",
+      "utf8",
+    );
+    database.exec(migration);
+    database.exec(migration);
+
+    expect(
+      database
+        .prepare(
+          `SELECT g.id FROM group_permissions gp
+           JOIN groups g ON g.id = gp.group_id
+           WHERE gp.permission_id = 'perm_core_plugin_export'
+           ORDER BY g.id`,
+        )
+        .all()
+        .map((row) => String(row.id)),
+    ).toEqual(["grp_admin"]);
+    expect(
+      database
+        .prepare("SELECT COUNT(*) AS count FROM plugin_package_chunks")
+        .get()?.count,
+    ).toBe(0);
+  });
 });

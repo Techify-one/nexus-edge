@@ -17,6 +17,24 @@ export class ApiError extends Error {
   }
 }
 
+type ErrorEnvelope = {
+  error?: { code: string; message: string; requestId?: string };
+};
+
+const responseError = (response: Response, data: ErrorEnvelope): ApiError => {
+  if (response.status === 401)
+    window.dispatchEvent(new Event("app:unauthenticated"));
+  const errorKey = `errors.${data.error?.code ?? "HTTP_ERROR"}`;
+  return new ApiError(
+    response.status,
+    data.error?.code ?? "HTTP_ERROR",
+    hasTranslation(errorKey)
+      ? translate(errorKey)
+      : translate("errors.fallback"),
+    data.error?.requestId,
+  );
+};
+
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   if (init.body && !(init.body instanceof FormData))
@@ -28,23 +46,21 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     credentials: "include",
   });
   if (response.status === 204) return undefined as T;
-  const data = (await response.json()) as T & {
-    error?: { code: string; message: string; requestId?: string };
-  };
-  if (!response.ok) {
-    if (response.status === 401)
-      window.dispatchEvent(new Event("app:unauthenticated"));
-    const errorKey = `errors.${data.error?.code ?? "HTTP_ERROR"}`;
-    throw new ApiError(
-      response.status,
-      data.error?.code ?? "HTTP_ERROR",
-      hasTranslation(errorKey)
-        ? translate(errorKey)
-        : translate("errors.fallback"),
-      data.error?.requestId,
-    );
-  }
+  const data = (await response.json()) as T & ErrorEnvelope;
+  if (!response.ok) throw responseError(response, data);
   return data;
+}
+
+export async function apiFile(path: string): Promise<Blob> {
+  const response = await fetch(path, {
+    headers: { "Accept-Language": getAppLocale() },
+    credentials: "include",
+  });
+  if (!response.ok) {
+    const data = (await response.json().catch(() => ({}))) as ErrorEnvelope;
+    throw responseError(response, data);
+  }
+  return response.blob();
 }
 
 export const idempotencyKey = (): string => crypto.randomUUID();

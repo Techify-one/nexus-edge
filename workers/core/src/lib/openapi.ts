@@ -343,6 +343,28 @@ export const OPENAPI_DOCUMENT = {
         },
       },
     },
+    "/api/v1/plugins/{pluginId}/package": {
+      get: {
+        parameters: [{ name: "pluginId", in: "path", required: true }],
+        responses: {
+          "200": {
+            description:
+              "Portable plugin ZIP containing code, manifest, and schema-only migrations",
+            content: {
+              "application/zip": {
+                schema: { type: "string", format: "binary" },
+              },
+            },
+          },
+          "403": { description: "Plugin export permission required" },
+          "404": { description: "Plugin not found" },
+          "409": {
+            description:
+              "Plugin is not installed or its portable package is unavailable",
+          },
+        },
+      },
+    },
     "/api/v1/plugin-operations": {
       get: { responses: { "200": { description: "Installer operations" } } },
       post: {

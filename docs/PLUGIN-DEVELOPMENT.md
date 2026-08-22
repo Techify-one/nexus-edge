@@ -181,6 +181,18 @@ combined install input must not exceed 4 MiB, and the gzipped Worker must not
 exceed 3 MiB. Artifacts are local build outputs and must not contain source
 maps, credentials, `.dev.vars`, environment files, or unrelated files.
 
+The Installer archives these exact validated inputs in bounded chunks after the
+package-hash check. An administrator with `core.plugin.export` can later
+download a fresh `.plugin.zip` for another Nexus installation. Export performs
+the manifest, migration-policy, and SHA-256 checks again and includes only the
+four documented package areas. It never queries or serializes plugin tables,
+business records, database bindings, environment variables, session data, or
+Nexus credentials. Do not embed credentials in Worker source: source code is an
+intentional part of every portable plugin package. Installation is rejected if
+the submitted files contain any protected runtime credential or
+installation-specific identifier currently configured in the destination
+Nexus.
+
 ## 8. Required verification
 
 Use Node.js 24+ and pnpm 11.19.0. From the repository root, run:
@@ -245,6 +257,11 @@ The Core must convert known failures into bounded safe diagnostics; unknown
 failure text remains available only in protected server logs and is correlated
 through the operation and request IDs. This report is diagnostic context for a
 developer, while Audit remains the durable user-visible history.
+
+Packages installed before export archiving was introduced have no recoverable
+copy of the inactive-provider migrations. Their download action remains
+unavailable until the same plugin is updated or reinstalled once from a valid
+package. Downloading is recorded as `core.plugin.package_downloaded` in Audit.
 
 Common failures:
 

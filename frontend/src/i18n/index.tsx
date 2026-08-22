@@ -206,6 +206,7 @@ const ptBR = {
   "permissions.core.plugin.create": "Instalar plugins",
   "permissions.core.plugin.update": "Atualizar plugins instalados",
   "permissions.core.plugin.delete": "Desinstalar plugins",
+  "permissions.core.plugin.export": "Baixar pacotes de plugins",
   "permissions.core.webhook.read": "Visualizar webhooks",
   "permissions.core.webhook.create": "Criar webhooks",
   "permissions.core.webhook.update": "Editar webhooks e trocar segredos",
@@ -318,6 +319,10 @@ const ptBR = {
   "plugins.update": "Atualizar",
   "plugins.install": "Instalar",
   "plugins.uninstall": "Desinstalar",
+  "plugins.downloadPackage": "Baixar pacote",
+  "plugins.packageDownloaded": "Pacote do plugin baixado.",
+  "plugins.downloadUnavailable":
+    "Atualize ou reinstale este plugin uma vez para gerar o pacote portátil.",
   "plugins.provider": "Provider",
   "plugins.invalidPackage": "Pacote inválido.",
   "plugins.permissionRequired":
@@ -363,6 +368,12 @@ const ptBR = {
   "errors.UNAUTHORIZED": "Faça login para continuar.",
   "errors.UNAUTHENTICATED": "Faça login para continuar.",
   "errors.FORBIDDEN": "Você não tem permissão para esta operação.",
+  "errors.PLUGIN_PACKAGE_EXPORT_NOT_INSTALLED":
+    "Somente plugins instalados podem ser baixados.",
+  "errors.PLUGIN_PACKAGE_EXPORT_UNAVAILABLE":
+    "O pacote portátil não está disponível. Atualize ou reinstale o plugin uma vez e tente novamente.",
+  "errors.PLUGIN_PACKAGE_CONTAINS_RUNTIME_VALUE":
+    "O pacote contém uma configuração ou credencial específica desta instalação e não pode ser instalado.",
   "errors.EMAIL_ALREADY_EXISTS": "Este e-mail já pertence a outro usuário.",
   "errors.PASSWORD_ACCOUNT_UNAVAILABLE":
     "Este usuário não possui uma conta com senha.",
@@ -568,6 +579,7 @@ const en: Record<TranslationKey, string> = {
   "permissions.core.plugin.create": "Install plugins",
   "permissions.core.plugin.update": "Update installed plugins",
   "permissions.core.plugin.delete": "Uninstall plugins",
+  "permissions.core.plugin.export": "Download plugin packages",
   "permissions.core.webhook.read": "View webhooks",
   "permissions.core.webhook.create": "Create webhooks",
   "permissions.core.webhook.update": "Edit webhooks and replace secrets",
@@ -675,6 +687,10 @@ const en: Record<TranslationKey, string> = {
   "plugins.update": "Update",
   "plugins.install": "Install",
   "plugins.uninstall": "Uninstall",
+  "plugins.downloadPackage": "Download package",
+  "plugins.packageDownloaded": "Plugin package downloaded.",
+  "plugins.downloadUnavailable":
+    "Update or reinstall this plugin once to generate its portable package.",
   "plugins.provider": "Provider",
   "plugins.invalidPackage": "Invalid package.",
   "plugins.permissionRequired":
@@ -718,6 +734,12 @@ const en: Record<TranslationKey, string> = {
   "errors.UNAUTHORIZED": "Sign in to continue.",
   "errors.UNAUTHENTICATED": "Sign in to continue.",
   "errors.FORBIDDEN": "You do not have permission for this operation.",
+  "errors.PLUGIN_PACKAGE_EXPORT_NOT_INSTALLED":
+    "Only installed plugins can be downloaded.",
+  "errors.PLUGIN_PACKAGE_EXPORT_UNAVAILABLE":
+    "The portable package is unavailable. Update or reinstall the plugin once and try again.",
+  "errors.PLUGIN_PACKAGE_CONTAINS_RUNTIME_VALUE":
+    "The package contains configuration or credentials specific to this installation and cannot be installed.",
   "errors.EMAIL_ALREADY_EXISTS": "This email already belongs to another user.",
   "errors.PASSWORD_ACCOUNT_UNAVAILABLE":
     "This user does not have a password account.",

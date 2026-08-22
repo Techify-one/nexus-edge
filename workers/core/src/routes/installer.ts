@@ -20,6 +20,13 @@ import {
   migrationStatements,
   type MigrationSet,
 } from "../installer/migrations.js";
+import {
+  archivePackageStatements,
+  assertNoRuntimeValues,
+  loadPortablePackage,
+  portablePackageZip,
+  verifyPortablePackage,
+} from "../installer/package-archive.js";
 import { AppError } from "../lib/http.js";
 import { canPermission } from "../lib/ability.js";
 import { dbTime } from "../lib/values.js";
@@ -250,6 +257,34 @@ const hashes = async (parts: PackageParts) => ({
   postgres: await sha256(stableJson(parts.postgresMigrations)),
 });
 
+const verifyPortablePackageBoundary = (
+  env: HonoEnv["Bindings"],
+  parts: PackageParts,
+): void => {
+  try {
+    assertNoRuntimeValues(parts, [
+      env.APP_INSTALLATION_ID,
+      env.BETTER_AUTH_SECRET,
+      env.WEBHOOK_ENCRYPTION_KEY,
+      env.CF_API_TOKEN,
+      env.CF_ACCOUNT_ID,
+      env.DATABASE_URL,
+      env.D1_DATABASE_ID,
+      env.HYPERDRIVE_ID,
+      env.BETTER_AUTH_URL,
+      env.TRUSTED_ORIGINS,
+      env.CORE_WORKER_NAME,
+      env.WEBHOOK_ALLOWED_DOMAINS,
+    ]);
+  } catch {
+    throw new AppError(
+      422,
+      "PLUGIN_PACKAGE_CONTAINS_RUNTIME_VALUE",
+      "Plugin packages cannot contain installation-specific runtime values.",
+    );
+  }
+};
+
 async function getOperation(c: {
   get(name: "db"): HonoEnv["Variables"]["db"];
   req: { param(name: string): string };
@@ -310,11 +345,17 @@ installerRoutes.get(
   requirePermission("core.plugin.read"),
   async (c) =>
     c.json({
-      items: await c
-        .get("db")
-        .query(
-          `SELECT id, name, installed_version AS "installedVersion", api_version AS "apiVersion", active_database_provider AS "databaseProvider", worker_name AS "workerName", status, installed_at AS "installedAt", updated_at AS "updatedAt" FROM plugins ORDER BY name`,
-        ),
+      items: await c.get("db").query(
+        `SELECT p.id, p.name, p.installed_version AS "installedVersion", p.api_version AS "apiVersion",
+                  p.active_database_provider AS "databaseProvider", p.worker_name AS "workerName", p.status,
+                  p.installed_at AS "installedAt", p.updated_at AS "updatedAt",
+                  CASE WHEN p.status = 'installed' AND EXISTS (
+                    SELECT 1 FROM plugin_operations po
+                    JOIN plugin_package_chunks pc ON pc.operation_id = po.operation_id
+                    WHERE po.plugin_id = p.id AND po.target_version = p.installed_version AND po.state = 'installed'
+                  ) THEN 1 ELSE 0 END AS "packageAvailable"
+             FROM plugins p ORDER BY p.name`,
+      ),
     }),
 );
 
@@ -373,6 +414,7 @@ installerRoutes.post("/plugin-operations", async (c) => {
     );
   migrationStatements(parts.d1Migrations, parts.manifest.tablePrefix);
   migrationStatements(parts.postgresMigrations, parts.manifest.tablePrefix);
+  verifyPortablePackageBoundary(c.env, parts);
   const installed = await c.get("db").first<{ installedVersion: string }>(
     `SELECT installed_version AS "installedVersion"
            FROM plugins
@@ -550,6 +592,7 @@ installerRoutes.post("/plugin-operations/:operationId/advance", async (c) => {
         c.env.APP_VERSION,
         c.env.PLUGIN_COMPATIBILITY_FLAGS,
       );
+      verifyPortablePackageBoundary(c.env, parts);
       await db.execute(
         "UPDATE plugin_operations SET state = 'migrating', lock_expires_at = ? WHERE operation_id = ?",
         [dbTime(db, Date.now() + 300_000), operation.operationId],
@@ -561,6 +604,9 @@ installerRoutes.post("/plugin-operations/:operationId/advance", async (c) => {
       const migrations = migrationStatements(
         activeSet,
         parts.manifest.tablePrefix,
+      );
+      await db.atomic(
+        archivePackageStatements(operation.operationId, parts, dbTime(db)),
       );
       const statements: SqlStatement[] = [];
       for (const migration of migrations) {
@@ -690,6 +736,14 @@ installerRoutes.post("/plugin-operations/:operationId/advance", async (c) => {
             params: [permissionId, now],
           })),
           {
+            sql: `DELETE FROM plugin_package_chunks
+                   WHERE operation_id IN (
+                     SELECT operation_id FROM plugin_operations
+                      WHERE plugin_id = ? AND operation_id <> ?
+                   )`,
+            params: [operation.pluginId, operation.operationId],
+          },
+          {
             sql: "UPDATE plugin_operations SET state = 'installed', finished_at = ? WHERE operation_id = ?",
             params: [now, operation.operationId],
           },
@@ -738,6 +792,92 @@ installerRoutes.post("/plugin-operations/:operationId/advance", async (c) => {
   }
 });
 
+installerRoutes.get(
+  "/plugins/:pluginId/package",
+  requirePermission("core.plugin.export"),
+  async (c) => {
+    const pluginId = c.req.param("pluginId");
+    const plugin = await c
+      .get("db")
+      .first<{ installedVersion: string | null; status: string }>(
+        `SELECT installed_version AS "installedVersion", status
+           FROM plugins WHERE id = ?`,
+        [pluginId],
+      );
+    if (!plugin)
+      throw new AppError(404, "PLUGIN_NOT_FOUND", "Plugin not found.");
+    if (plugin.status !== "installed" || !plugin.installedVersion)
+      throw new AppError(
+        409,
+        "PLUGIN_PACKAGE_EXPORT_NOT_INSTALLED",
+        "Only an installed plugin can be downloaded.",
+      );
+    const operation = await c.get("db").first<{
+      operationId: string;
+      manifestSha256: string;
+      workerSha256: string;
+      d1MigrationsSha256: string;
+      postgresMigrationsSha256: string;
+    }>(
+      `SELECT operation_id AS "operationId", manifest_sha256 AS "manifestSha256",
+              worker_sha256 AS "workerSha256", d1_migrations_sha256 AS "d1MigrationsSha256",
+              postgres_migrations_sha256 AS "postgresMigrationsSha256"
+         FROM plugin_operations
+        WHERE plugin_id = ? AND target_version = ? AND state = 'installed'
+        ORDER BY finished_at DESC`,
+      [pluginId, plugin.installedVersion],
+    );
+    if (!operation)
+      throw new AppError(
+        409,
+        "PLUGIN_PACKAGE_EXPORT_UNAVAILABLE",
+        "Update or reinstall this plugin once to create a portable package.",
+      );
+    try {
+      const parts = await loadPortablePackage(
+        c.get("db"),
+        operation.operationId,
+      );
+      await verifyPortablePackage(parts, {
+        pluginId,
+        version: plugin.installedVersion,
+        manifest: operation.manifestSha256,
+        worker: operation.workerSha256,
+        d1: operation.d1MigrationsSha256,
+        postgres: operation.postgresMigrationsSha256,
+      });
+      const zip = portablePackageZip(parts);
+      await audit(
+        c,
+        "core.plugin.package_downloaded",
+        "core.plugin",
+        pluginId,
+        {
+          version: plugin.installedVersion,
+          bytes: zip.byteLength,
+        },
+      );
+      const responseBody = new Uint8Array(zip.byteLength);
+      responseBody.set(zip);
+      return new Response(responseBody.buffer, {
+        headers: {
+          "Cache-Control": "private, no-store",
+          "Content-Disposition": `attachment; filename="${pluginId}-${plugin.installedVersion}.plugin.zip"`,
+          "Content-Length": String(zip.byteLength),
+          "Content-Type": "application/zip",
+        },
+      });
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      throw new AppError(
+        409,
+        "PLUGIN_PACKAGE_EXPORT_UNAVAILABLE",
+        "The portable package is unavailable or failed integrity verification. Update or reinstall the plugin.",
+      );
+    }
+  },
+);
+
 installerRoutes.delete(
   "/plugins/:pluginId",
   requirePermission("core.plugin.delete"),
@@ -752,13 +892,20 @@ installerRoutes.delete(
     if (!plugin)
       throw new AppError(404, "PLUGIN_NOT_FOUND", "Plugin not found.");
     if (plugin.status === "uninstalled") {
-      const deleted = await c
-        .get("db")
-        .execute(
-          "DELETE FROM plugins WHERE id = ? AND status = 'uninstalled'",
-          [pluginId],
-        );
-      if (!deleted.rowsAffected)
+      const results = await c.get("db").atomic([
+        {
+          sql: `DELETE FROM plugin_package_chunks
+                 WHERE operation_id IN (
+                   SELECT operation_id FROM plugin_operations WHERE plugin_id = ?
+                 )`,
+          params: [pluginId],
+        },
+        {
+          sql: "DELETE FROM plugins WHERE id = ? AND status = 'uninstalled'",
+          params: [pluginId],
+        },
+      ]);
+      if (!results[1]?.rowsAffected)
         throw new AppError(
           409,
           "PLUGIN_STATE_CONFLICT",

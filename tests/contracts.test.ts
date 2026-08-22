@@ -193,6 +193,7 @@ describe("contracts", () => {
       "core.plugin.create",
       "core.plugin.update",
       "core.plugin.delete",
+      "core.plugin.export",
       "core.webhook.read",
       "core.webhook.create",
       "core.webhook.update",
