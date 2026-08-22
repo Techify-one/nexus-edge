@@ -39,7 +39,6 @@ webhookRoutes.get(
 webhookRoutes.post(
   "/endpoints",
   requirePermission("core.webhook.create"),
-  requireRecentReauth,
   async (c) => {
     const input = await parseBody(c, webhookEndpointCreateSchema);
     if (

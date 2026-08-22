@@ -236,7 +236,6 @@ export const OPENAPI_DOCUMENT = {
     "/api/v1/me/api-keys": {
       get: { responses: { "200": { description: "Personal keys" } } },
       post: {
-        parameters: [{ name: "X-Reauth-Token", in: "header", required: true }],
         responses: { "201": { description: "Secret returned once" } },
       },
     },

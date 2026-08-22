@@ -18,7 +18,6 @@ import {
   Input,
   Label,
   PageHeader,
-  PasswordInput,
   Skeleton,
 } from "../../components/ui/index.js";
 import { api, idempotencyKey } from "../../lib/api/core-client.js";
@@ -92,14 +91,9 @@ export default function WebhooksPage() {
           headers: { "Idempotency-Key": idempotencyKey() },
           body: JSON.stringify(payload),
         });
-      const reauth = await api<{ token: string }>("/api/v1/auth/reauth", {
-        method: "POST",
-        body: JSON.stringify({ password: form.get("password") }),
-      });
       return api<{ secret: string }>("/api/v1/webhooks/endpoints", {
         method: "POST",
         headers: {
-          "X-Reauth-Token": reauth.token,
           "Idempotency-Key": idempotencyKey(),
         },
         body: JSON.stringify({ ...payload, url: form.get("url") }),
@@ -457,19 +451,6 @@ export default function WebhooksPage() {
                 ))}
               </div>
             </fieldset>
-            {!current && (
-              <div>
-                <Label htmlFor="webhook-password">
-                  {t("common.confirmPassword")}
-                </Label>
-                <PasswordInput
-                  id="webhook-password"
-                  name="password"
-                  autoComplete="current-password"
-                  required
-                />
-              </div>
-            )}
             <div className="flex justify-end gap-2">
               <Button
                 type="button"

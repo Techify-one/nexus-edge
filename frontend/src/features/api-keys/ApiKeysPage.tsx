@@ -11,7 +11,6 @@ import {
   Input,
   Label,
   PageHeader,
-  PasswordInput,
   Skeleton,
 } from "../../components/ui/index.js";
 import { api } from "../../lib/api/core-client.js";
@@ -54,13 +53,8 @@ export default function ApiKeysPage() {
   );
   const create = useMutation({
     mutationFn: async (form: FormData) => {
-      const reauth = await api<{ token: string }>("/api/v1/auth/reauth", {
-        method: "POST",
-        body: JSON.stringify({ password: form.get("password") }),
-      });
       return api<ApiKey & { key: string }>("/api/v1/me/api-keys", {
         method: "POST",
-        headers: { "X-Reauth-Token": reauth.token },
         body: JSON.stringify({
           name: form.get("name"),
           scopes: form.getAll("scopes"),
@@ -265,17 +259,6 @@ export default function ApiKeysPage() {
                 name="scopes"
               />
             </fieldset>
-            <div>
-              <Label htmlFor="key-password">
-                {t("common.confirmPassword")}
-              </Label>
-              <PasswordInput
-                id="key-password"
-                name="password"
-                autoComplete="current-password"
-                required
-              />
-            </div>
             <div className="flex justify-end gap-2">
               <Button
                 type="button"

@@ -320,7 +320,7 @@ managementRoutes.get("/me/api-keys", async (c) => {
   return c.json(data, 200, noStore);
 });
 
-managementRoutes.post("/me/api-keys", requireRecentReauth, async (c) => {
+managementRoutes.post("/me/api-keys", async (c) => {
   const input = await parseBody(c, apiKeyCreateSchema);
   await requireAvailablePermissionRows(c.get("db"), input.scopes);
   const ability = c.get("ability");
