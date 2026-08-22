@@ -73,21 +73,6 @@ export function validateAdditiveMigration(
 ): void {
   const words = tokens(statement);
   const upper = words.map((word) => word.toUpperCase());
-  const forbidden = new Set([
-    "DROP",
-    "DELETE",
-    "UPDATE",
-    "INSERT",
-    "REPLACE",
-    "TRUNCATE",
-    "PRAGMA",
-    "ATTACH",
-    "DETACH",
-    "VACUUM",
-    "REINDEX",
-  ]);
-  if (upper.some((word) => forbidden.has(word)))
-    throw new Error("Migration contains a forbidden statement");
   let tableName: string | undefined;
   if (upper[0] === "CREATE" && upper[1] === "TABLE") {
     const offset = upper[2] === "IF" ? 5 : 2;

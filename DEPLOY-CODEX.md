@@ -122,7 +122,7 @@ Open `https://YOUR-DOMAIN/setup` and create the first administrator using only a
 2. Open `/app/plugins`.
 3. Click **Add** and select `artifacts/crm.plugin.zip`.
 4. Review the version, sizes, migrations, menus, and permissions.
-5. Confirm the password. The interface advances one stage per request and displays the persisted state.
+5. Confirm the installation. The interface advances one stage per request and displays the persisted state.
 6. Verify `/app/crm/leads`, create/edit/delete one lead, and inspect `/app/audit`.
 
 The Installer creates `app-plugin-crm`, applies only the active provider's migration, disables the public URL, and adds `PLUGIN_CRM` to the Core. On failure, preserve `operationId` and select the same package again to resume stages that require the artifact.

@@ -333,10 +333,7 @@ export const OPENAPI_DOCUMENT = {
     "/api/v1/plugin-operations": {
       get: { responses: { "200": { description: "Installer operations" } } },
       post: {
-        parameters: [
-          { name: "Idempotency-Key", in: "header", required: true },
-          { name: "X-Reauth-Token", in: "header", required: true },
-        ],
+        parameters: [{ name: "Idempotency-Key", in: "header", required: true }],
         requestBody: {
           content: { "multipart/form-data": { schema: { type: "object" } } },
         },

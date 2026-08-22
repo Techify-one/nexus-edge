@@ -345,7 +345,6 @@ const ptBR = {
   "plugins.installFailed":
     "A instalação falhou. Use o ID da operação para retomar.",
   "plugins.installed": "Plugin instalado.",
-  "plugins.uninstallPassword": "Digite sua senha para desinstalar {{name}}:",
   "plugins.uninstalled": "Plugin desinstalado; as tabelas foram preservadas.",
   "plugins.uninstallConfirm": "Desinstalar {{name}} {{version}}?",
   "plugins.state.validating": "Validando",
@@ -704,7 +703,6 @@ const en: Record<TranslationKey, string> = {
   "plugins.installFailed":
     "Installation failed. Use the operation ID to resume.",
   "plugins.installed": "Plugin installed.",
-  "plugins.uninstallPassword": "Enter your password to uninstall {{name}}:",
   "plugins.uninstalled": "Plugin uninstalled; database tables were preserved.",
   "plugins.uninstallConfirm": "Uninstall {{name}} {{version}}?",
   "plugins.state.validating": "Validating",

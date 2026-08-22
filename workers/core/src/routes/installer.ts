@@ -24,7 +24,6 @@ import { AppError } from "../lib/http.js";
 import { canPermission } from "../lib/ability.js";
 import { dbTime } from "../lib/values.js";
 import { requirePermission } from "../middleware/auth.js";
-import { requireRecentReauth } from "../middleware/reauth.js";
 import { audit } from "../services/audit.js";
 import { commitWithEvent } from "../services/events.js";
 import { idempotencyLookup, saveIdempotency } from "../services/idempotency.js";
@@ -242,7 +241,7 @@ installerRoutes.get(
   },
 );
 
-installerRoutes.post("/plugin-operations", requireRecentReauth, async (c) => {
+installerRoutes.post("/plugin-operations", async (c) => {
   const parts = await readPackage(c);
   validateManifestPolicy(
     parts.manifest,
@@ -343,272 +342,257 @@ installerRoutes.post("/plugin-operations", requireRecentReauth, async (c) => {
   return c.json(response, 201);
 });
 
-installerRoutes.post(
-  "/plugin-operations/:operationId/resume",
-  requireRecentReauth,
-  async (c) => {
-    const operation = await getOperation(c);
-    requirePluginOperationPermission(c, operation.type);
-    if (operation.state !== "failed" || !operation.lastError)
-      throw new AppError(
-        409,
-        "OPERATION_NOT_FAILED",
-        "Only a failed operation can be resumed.",
-      );
-    const failure = JSON.parse(operation.lastError) as { from: string };
-    const now = Date.now();
-    const lock = await c
-      .get("db")
-      .execute(
-        `UPDATE installer_lock SET operation_id = ?, acquired_at = ?, expires_at = ? WHERE id = 'global' AND (operation_id IS NULL OR operation_id = ? OR expires_at < ?)`,
-        [
-          operation.operationId,
-          dbTime(c.get("db"), now),
-          dbTime(c.get("db"), now + 300_000),
-          operation.operationId,
-          dbTime(c.get("db"), now),
-        ],
-      );
-    if (!lock.rowsAffected)
-      throw new AppError(
-        409,
-        "INSTALLER_BUSY",
-        "Another installation is in progress.",
-      );
-    await c
-      .get("db")
-      .execute(
-        "UPDATE plugin_operations SET state = ?, last_error = NULL WHERE operation_id = ?",
-        [failure.from, operation.operationId],
-      );
-    return c.json({ operationId: operation.operationId, state: failure.from });
-  },
-);
+installerRoutes.post("/plugin-operations/:operationId/resume", async (c) => {
+  const operation = await getOperation(c);
+  requirePluginOperationPermission(c, operation.type);
+  if (operation.state !== "failed" || !operation.lastError)
+    throw new AppError(
+      409,
+      "OPERATION_NOT_FAILED",
+      "Only a failed operation can be resumed.",
+    );
+  const failure = JSON.parse(operation.lastError) as { from: string };
+  const now = Date.now();
+  const lock = await c
+    .get("db")
+    .execute(
+      `UPDATE installer_lock SET operation_id = ?, acquired_at = ?, expires_at = ? WHERE id = 'global' AND (operation_id IS NULL OR operation_id = ? OR expires_at < ?)`,
+      [
+        operation.operationId,
+        dbTime(c.get("db"), now),
+        dbTime(c.get("db"), now + 300_000),
+        operation.operationId,
+        dbTime(c.get("db"), now),
+      ],
+    );
+  if (!lock.rowsAffected)
+    throw new AppError(
+      409,
+      "INSTALLER_BUSY",
+      "Another installation is in progress.",
+    );
+  await c
+    .get("db")
+    .execute(
+      "UPDATE plugin_operations SET state = ?, last_error = NULL WHERE operation_id = ?",
+      [failure.from, operation.operationId],
+    );
+  return c.json({ operationId: operation.operationId, state: failure.from });
+});
 
-installerRoutes.post(
-  "/plugin-operations/:operationId/advance",
-  requireRecentReauth,
-  async (c) => {
-    const operation = await getOperation(c);
-    requirePluginOperationPermission(c, operation.type);
-    const db = c.get("db");
-    const fail = async (from: string, error: unknown) => {
-      const detail =
-        error instanceof Error ? error.message.slice(0, 500) : "unknown";
+installerRoutes.post("/plugin-operations/:operationId/advance", async (c) => {
+  const operation = await getOperation(c);
+  requirePluginOperationPermission(c, operation.type);
+  const db = c.get("db");
+  const fail = async (from: string, error: unknown) => {
+    const detail =
+      error instanceof Error ? error.message.slice(0, 500) : "unknown";
+    await db.execute(
+      "UPDATE plugin_operations SET state = 'failed', last_error = ? WHERE operation_id = ?",
+      [JSON.stringify({ from, detail }), operation.operationId],
+    );
+    throw new AppError(
+      500,
+      "PLUGIN_OPERATION_FAILED",
+      "The stage failed. Check the operation code and try to resume.",
+    );
+  };
+  try {
+    if (operation.state === "validating") {
+      const parts = await readPackage(c);
+      await verifyPackage(operation, parts);
+      validateManifestPolicy(
+        parts.manifest,
+        c.env.APP_VERSION,
+        c.env.PLUGIN_COMPATIBILITY_FLAGS,
+      );
       await db.execute(
-        "UPDATE plugin_operations SET state = 'failed', last_error = ? WHERE operation_id = ?",
-        [JSON.stringify({ from, detail }), operation.operationId],
+        "UPDATE plugin_operations SET state = 'migrating', lock_expires_at = ? WHERE operation_id = ?",
+        [dbTime(db, Date.now() + 300_000), operation.operationId],
       );
-      throw new AppError(
-        500,
-        "PLUGIN_OPERATION_FAILED",
-        "The stage failed. Check the operation code and try to resume.",
+      const activeSet =
+        c.env.DATABASE_PROVIDER === "d1"
+          ? parts.d1Migrations
+          : parts.postgresMigrations;
+      const migrations = migrationStatements(
+        activeSet,
+        parts.manifest.tablePrefix,
       );
-    };
-    try {
-      if (operation.state === "validating") {
-        const parts = await readPackage(c);
-        await verifyPackage(operation, parts);
-        validateManifestPolicy(
-          parts.manifest,
-          c.env.APP_VERSION,
-          c.env.PLUGIN_COMPATIBILITY_FLAGS,
+      const statements: SqlStatement[] = [];
+      for (const migration of migrations) {
+        const digest = await sha256(activeSet[migration.migrationId]!);
+        const existing = await db.first<{ sha256: string }>(
+          "SELECT sha256 FROM plugin_migrations WHERE plugin_id = ? AND dialect = ? AND migration_id = ?",
+          [operation.pluginId, c.env.DATABASE_PROVIDER, migration.migrationId],
         );
-        await db.execute(
-          "UPDATE plugin_operations SET state = 'migrating', lock_expires_at = ? WHERE operation_id = ?",
-          [dbTime(db, Date.now() + 300_000), operation.operationId],
-        );
-        const activeSet =
-          c.env.DATABASE_PROVIDER === "d1"
-            ? parts.d1Migrations
-            : parts.postgresMigrations;
-        const migrations = migrationStatements(
-          activeSet,
-          parts.manifest.tablePrefix,
-        );
-        const statements: SqlStatement[] = [];
-        for (const migration of migrations) {
-          const digest = await sha256(activeSet[migration.migrationId]!);
-          const existing = await db.first<{ sha256: string }>(
-            "SELECT sha256 FROM plugin_migrations WHERE plugin_id = ? AND dialect = ? AND migration_id = ?",
-            [
+        if (existing && existing.sha256 !== digest)
+          throw new Error(`Migration hash mismatch: ${migration.migrationId}`);
+        if (!existing)
+          statements.push(...migration.statements, {
+            sql: "INSERT INTO plugin_migrations(plugin_id, dialect, migration_id, sha256, applied_at) VALUES (?, ?, ?, ?, ?)",
+            params: [
               operation.pluginId,
               c.env.DATABASE_PROVIDER,
               migration.migrationId,
+              digest,
+              dbTime(db),
             ],
-          );
-          if (existing && existing.sha256 !== digest)
-            throw new Error(
-              `Migration hash mismatch: ${migration.migrationId}`,
-            );
-          if (!existing)
-            statements.push(...migration.statements, {
-              sql: "INSERT INTO plugin_migrations(plugin_id, dialect, migration_id, sha256, applied_at) VALUES (?, ?, ?, ?, ?)",
-              params: [
-                operation.pluginId,
-                c.env.DATABASE_PROVIDER,
-                migration.migrationId,
-                digest,
-                dbTime(db),
-              ],
-            });
-        }
-        await db.atomic(statements);
-        await db.execute(
-          "UPDATE plugin_operations SET state = 'deploying' WHERE operation_id = ?",
-          [operation.operationId],
-        );
-        return c.json({
-          operationId: operation.operationId,
-          state: "deploying",
-        });
+          });
       }
-      if (operation.state === "deploying") {
-        const parts = await readPackage(c);
-        await verifyPackage(operation, parts);
-        await uploadPluginWorker(
-          c.env,
-          workerName(operation.pluginId),
-          parts.worker,
-          parts.manifest,
+      await db.atomic(statements);
+      await db.execute(
+        "UPDATE plugin_operations SET state = 'deploying' WHERE operation_id = ?",
+        [operation.operationId],
+      );
+      return c.json({
+        operationId: operation.operationId,
+        state: "deploying",
+      });
+    }
+    if (operation.state === "deploying") {
+      const parts = await readPackage(c);
+      await verifyPackage(operation, parts);
+      await uploadPluginWorker(
+        c.env,
+        workerName(operation.pluginId),
+        parts.worker,
+        parts.manifest,
+      );
+      await db.execute(
+        "UPDATE plugin_operations SET state = 'hardening' WHERE operation_id = ?",
+        [operation.operationId],
+      );
+      return c.json({
+        operationId: operation.operationId,
+        state: "hardening",
+      });
+    }
+    if (operation.state === "hardening") {
+      await hardenPluginWorker(c.env, workerName(operation.pluginId));
+      await db.execute(
+        "UPDATE plugin_operations SET state = 'binding' WHERE operation_id = ?",
+        [operation.operationId],
+      );
+      return c.json({ operationId: operation.operationId, state: "binding" });
+    }
+    if (operation.state === "binding") {
+      await mergeCoreServiceBinding(
+        c.env,
+        bindingName(operation.pluginId),
+        workerName(operation.pluginId),
+      );
+      await db.execute(
+        "UPDATE plugin_operations SET state = 'registering' WHERE operation_id = ?",
+        [operation.operationId],
+      );
+      return c.json({
+        operationId: operation.operationId,
+        state: "registering",
+      });
+    }
+    if (operation.state === "registering") {
+      const parts = await readPackage(c);
+      await verifyPackage(operation, parts);
+      const binding =
+        c.env[bindingName(operation.pluginId) as `PLUGIN_${string}`];
+      if (!binding || typeof (binding as Fetcher).fetch !== "function")
+        throw new Error(
+          "The Service Binding is not available for the smoke test yet",
         );
-        await db.execute(
-          "UPDATE plugin_operations SET state = 'hardening' WHERE operation_id = ?",
-          [operation.operationId],
-        );
-        return c.json({
-          operationId: operation.operationId,
-          state: "hardening",
-        });
-      }
-      if (operation.state === "hardening") {
-        await hardenPluginWorker(c.env, workerName(operation.pluginId));
-        await db.execute(
-          "UPDATE plugin_operations SET state = 'binding' WHERE operation_id = ?",
-          [operation.operationId],
-        );
-        return c.json({ operationId: operation.operationId, state: "binding" });
-      }
-      if (operation.state === "binding") {
-        await mergeCoreServiceBinding(
-          c.env,
-          bindingName(operation.pluginId),
-          workerName(operation.pluginId),
-        );
-        await db.execute(
-          "UPDATE plugin_operations SET state = 'registering' WHERE operation_id = ?",
-          [operation.operationId],
-        );
-        return c.json({
-          operationId: operation.operationId,
-          state: "registering",
-        });
-      }
-      if (operation.state === "registering") {
-        const parts = await readPackage(c);
-        await verifyPackage(operation, parts);
-        const binding =
-          c.env[bindingName(operation.pluginId) as `PLUGIN_${string}`];
-        if (!binding || typeof (binding as Fetcher).fetch !== "function")
-          throw new Error(
-            "The Service Binding is not available for the smoke test yet",
-          );
-        const smoke = await (binding as Fetcher).fetch(
-          new Request("https://plugin.internal/__installer/smoke", {
-            method: "POST",
-            headers: {
-              "X-Plugin-Context": pluginContextHeader(
-                c.get("principal").userId,
-                parts.manifest.permissions,
-                c.get("requestId"),
-              ),
-            },
-          }),
-        );
-        if (!smoke.ok)
-          throw new Error(`Plugin smoke test failed (${smoke.status})`);
-        const now = dbTime(db);
-        const permissionIds = parts.manifest.permissions.map(
-          (key) => `perm_${key.replaceAll(".", "_")}`,
-        );
-        await commitWithEvent(
-          c,
-          [
-            {
-              sql: `INSERT INTO plugins(id, name, installed_version, api_version, database_dialects_json, active_database_provider, worker_name, status, manifest_json, installed_at, updated_at)
+      const smoke = await (binding as Fetcher).fetch(
+        new Request("https://plugin.internal/__installer/smoke", {
+          method: "POST",
+          headers: {
+            "X-Plugin-Context": pluginContextHeader(
+              c.get("principal").userId,
+              parts.manifest.permissions,
+              c.get("requestId"),
+            ),
+          },
+        }),
+      );
+      if (!smoke.ok)
+        throw new Error(`Plugin smoke test failed (${smoke.status})`);
+      const now = dbTime(db);
+      const permissionIds = parts.manifest.permissions.map(
+        (key) => `perm_${key.replaceAll(".", "_")}`,
+      );
+      await commitWithEvent(
+        c,
+        [
+          {
+            sql: `INSERT INTO plugins(id, name, installed_version, api_version, database_dialects_json, active_database_provider, worker_name, status, manifest_json, installed_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, 'installed', ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET name=excluded.name, installed_version=excluded.installed_version, api_version=excluded.api_version, status='installed', manifest_json=excluded.manifest_json, updated_at=excluded.updated_at`,
-              params: [
-                parts.manifest.id,
-                parts.manifest.name,
-                parts.manifest.version,
-                parts.manifest.apiVersion,
-                JSON.stringify(parts.manifest.databaseDialects),
-                c.env.DATABASE_PROVIDER,
-                workerName(parts.manifest.id),
-                JSON.stringify(parts.manifest),
-                now,
-                now,
-              ],
-            },
-            ...parts.manifest.permissions.map((key) => ({
-              sql: insertIgnore(db.provider),
-              params: [`perm_${key.replaceAll(".", "_")}`, key, now],
-            })),
-            ...permissionIds.map((permissionId) => ({
-              sql: insertAdminPermission(db.provider),
-              params: [permissionId, now],
-            })),
-            {
-              sql: "UPDATE plugin_operations SET state = 'installed', finished_at = ? WHERE operation_id = ?",
-              params: [now, operation.operationId],
-            },
-            {
-              sql: "UPDATE installer_lock SET operation_id = NULL, acquired_at = NULL, expires_at = NULL WHERE id = 'global' AND operation_id = ?",
-              params: [operation.operationId],
-            },
-          ],
-          {
-            eventType: "core.plugin.installation_succeeded",
-            resourceType: "core.plugin",
-            resourceId: operation.pluginId,
-            data: {
-              version: operation.targetVersion,
-              workerName: workerName(operation.pluginId),
-            },
+            params: [
+              parts.manifest.id,
+              parts.manifest.name,
+              parts.manifest.version,
+              parts.manifest.apiVersion,
+              JSON.stringify(parts.manifest.databaseDialects),
+              c.env.DATABASE_PROVIDER,
+              workerName(parts.manifest.id),
+              JSON.stringify(parts.manifest),
+              now,
+              now,
+            ],
           },
-        );
-        await audit(
-          c,
-          "core.plugin.installation_succeeded",
-          "core.plugin",
-          operation.pluginId,
+          ...parts.manifest.permissions.map((key) => ({
+            sql: insertIgnore(db.provider),
+            params: [`perm_${key.replaceAll(".", "_")}`, key, now],
+          })),
+          ...permissionIds.map((permissionId) => ({
+            sql: insertAdminPermission(db.provider),
+            params: [permissionId, now],
+          })),
           {
-            operationId: operation.operationId,
+            sql: "UPDATE plugin_operations SET state = 'installed', finished_at = ? WHERE operation_id = ?",
+            params: [now, operation.operationId],
+          },
+          {
+            sql: "UPDATE installer_lock SET operation_id = NULL, acquired_at = NULL, expires_at = NULL WHERE id = 'global' AND operation_id = ?",
+            params: [operation.operationId],
+          },
+        ],
+        {
+          eventType: "core.plugin.installation_succeeded",
+          resourceType: "core.plugin",
+          resourceId: operation.pluginId,
+          data: {
             version: operation.targetVersion,
+            workerName: workerName(operation.pluginId),
           },
-        );
-        return c.json({
-          operationId: operation.operationId,
-          state: "installed",
-        });
-      }
-      throw new AppError(
-        409,
-        "OPERATION_NOT_ADVANCEABLE",
-        "The operation cannot advance from its current state.",
+        },
       );
-    } catch (error) {
-      if (error instanceof AppError) throw error;
-      return fail(operation.state, error);
+      await audit(
+        c,
+        "core.plugin.installation_succeeded",
+        "core.plugin",
+        operation.pluginId,
+        {
+          operationId: operation.operationId,
+          version: operation.targetVersion,
+        },
+      );
+      return c.json({
+        operationId: operation.operationId,
+        state: "installed",
+      });
     }
-  },
-);
+    throw new AppError(
+      409,
+      "OPERATION_NOT_ADVANCEABLE",
+      "The operation cannot advance from its current state.",
+    );
+  } catch (error) {
+    if (error instanceof AppError) throw error;
+    return fail(operation.state, error);
+  }
+});
 
 installerRoutes.delete(
   "/plugins/:pluginId",
   requirePermission("core.plugin.delete"),
-  requireRecentReauth,
   async (c) => {
     const pluginId = c.req.param("pluginId");
     const plugin = await c

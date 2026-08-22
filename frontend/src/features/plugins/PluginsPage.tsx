@@ -12,7 +12,6 @@ import {
   Input,
   Label,
   PageHeader,
-  PasswordInput,
   Skeleton,
 } from "../../components/ui/index.js";
 import { api, idempotencyKey } from "../../lib/api/core-client.js";
@@ -221,31 +220,23 @@ export default function PluginsPage() {
   const install = useMutation({
     mutationFn: async ({
       packageParts,
-      password,
       resume,
     }: {
       packageParts: PluginParts;
-      password: string;
       resume?: OperationRow | undefined;
     }) => {
       if (packageParts.rawBytes > 4 * 1024 * 1024)
         throw new Error(t("plugins.rawTooLarge"));
       if (packageParts.gzipBytes > 3 * 1024 * 1024)
         throw new Error(t("plugins.gzipTooLarge"));
-      const reauth = await api<{ token: string }>("/api/v1/auth/reauth", {
-        method: "POST",
-        body: JSON.stringify({ password }),
-      });
-      const reauthHeaders = { "X-Reauth-Token": reauth.token };
       let current = resume
         ? await api<Operation>(
             `/api/v1/plugin-operations/${resume.operationId}/resume`,
-            { method: "POST", headers: reauthHeaders },
+            { method: "POST" },
           )
         : await api<Operation>("/api/v1/plugin-operations", {
             method: "POST",
             headers: {
-              ...reauthHeaders,
               "Idempotency-Key": idempotencyKey(),
             },
             body: bodyFor(packageParts),
@@ -256,7 +247,6 @@ export default function PluginsPage() {
           `/api/v1/plugin-operations/${current.operationId}/advance`,
           {
             method: "POST",
-            headers: reauthHeaders,
             body: bodyFor(packageParts),
           },
         );
@@ -284,20 +274,8 @@ export default function PluginsPage() {
     },
   });
   const remove = useMutation({
-    mutationFn: async (plugin: Plugin) => {
-      const password = prompt(
-        t("plugins.uninstallPassword", { name: plugin.name }),
-      );
-      if (!password) throw new Error(t("common.operationCancelled"));
-      const reauth = await api<{ token: string }>("/api/v1/auth/reauth", {
-        method: "POST",
-        body: JSON.stringify({ password }),
-      });
-      return api(`/api/v1/plugins/${plugin.id}`, {
-        method: "DELETE",
-        headers: { "X-Reauth-Token": reauth.token },
-      });
-    },
+    mutationFn: (plugin: Plugin) =>
+      api(`/api/v1/plugins/${plugin.id}`, { method: "DELETE" }),
     onSuccess: () => {
       toast.success(t("plugins.uninstalled"));
       setSelected(null);
@@ -607,9 +585,6 @@ export default function PluginsPage() {
               event.preventDefault();
               install.mutate({
                 packageParts: parts,
-                password: String(
-                  new FormData(event.currentTarget).get("password"),
-                ),
                 resume: resumeTarget ?? undefined,
               });
             }}
@@ -645,17 +620,6 @@ export default function PluginsPage() {
                 </span>
                 <p>{parts.manifest.permissions.length}</p>
               </div>
-            </div>
-            <div>
-              <Label htmlFor="plugin-password">
-                {t("common.confirmPassword")}
-              </Label>
-              <PasswordInput
-                id="plugin-password"
-                name="password"
-                autoComplete="current-password"
-                required
-              />
             </div>
             {operation && (
               <div className="rounded-xl border p-4" aria-live="polite">

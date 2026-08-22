@@ -19,6 +19,13 @@ describe("plugin migrations", () => {
         "crm_",
       ),
     ).not.toThrow());
+  it("allows referential actions inside additive table definitions", () =>
+    expect(() =>
+      validateAdditiveMigration(
+        "CREATE TABLE crm_activities(id TEXT PRIMARY KEY, lead_id TEXT REFERENCES crm_leads(id) ON DELETE CASCADE)",
+        "crm_",
+      ),
+    ).not.toThrow());
   it("rejects DROP and tables outside the namespace", () => {
     expect(() =>
       validateAdditiveMigration("DROP TABLE crm_leads", "crm_"),
