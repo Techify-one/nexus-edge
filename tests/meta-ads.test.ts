@@ -181,7 +181,7 @@ describe("Meta Ads plugin", () => {
     expect(dashboard).toContain("setCreativePreview");
     expect(table).toContain("sticky right-0");
     expect(table).toContain('title={t("table.columns")}');
-    expect(shell).toContain("nexus.sidebar.collapsed");
+    expect(shell).toContain("nexus.sidebar.hidden");
     expect(shell).toContain('startsWith("/app/meta-ads")');
   });
 

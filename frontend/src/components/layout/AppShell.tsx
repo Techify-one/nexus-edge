@@ -82,8 +82,10 @@ const items = [
 export function AppShell() {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+  const [sidebarHidden, setSidebarHidden] = useState(() => {
     try {
+      const hidden = window.localStorage.getItem("nexus.sidebar.hidden");
+      if (hidden !== null) return hidden === "true";
       return window.localStorage.getItem("nexus.sidebar.collapsed") === "true";
     } catch {
       return false;
@@ -104,32 +106,28 @@ export function AppShell() {
   useEffect(() => {
     try {
       window.localStorage.setItem(
-        "nexus.sidebar.collapsed",
-        String(sidebarCollapsed),
+        "nexus.sidebar.hidden",
+        String(sidebarHidden),
       );
     } catch {
       // The menu still works when browser storage is unavailable.
     }
-  }, [sidebarCollapsed]);
+  }, [sidebarHidden]);
   const logout = async () => {
     await api("/api/auth/sign-out", { method: "POST" });
     queryClient.clear();
     navigate("/login", { replace: true });
   };
-  const nav = (compact = false) => (
+  const nav = () => (
     <>
-      <div
-        className={`flex h-16 items-center border-b ${compact ? "justify-center px-2" : "gap-3 px-5"}`}
-      >
+      <div className="flex h-16 items-center gap-3 border-b px-5">
         <div className="grid h-9 w-9 place-items-center rounded-xl bg-indigo-600 font-black text-white">
           {APP_MARK}
         </div>
-        {!compact && (
-          <div>
-            <div className="font-bold">{APP_NAME}</div>
-            <div className="text-xs text-slate-500">Edge Runtime</div>
-          </div>
-        )}
+        <div>
+          <div className="font-bold">{APP_NAME}</div>
+          <div className="text-xs text-slate-500">Edge Runtime</div>
+        </div>
       </div>
       <nav className="space-y-1 p-3" aria-label={t("nav.main")}>
         {items
@@ -144,13 +142,12 @@ export function AppShell() {
               to={to}
               end={to === "/app"}
               onClick={() => setOpen(false)}
-              title={compact ? t(label) : undefined}
               className={({ isActive }) =>
-                `flex items-center rounded-xl py-2.5 text-sm font-medium ${compact ? "justify-center px-2" : "gap-3 px-3"} ${isActive ? "bg-indigo-50 text-indigo-700" : "text-slate-600 hover:bg-slate-100"}`
+                `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium ${isActive ? "bg-indigo-50 text-indigo-700" : "text-slate-600 hover:bg-slate-100"}`
               }
             >
               <Icon className="h-4.5 w-4.5 shrink-0" />
-              {!compact && t(label)}
+              {t(label)}
             </NavLink>
           ))}
       </nav>
@@ -159,9 +156,10 @@ export function AppShell() {
   return (
     <div className="min-h-screen bg-slate-50">
       <aside
-        className={`fixed inset-y-0 left-0 z-30 hidden border-r bg-white transition-[width] duration-200 lg:block ${sidebarCollapsed ? "w-20" : "w-60"}`}
+        aria-hidden={sidebarHidden}
+        className={`fixed inset-y-0 left-0 z-30 hidden overflow-hidden bg-white transition-[width] duration-200 lg:block ${sidebarHidden ? "w-0 border-r-0" : "w-60 border-r"}`}
       >
-        {nav(sidebarCollapsed)}
+        {!sidebarHidden && <div className="w-60">{nav()}</div>}
       </aside>
       {open && (
         <div className="fixed inset-0 z-40 lg:hidden">
@@ -176,7 +174,7 @@ export function AppShell() {
         </div>
       )}
       <div
-        className={`transition-[padding] duration-200 ${sidebarCollapsed ? "lg:pl-20" : "lg:pl-60"}`}
+        className={`transition-[padding] duration-200 ${sidebarHidden ? "lg:pl-0" : "lg:pl-60"}`}
       >
         <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b bg-white/95 px-4 backdrop-blur sm:px-6">
           <div className="flex items-center gap-3">
@@ -191,15 +189,15 @@ export function AppShell() {
             <Button
               variant="ghost"
               className="hidden px-2 lg:inline-flex"
-              onClick={() => setSidebarCollapsed((current) => !current)}
+              onClick={() => setSidebarHidden((current) => !current)}
               aria-label={
-                sidebarCollapsed ? t("nav.expandMenu") : t("nav.collapseMenu")
+                sidebarHidden ? t("nav.expandMenu") : t("nav.collapseMenu")
               }
               title={
-                sidebarCollapsed ? t("nav.expandMenu") : t("nav.collapseMenu")
+                sidebarHidden ? t("nav.expandMenu") : t("nav.collapseMenu")
               }
             >
-              {sidebarCollapsed ? (
+              {sidebarHidden ? (
                 <PanelLeftOpen className="h-5 w-5" />
               ) : (
                 <PanelLeftClose className="h-5 w-5" />
