@@ -49,7 +49,12 @@ Follow [docs/INTERNATIONALIZATION.md](./docs/INTERNATIONALIZATION.md) to add lan
 
 Follow [docs/DATA-TABLE-STANDARD.md](./docs/DATA-TABLE-STANDARD.md) whenever creating a table or changing an existing record-list table. The repository rules make this configurable, per-user table contract mandatory for agent-driven work.
 
-Follow [workers/plugin-template/README.md](./workers/plugin-template/README.md) when creating a plugin with frontend routes. Plugin tables use the same component, layout, behavior, and per-user Core preference storage as Core tables.
+Follow [docs/PLUGIN-DEVELOPMENT.md](./docs/PLUGIN-DEVELOPMENT.md) and then copy
+[workers/plugin-template](./workers/plugin-template) when creating a plugin.
+The guide defines the required Wrangler build, manifest, paired migrations,
+private Service Binding, package layout, frontend registration, retry behavior,
+and release checks. Plugin tables use the same component, layout, behavior, and
+per-user Core preference storage as Core tables.
 
 The initial D1 environment is documented in `docs/DEPLOYMENT-STATUS.md`. `pnpm deploy:direct` is an official-API alternative when a Wrangler subprocess is unavailable. It reads deployment credentials from environment variables and preserves existing application secrets, installer credentials, and `PLUGIN_*` bindings when replacement values are omitted; the deployment token is never copied into the Worker automatically.
 

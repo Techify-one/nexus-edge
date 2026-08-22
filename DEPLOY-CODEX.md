@@ -118,6 +118,10 @@ Open `https://YOUR-DOMAIN/setup` and create the first administrator using only a
 
 ## 6. Install the CRM
 
+New plugin packages must follow `docs/PLUGIN-DEVELOPMENT.md`. In particular,
+build the Worker with Wrangler dry-run, package it with
+`scripts/package-plugin.ts`, and never substitute a raw Node/esbuild bundle.
+
 1. Sign in as an administrator.
 2. Open `/app/plugins`.
 3. Click **Add** and select `artifacts/crm.plugin.zip`.
@@ -126,6 +130,13 @@ Open `https://YOUR-DOMAIN/setup` and create the first administrator using only a
 6. Verify `/app/crm/leads`, create/edit/delete one lead, and inspect `/app/audit`.
 
 The Installer creates `app-plugin-crm`, applies only the active provider's migration, disables the public URL, and adds `PLUGIN_CRM` to the Core. On failure, preserve `operationId` and select the same package again to resume stages that require the artifact.
+
+Installation and removal use the current authenticated administrator session;
+they do not request the account password again. A rebuilt package cannot resume
+an older failed operation because its hashes differ. Start a new operation for
+the new artifact. Core Worker settings updates are multipart requests whose
+JSON part is named `settings`; `pnpm deploy:core` preserves and verifies all
+existing `PLUGIN_*` bindings.
 
 ## 7. Production verification
 

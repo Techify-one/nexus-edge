@@ -2,9 +2,16 @@
 
 Use this Worker as the backend base for a new plugin. Plugin UI is not served by the plugin Worker: it is compiled into the Core SPA and registered there.
 
+Before copying or modifying this template, follow the complete
+[`docs/PLUGIN-DEVELOPMENT.md`](../../docs/PLUGIN-DEVELOPMENT.md) guide. It is the
+authoritative contract for naming, manifest policy, Wrangler builds, migrations,
+packaging, private Service Bindings, retries, and release verification. Do not
+replace the template's Wrangler dry-run build with a raw Node/esbuild bundle.
+
 Before creating plugin UI, read:
 
 - `AGENTS.md`
+- `docs/PLUGIN-DEVELOPMENT.md`
 - `docs/DATA-TABLE-STANDARD.md`
 - `docs/INTERNATIONALIZATION.md`
 
@@ -72,7 +79,11 @@ Add interaction coverage for the plugin page and run:
 ```bash
 pnpm typecheck
 pnpm test
+pnpm test:matrix
+pnpm openapi:check
 pnpm build
+pnpm verify:bundle
+pnpm format:check
 ```
 
 `tests/table-standard.test.ts` rejects legacy, raw, and incorrectly namespaced plugin tables. Never increase its allowances to make new plugin code pass.
