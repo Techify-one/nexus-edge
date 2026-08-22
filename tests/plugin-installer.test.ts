@@ -28,15 +28,27 @@ const crmPackageBody = () => {
   return body;
 };
 
-const installerApp = () => {
+const installerApp = (options?: {
+  operation?: Record<string, unknown>;
+  executedSql?: string[];
+  atomicSql?: string[];
+}) => {
   const db: DatabasePort = {
     provider: "d1",
     orm: {},
     query: async () => [],
-    first: async () => null,
-    execute: async () => ({ rowsAffected: 1 }),
-    atomic: async (statements: SqlStatement[]) =>
-      statements.map(() => ({ rowsAffected: 1 })),
+    first: async <T extends Record<string, unknown>>(sql: string) =>
+      sql.includes("FROM plugin_operations") && options?.operation
+        ? (options.operation as T)
+        : null,
+    execute: async (sql: string) => {
+      options?.executedSql?.push(sql);
+      return { rowsAffected: 1 };
+    },
+    atomic: async (statements: SqlStatement[]) => {
+      options?.atomicSql?.push(...statements.map(({ sql }) => sql));
+      return statements.map(() => ({ rowsAffected: 1 }));
+    },
     close: async () => {},
   };
   const app = new Hono<HonoEnv>();
@@ -64,7 +76,8 @@ const installerApp = () => {
 
 describe("CRM plugin installer", () => {
   it("accepts the CRM package sources without password confirmation", async () => {
-    const response = await installerApp().request(
+    const executedSql: string[] = [];
+    const response = await installerApp({ executedSql }).request(
       "/plugin-operations",
       {
         method: "POST",
@@ -81,6 +94,63 @@ describe("CRM plugin installer", () => {
     expect(response.status).toBe(201);
     expect(await response.json()).toEqual(
       expect.objectContaining({ pluginId: "crm", state: "validating" }),
+    );
+    expect(executedSql).toContainEqual(
+      expect.stringContaining("state = 'failed'"),
+    );
+  });
+
+  it("releases the global lock when an installation stage fails", async () => {
+    const atomicSql: string[] = [];
+    const response = await installerApp({
+      atomicSql,
+      operation: {
+        operationId: "pop_failure",
+        pluginId: "crm",
+        type: "install",
+        targetVersion: "1.0.0",
+        state: "hardening",
+        manifestSha256: "manifest",
+        workerSha256: "worker",
+        d1MigrationsSha256: "d1",
+        postgresMigrationsSha256: "postgres",
+        lastError: null,
+      },
+    }).request("/plugin-operations/pop_failure/advance", { method: "POST" }, {
+      DATABASE_PROVIDER: "d1",
+    } as CoreEnv);
+
+    expect(response.status).toBe(500);
+    expect(atomicSql).toContainEqual(
+      expect.stringContaining("UPDATE installer_lock SET operation_id = NULL"),
+    );
+  });
+
+  it("releases the global lock when a resumed package has different hashes", async () => {
+    const atomicSql: string[] = [];
+    const response = await installerApp({
+      atomicSql,
+      operation: {
+        operationId: "pop_mismatch",
+        pluginId: "crm",
+        type: "install",
+        targetVersion: "1.0.0",
+        state: "deploying",
+        manifestSha256: "old-manifest",
+        workerSha256: "old-worker",
+        d1MigrationsSha256: "old-d1",
+        postgresMigrationsSha256: "old-postgres",
+        lastError: null,
+      },
+    }).request(
+      "/plugin-operations/pop_mismatch/advance",
+      { method: "POST", body: crmPackageBody() },
+      { DATABASE_PROVIDER: "d1" } as CoreEnv,
+    );
+
+    expect(response.status).toBe(409);
+    expect(atomicSql).toContainEqual(
+      expect.stringContaining("UPDATE installer_lock SET operation_id = NULL"),
     );
   });
 });

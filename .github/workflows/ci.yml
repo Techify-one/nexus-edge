@@ -54,6 +54,14 @@ jobs:
         run: >-
           pnpm exec wrangler d1 migrations apply modular-workers-app-db
           --remote --config "$CORE_WRANGLER_CONFIG"
+      - name: Configure installer secrets
+        run: |
+          node --input-type=module <<'NODE' | pnpm exec wrangler secret bulk --config "$CORE_WRANGLER_CONFIG"
+          process.stdout.write(JSON.stringify({
+            CF_API_TOKEN: process.env.CF_API_TOKEN,
+            CF_ACCOUNT_ID: process.env.CF_ACCOUNT_ID,
+          }));
+          NODE
       - name: Deploy Core Worker
         run: pnpm deploy:core
       - name: Verify production

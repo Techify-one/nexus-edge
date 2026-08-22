@@ -287,6 +287,12 @@ installerRoutes.post("/plugin-operations", async (c) => {
     return c.json(idem.replay.body as never, idem.replay.status as 201);
   const operationId = createId("pop");
   const now = Date.now();
+  await c.get("db").execute(
+    `UPDATE installer_lock
+        SET operation_id = NULL, acquired_at = NULL, expires_at = NULL
+      WHERE id = 'global'
+        AND operation_id IN (SELECT operation_id FROM plugin_operations WHERE state = 'failed')`,
+  );
   const lock = await c
     .get("db")
     .execute(
@@ -384,12 +390,25 @@ installerRoutes.post("/plugin-operations/:operationId/advance", async (c) => {
   const operation = await getOperation(c);
   requirePluginOperationPermission(c, operation.type);
   const db = c.get("db");
+  const recordFailure = async (from: string, detail: string) => {
+    await db.atomic([
+      {
+        sql: "UPDATE plugin_operations SET state = 'failed', last_error = ? WHERE operation_id = ?",
+        params: [
+          JSON.stringify({ from, detail: detail.slice(0, 500) }),
+          operation.operationId,
+        ],
+      },
+      {
+        sql: "UPDATE installer_lock SET operation_id = NULL, acquired_at = NULL, expires_at = NULL WHERE id = 'global' AND operation_id = ?",
+        params: [operation.operationId],
+      },
+    ]);
+  };
   const fail = async (from: string, error: unknown) => {
-    const detail =
-      error instanceof Error ? error.message.slice(0, 500) : "unknown";
-    await db.execute(
-      "UPDATE plugin_operations SET state = 'failed', last_error = ? WHERE operation_id = ?",
-      [JSON.stringify({ from, detail }), operation.operationId],
+    await recordFailure(
+      from,
+      error instanceof Error ? error.message : "unknown",
     );
     throw new AppError(
       500,
@@ -585,7 +604,11 @@ installerRoutes.post("/plugin-operations/:operationId/advance", async (c) => {
       "The operation cannot advance from its current state.",
     );
   } catch (error) {
-    if (error instanceof AppError) throw error;
+    if (error instanceof AppError) {
+      if (error.code === "PLUGIN_PACKAGE_HASH_MISMATCH")
+        await recordFailure(operation.state, error.message);
+      throw error;
+    }
     return fail(operation.state, error);
   }
 });

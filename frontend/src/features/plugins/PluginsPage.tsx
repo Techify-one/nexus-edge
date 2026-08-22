@@ -243,6 +243,8 @@ export default function PluginsPage() {
           });
       setOperation(current);
       while (!terminal.has(current.state)) {
+        if (current.state === "registering")
+          await new Promise((resolve) => setTimeout(resolve, 3_000));
         current = await api<Operation>(
           `/api/v1/plugin-operations/${current.operationId}/advance`,
           {
