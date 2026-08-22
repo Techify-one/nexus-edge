@@ -20,6 +20,9 @@ describe("frontend deployment recovery", () => {
     );
 
     expect(shell).not.toContain('to: "/app/meta-ads/accounts"');
+    expect(shell).not.toContain('to: "/app/meta-ads"');
+    expect(shell).not.toContain('to: "/app/crm/leads"');
+    expect(shell).not.toContain('queryKey: ["me", "plugin-navigation"]');
     expect(dashboard).toContain('navigate("/app/meta-ads/accounts")');
     expect(dashboard).toContain("metaAds.accounts.manage");
   });

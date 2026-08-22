@@ -18,3 +18,19 @@ export const pluginUiRegistry = {
 } satisfies Record<string, PluginPage>;
 
 export type PluginRouteKey = keyof typeof pluginUiRegistry;
+
+/**
+ * Overview destinations for installed plugins. Keep this map aligned with the
+ * routes in main.tsx. The first manifest menu entry with a registered path is
+ * used as the plugin's primary Overview destination.
+ */
+export const pluginRoutePaths = {
+  "crm.home": "/app/crm",
+  "crm.leads": "/app/crm/leads",
+  "meta_ads.home": "/app/meta-ads",
+  "meta_ads.dashboard": "/app/meta-ads",
+  "meta_ads.accounts": "/app/meta-ads/accounts",
+} satisfies Record<PluginRouteKey, string>;
+
+export const resolvePluginRoute = (routeKey: string): string | undefined =>
+  pluginRoutePaths[routeKey as PluginRouteKey];

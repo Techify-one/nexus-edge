@@ -283,13 +283,13 @@ managementRoutes.delete("/me/table-preferences/:tableId", async (c) => {
 managementRoutes.get("/me/plugin-navigation", async (c) => {
   const plugins = await c
     .get("db")
-    .query<{ id: string; manifest: unknown }>(
-      `SELECT id, manifest_json AS "manifest" FROM plugins WHERE status = 'installed' ORDER BY name`,
+    .query<{ id: string; name: string; manifest: unknown }>(
+      `SELECT id, name, manifest_json AS "manifest" FROM plugins WHERE status = 'installed' ORDER BY name`,
     );
   const permissions = await c
     .get("db")
     .query<{ key: string }>("SELECT key FROM permissions ORDER BY key");
-  const items = plugins.flatMap((plugin) => {
+  const visiblePlugins = plugins.flatMap((plugin) => {
     const manifest = parseJson<{
       menu?: Array<{ title: string; routeKey: string }>;
     }>(plugin.manifest, {});
@@ -298,13 +298,19 @@ managementRoutes.get("/me/plugin-navigation", async (c) => {
         key.startsWith(`${plugin.id}.`) && canPermission(c.get("ability"), key),
     );
     return namespaceAllowed
-      ? (manifest.menu ?? []).map((entry) => ({
-          pluginId: plugin.id,
-          ...entry,
-        }))
+      ? [
+          {
+            pluginId: plugin.id,
+            name: plugin.name,
+            menu: manifest.menu ?? [],
+          },
+        ]
       : [];
   });
-  return c.json({ items }, 200, noStore);
+  const items = visiblePlugins.flatMap((plugin) =>
+    plugin.menu.map((entry) => ({ pluginId: plugin.pluginId, ...entry })),
+  );
+  return c.json({ plugins: visiblePlugins, items }, 200, noStore);
 });
 
 managementRoutes.get("/me/api-keys", async (c) => {

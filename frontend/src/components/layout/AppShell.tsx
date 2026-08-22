@@ -1,7 +1,6 @@
 import {
   KeyRound,
   LayoutDashboard,
-  Megaphone,
   LogOut,
   Menu,
   Package,
@@ -11,10 +10,8 @@ import {
   Users,
   UserRoundCog,
   Webhook,
-  Workflow,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { queryClient } from "../../app/query-client.js";
 import { can } from "../../lib/ability.js";
@@ -37,20 +34,6 @@ const items = [
     label: "nav.groups",
     icon: UserRoundCog,
     permission: "core.group.read",
-  },
-  {
-    to: "/app/crm/leads",
-    label: "nav.leads",
-    icon: Workflow,
-    permission: "crm.lead.read",
-    routeKey: "crm.leads",
-  },
-  {
-    to: "/app/meta-ads",
-    label: "nav.metaAds",
-    icon: Megaphone,
-    permission: "meta_ads.insight.read",
-    routeKey: "meta_ads.dashboard",
   },
   { to: "/app/settings/api-keys", label: "nav.apiKeys", icon: KeyRound },
   {
@@ -76,7 +59,6 @@ const items = [
   label: TranslationKey;
   icon: typeof LayoutDashboard;
   permission?: string;
-  routeKey?: string;
 }>;
 
 export function AppShell() {
@@ -93,16 +75,6 @@ export function AppShell() {
   });
   const navigate = useNavigate();
   const location = useLocation();
-  const pluginNavigation = useQuery({
-    queryKey: ["me", "plugin-navigation"],
-    queryFn: () =>
-      api<{ items: Array<{ routeKey: string }> }>(
-        "/api/v1/me/plugin-navigation",
-      ),
-  });
-  const activeRouteKeys = new Set(
-    pluginNavigation.data?.items.map((item) => item.routeKey) ?? [],
-  );
   useEffect(() => {
     try {
       window.localStorage.setItem(
@@ -131,11 +103,7 @@ export function AppShell() {
       </div>
       <nav className="space-y-1 p-3" aria-label={t("nav.main")}>
         {items
-          .filter(
-            (item) =>
-              (!item.permission || can(item.permission)) &&
-              (!("routeKey" in item) || activeRouteKeys.has(item.routeKey)),
-          )
+          .filter((item) => !item.permission || can(item.permission))
           .map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}

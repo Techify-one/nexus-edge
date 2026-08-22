@@ -138,15 +138,26 @@ Update `scripts/test-database-matrix.ts` coverage for the new migration pair.
 
 ## 6. Frontend registration
 
+Manifest `menu` entries belong to the authenticated Overview, never to the
+Core's left sidebar. The sidebar is reserved for Core-owned destinations. The
+Overview automatically shows one card per installed plugin and uses the first
+manifest menu entry registered by the Core as its primary destination; all menu
+titles and route keys are searchable there.
+
 For every manifest menu route:
 
 1. Create the page under `frontend/src/plugins/<plugin-id>/`.
 2. Register its lazy import in `frontend/src/plugins/registry.ts`.
-3. Add the route key to the Core allowlist in
+3. Add its Overview destination to `pluginRoutePaths` in
+   `frontend/src/plugins/registry.ts`.
+4. Add the route key to the Core allowlist in
    `workers/core/src/installer/manifest.ts`.
-4. Add translated labels to every typed locale catalog.
-5. Call only the Core gateway path `/api/v1/p/<plugin-id>/*` with the shared API
+5. Add translated labels to every typed locale catalog.
+6. Call only the Core gateway path `/api/v1/p/<plugin-id>/*` with the shared API
    client.
+
+Do not add plugin routes, labels, permissions, or icons to
+`frontend/src/components/layout/AppShell.tsx`.
 
 Read `docs/INTERNATIONALIZATION.md` and `docs/DATA-TABLE-STANDARD.md`. Every new
 record-list table must use `ConfigurableDataTable` with an immutable
@@ -221,7 +232,7 @@ For a production/staging install, verify all of the following:
 - the plugin is listed with the expected version and active database provider;
 - business requests work only through the Core gateway;
 - the Worker has no public `workers.dev` or preview URL;
-- permissions and menu entries appear only while the plugin is installed;
+- permissions and Overview entries appear only while the plugin is installed;
 - uninstall removes the binding and permission exposure while preserving data;
 - a subsequent Core deployment preserves the `PLUGIN_*` Service Binding.
 
