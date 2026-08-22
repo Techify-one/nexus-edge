@@ -129,14 +129,20 @@ build the Worker with Wrangler dry-run, package it with
 5. Confirm the installation. The interface advances one stage per request and displays the persisted state.
 6. Verify `/app/crm/leads`, create/edit/delete one lead, and inspect `/app/audit`.
 
-The Installer creates `app-plugin-crm`, applies only the active provider's migration, disables the public URL, and adds `PLUGIN_CRM` to the Core. On failure, preserve `operationId` and select the same package again to resume stages that require the artifact.
+The Installer creates `app-plugin-crm`, applies only the active provider's
+migration, disables the public URL, and adds `PLUGIN_CRM` to the Core. On
+failure, copy the expandable support report before closing the panel and attach
+it to the incident or developer report. It contains safe operation and request
+identifiers, the failed stage, a bounded error code, and package metadata; raw
+provider logs, credentials, and secrets are excluded.
 
 Installation and removal use the current authenticated administrator session;
-they do not request the account password again. A rebuilt package cannot resume
-an older failed operation because its hashes differ. Start a new operation for
-the new artifact. Core Worker settings updates are multipart requests whose
-JSON part is named `settings`; `pnpm deploy:core` preserves and verifies all
-existing `PLUGIN_*` bindings.
+they do not request the account password again. API operators can resume a
+failed operation only with exactly the same artifact; selecting a package again
+in the panel starts a new safe operation. A rebuilt package has different hashes
+and must always start a new operation. Core Worker settings updates are
+multipart requests whose JSON part is named `settings`; `pnpm deploy:core`
+preserves and verifies all existing `PLUGIN_*` bindings.
 
 ## 7. Production verification
 

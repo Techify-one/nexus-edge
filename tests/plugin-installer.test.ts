@@ -34,6 +34,7 @@ const installerApp = (options?: {
   plugin?: Record<string, unknown>;
   executedSql?: string[];
   atomicSql?: string[];
+  atomicStatements?: SqlStatement[];
 }) => {
   const db: DatabasePort = {
     provider: "d1",
@@ -52,6 +53,7 @@ const installerApp = (options?: {
     },
     atomic: async (statements: SqlStatement[]) => {
       options?.atomicSql?.push(...statements.map(({ sql }) => sql));
+      options?.atomicStatements?.push(...statements);
       return statements.map(() => ({ rowsAffected: 1 }));
     },
     close: async () => {},
@@ -107,9 +109,11 @@ describe("CRM plugin installer", () => {
 
   it("releases the global lock when an installation stage fails", async () => {
     const atomicSql: string[] = [];
+    const atomicStatements: SqlStatement[] = [];
     const executedSql: string[] = [];
     const response = await installerApp({
       atomicSql,
+      atomicStatements,
       executedSql,
       operation: {
         operationId: "pop_failure",
@@ -134,6 +138,10 @@ describe("CRM plugin installer", () => {
     expect(executedSql).toContainEqual(
       expect.stringContaining("INSERT INTO audit_log"),
     );
+    expect(String(atomicStatements[0]?.params?.[0])).toContain(
+      '"requestId":"req_plugin_test"',
+    );
+    expect(String(atomicStatements[0]?.params?.[0])).toMatch(/"failedAt":\d+/u);
   });
 
   it("releases the global lock when a resumed package has different hashes", async () => {
@@ -179,6 +187,8 @@ describe("CRM plugin installer", () => {
         lastError: JSON.stringify({
           from: "deploying",
           detail: "Cloudflare API failed (400): 10021",
+          requestId: "req_cloudflare_failure",
+          failedAt: 1_787_425_185_000,
         }),
       },
     }).request("/plugin-operations/pop_diagnostic");
@@ -188,8 +198,39 @@ describe("CRM plugin installer", () => {
       expect.objectContaining({
         failureStage: "deploying",
         failureReason: "cloudflare_api_400_10021",
+        failureDetail: "Cloudflare API returned HTTP 400 with code(s) 10021.",
+        failureRequestId: "req_cloudflare_failure",
+        failedAt: 1_787_425_185_000,
       }),
     );
+  });
+
+  it("never returns arbitrary provider failure details", async () => {
+    const response = await installerApp({
+      operation: {
+        operationId: "pop_secret_diagnostic",
+        pluginId: "crm",
+        type: "install",
+        targetVersion: "1.0.0",
+        state: "failed",
+        manifestSha256: "manifest",
+        workerSha256: "worker",
+        d1MigrationsSha256: "d1",
+        postgresMigrationsSha256: "postgres",
+        lastError: JSON.stringify({
+          from: "deploying",
+          detail: "token=super-secret https://private.example.test/account",
+          requestId: "invalid request id",
+        }),
+      },
+    }).request("/plugin-operations/pop_secret_diagnostic");
+
+    const body = JSON.stringify(await response.json());
+    expect(response.status).toBe(200);
+    expect(body).toContain("unexpected_stage_failure");
+    expect(body).not.toContain("super-secret");
+    expect(body).not.toContain("private.example.test");
+    expect(body).not.toContain("invalid request id");
   });
 
   it("deletes an already-uninstalled plugin record without touching preserved data", async () => {

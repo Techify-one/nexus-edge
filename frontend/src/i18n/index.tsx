@@ -330,7 +330,14 @@ const ptBR = {
   "plugins.rawTooLarge": "O pacote cru excede 4 MiB.",
   "plugins.gzipTooLarge": "O worker compactado excede 3 MiB.",
   "plugins.installFailed":
-    "A instalação falhou. Use o ID da operação para retomar.",
+    "A instalação falhou. Abra e copie o relatório de suporte abaixo.",
+  "plugins.supportReport": "Relatório de suporte da instalação",
+  "plugins.supportReportHelp":
+    "Copie este diagnóstico seguro e envie ao desenvolvedor. Logs brutos, credenciais e segredos não são incluídos.",
+  "plugins.copySupportReport": "Copiar relatório",
+  "plugins.supportReportCopied": "Relatório de suporte copiado.",
+  "plugins.supportReportCopyFailed":
+    "Não foi possível copiar o relatório. Selecione o texto manualmente.",
   "plugins.installed": "Plugin instalado.",
   "plugins.uninstalled": "Plugin desinstalado; as tabelas foram preservadas.",
   "plugins.uninstallConfirm": "Desinstalar {{name}} {{version}}?",
@@ -679,7 +686,14 @@ const en: Record<TranslationKey, string> = {
   "plugins.rawTooLarge": "The raw package exceeds 4 MiB.",
   "plugins.gzipTooLarge": "The compressed Worker exceeds 3 MiB.",
   "plugins.installFailed":
-    "Installation failed. Use the operation ID to resume.",
+    "Installation failed. Open and copy the support report below.",
+  "plugins.supportReport": "Installation support report",
+  "plugins.supportReportHelp":
+    "Copy this safe diagnostic and send it to the developer. Raw logs, credentials, and secrets are not included.",
+  "plugins.copySupportReport": "Copy report",
+  "plugins.supportReportCopied": "Support report copied.",
+  "plugins.supportReportCopyFailed":
+    "The report could not be copied. Select the text manually.",
   "plugins.installed": "Plugin installed.",
   "plugins.uninstalled": "Plugin uninstalled; database tables were preserved.",
   "plugins.uninstallConfirm": "Uninstall {{name}} {{version}}?",

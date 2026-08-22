@@ -236,6 +236,16 @@ an end-user history on the Plugins page. Starts, successes, failures,
 uninstalls, and catalog-record deletions are recorded in the Audit page; failure
 audits contain the operation ID and stage but not raw provider errors.
 
+When installation fails, the open Installer panel presents an expandable,
+copyable support report. It contains the operation, plugin, version, failed
+stage, allowlisted failure code and description, request IDs, timestamps,
+package sizes, and migration IDs. It deliberately excludes raw provider logs,
+package contents, URLs returned in arbitrary errors, credentials, and secrets.
+The Core must convert known failures into bounded safe diagnostics; unknown
+failure text remains available only in protected server logs and is correlated
+through the operation and request IDs. This report is diagnostic context for a
+developer, while Audit remains the durable user-visible history.
+
 Common failures:
 
 | Result                               | Meaning                                               | Action                                                      |

@@ -1,6 +1,13 @@
 import { gzipSync, strFromU8, unzipSync } from "fflate";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { PackagePlus, Pencil, Search, Trash2, UploadCloud } from "lucide-react";
+import {
+  Copy,
+  PackagePlus,
+  Pencil,
+  Search,
+  Trash2,
+  UploadCloud,
+} from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ConfigurableDataTable } from "../../components/ui/configurable-data-table.js";
@@ -13,9 +20,13 @@ import {
   PageHeader,
   Skeleton,
 } from "../../components/ui/index.js";
-import { api, idempotencyKey } from "../../lib/api/core-client.js";
+import { ApiError, api, idempotencyKey } from "../../lib/api/core-client.js";
 import { translate, useI18n, type TranslationKey } from "../../i18n/index.js";
 import { can } from "../../lib/ability.js";
+import {
+  buildPluginSupportReport,
+  type PluginSupportDiagnostic,
+} from "./support-report.js";
 
 type Manifest = {
   id: string;
@@ -150,6 +161,7 @@ export default function PluginsPage() {
   const [selected, setSelected] = useState<Plugin | null>(null);
   const [parts, setParts] = useState<PluginParts | null>(null);
   const [operation, setOperation] = useState<Operation | null>(null);
+  const [supportReport, setSupportReport] = useState<string | null>(null);
   const plugins = useQuery({
     queryKey: ["plugins"],
     queryFn: () => api<{ items: Plugin[] }>("/api/v1/plugins"),
@@ -181,6 +193,7 @@ export default function PluginsPage() {
         throw new Error(t("plugins.permissionRequired"));
       setParts(selectedParts);
       setOperation(null);
+      setSupportReport(null);
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : t("plugins.invalidPackage"),
@@ -189,38 +202,92 @@ export default function PluginsPage() {
   };
   const install = useMutation({
     mutationFn: async (packageParts: PluginParts) => {
-      if (packageParts.rawBytes > 4 * 1024 * 1024)
-        throw new Error(t("plugins.rawTooLarge"));
-      if (packageParts.gzipBytes > 3 * 1024 * 1024)
-        throw new Error(t("plugins.gzipTooLarge"));
-      let current = await api<Operation>("/api/v1/plugin-operations", {
-        method: "POST",
-        headers: {
-          "Idempotency-Key": idempotencyKey(),
-        },
-        body: bodyFor(packageParts),
-      });
-      setOperation(current);
-      while (!terminal.has(current.state)) {
-        if (current.state === "registering")
-          await new Promise((resolve) => setTimeout(resolve, 3_000));
-        current = await api<Operation>(
-          `/api/v1/plugin-operations/${current.operationId}/advance`,
-          {
-            method: "POST",
-            body: bodyFor(packageParts),
+      setSupportReport(null);
+      let current: Operation | null = null;
+      try {
+        if (packageParts.rawBytes > 4 * 1024 * 1024)
+          throw new Error(t("plugins.rawTooLarge"));
+        if (packageParts.gzipBytes > 3 * 1024 * 1024)
+          throw new Error(t("plugins.gzipTooLarge"));
+        current = await api<Operation>("/api/v1/plugin-operations", {
+          method: "POST",
+          headers: {
+            "Idempotency-Key": idempotencyKey(),
           },
-        );
+          body: bodyFor(packageParts),
+        });
         setOperation(current);
+        while (!terminal.has(current.state)) {
+          if (current.state === "registering")
+            await new Promise((resolve) => setTimeout(resolve, 3_000));
+          current = await api<Operation>(
+            `/api/v1/plugin-operations/${current.operationId}/advance`,
+            {
+              method: "POST",
+              body: bodyFor(packageParts),
+            },
+          );
+          setOperation(current);
+        }
+        if (current.state === "failed")
+          throw new Error(t("plugins.installFailed"));
+        return current;
+      } catch (error) {
+        const operationType = (plugins.data?.items ?? []).some(
+          (plugin) =>
+            plugin.id === packageParts.manifest.id &&
+            plugin.status === "installed",
+        )
+          ? "update"
+          : "install";
+        let diagnostic: PluginSupportDiagnostic = {
+          ...(current ? { operationId: current.operationId } : {}),
+          pluginId: packageParts.manifest.id,
+          targetVersion: packageParts.manifest.version,
+          type: operationType,
+          state: "failed",
+          failureStage: current?.state ?? "validating",
+        };
+        if (current?.operationId) {
+          try {
+            diagnostic = await api<PluginSupportDiagnostic>(
+              `/api/v1/plugin-operations/${current.operationId}`,
+            );
+          } catch {
+            // Keep the local safe fallback when diagnostics cannot be fetched.
+          }
+        }
+        setSupportReport(
+          buildPluginSupportReport({
+            diagnostic,
+            package: {
+              pluginId: packageParts.manifest.id,
+              version: packageParts.manifest.version,
+              rawBytes: packageParts.rawBytes,
+              gzipBytes: packageParts.gzipBytes,
+              d1MigrationIds: Object.keys(packageParts.d1Migrations),
+              postgresMigrationIds: Object.keys(
+                packageParts.postgresMigrations,
+              ),
+            },
+            clientErrorCode:
+              error instanceof ApiError
+                ? error.code
+                : "client_validation_failed",
+            ...(error instanceof ApiError && error.requestId
+              ? { clientRequestId: error.requestId }
+              : {}),
+            coreOrigin: window.location.origin,
+          }),
+        );
+        throw error;
       }
-      if (current.state === "failed")
-        throw new Error(t("plugins.installFailed"));
-      return current;
     },
     onSuccess: () => {
       toast.success(t("plugins.installed"));
       setParts(null);
       setOperation(null);
+      setSupportReport(null);
       void client.invalidateQueries({ queryKey: ["plugins"] });
       void client.invalidateQueries({ queryKey: ["me", "ability"] });
       void client.invalidateQueries({
@@ -261,6 +328,7 @@ export default function PluginsPage() {
             <Button
               onClick={() => {
                 setOperation(null);
+                setSupportReport(null);
                 inputRef.current?.click();
               }}
             >
@@ -399,6 +467,7 @@ export default function PluginsPage() {
           if (!open && !install.isPending) {
             setParts(null);
             setOperation(null);
+            setSupportReport(null);
           }
         }}
         title={t("plugins.installTitle")}
@@ -463,12 +532,51 @@ export default function PluginsPage() {
                 </ol>
               </div>
             )}
+            {supportReport && (
+              <details
+                open
+                aria-live="polite"
+                className="rounded-xl border border-red-200 bg-red-50 p-4"
+              >
+                <summary className="cursor-pointer text-sm font-semibold text-red-900">
+                  {t("plugins.supportReport")}
+                </summary>
+                <p className="mt-2 text-sm text-red-800">
+                  {t("plugins.supportReportHelp")}
+                </p>
+                <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-slate-950 p-3 text-xs text-slate-100">
+                  {supportReport}
+                </pre>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="mt-3"
+                  onClick={() => {
+                    void navigator.clipboard
+                      .writeText(supportReport)
+                      .then(() =>
+                        toast.success(t("plugins.supportReportCopied")),
+                      )
+                      .catch(() =>
+                        toast.error(t("plugins.supportReportCopyFailed")),
+                      );
+                  }}
+                >
+                  <Copy className="h-4 w-4" />
+                  {t("plugins.copySupportReport")}
+                </Button>
+              </details>
+            )}
             <div className="flex justify-end gap-2">
               <Button
                 type="button"
                 variant="secondary"
                 disabled={install.isPending}
-                onClick={() => setParts(null)}
+                onClick={() => {
+                  setParts(null);
+                  setOperation(null);
+                  setSupportReport(null);
+                }}
               >
                 {t("common.cancel")}
               </Button>
@@ -521,6 +629,7 @@ export default function PluginsPage() {
                   variant="secondary"
                   onClick={() => {
                     setSelected(null);
+                    setSupportReport(null);
                     inputRef.current?.click();
                   }}
                 >

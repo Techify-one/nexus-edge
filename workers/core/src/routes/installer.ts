@@ -48,36 +48,114 @@ type PackageParts = {
   rawBytes: number;
 };
 
+const failureStages = new Set([
+  "validating",
+  "migrating",
+  "deploying",
+  "hardening",
+  "binding",
+  "registering",
+]);
+
 const safeFailureSummary = (
   lastError: string | null,
-): { failureStage: string; failureReason: string } | null => {
+): {
+  failureStage: string;
+  failureReason: string;
+  failureDetail: string;
+  failureRequestId?: string;
+  failedAt?: number;
+} | null => {
   if (!lastError) return null;
   try {
     const failure = JSON.parse(lastError) as {
       from?: unknown;
       detail?: unknown;
+      requestId?: unknown;
+      failedAt?: unknown;
     };
     const failureStage =
-      typeof failure.from === "string" ? failure.from : "unknown";
+      typeof failure.from === "string" && failureStages.has(failure.from)
+        ? failure.from
+        : "unknown";
     const detail = typeof failure.detail === "string" ? failure.detail : "";
+    const metadata = {
+      ...(typeof failure.requestId === "string" &&
+      /^req_[A-Za-z0-9_-]{1,100}$/u.test(failure.requestId)
+        ? { failureRequestId: failure.requestId }
+        : {}),
+      ...(typeof failure.failedAt === "number" &&
+      Number.isFinite(failure.failedAt)
+        ? { failedAt: failure.failedAt }
+        : {}),
+    };
     if (detail === "CF_API_TOKEN and CF_ACCOUNT_ID must be configured")
-      return { failureStage, failureReason: "installer_credentials_missing" };
+      return {
+        failureStage,
+        failureReason: "installer_credentials_missing",
+        failureDetail: "Installer Cloudflare credentials are not configured.",
+        ...metadata,
+      };
     const cloudflare =
       /^Cloudflare API failed \((\d{3})\): ([0-9,]+|unknown)$/u.exec(detail);
     if (cloudflare)
       return {
         failureStage,
         failureReason: `cloudflare_api_${cloudflare[1]}_${cloudflare[2]}`,
+        failureDetail: `Cloudflare API returned HTTP ${cloudflare[1]} with code(s) ${cloudflare[2]}.`,
+        ...metadata,
       };
-    if (detail.startsWith("Plugin smoke test failed"))
-      return { failureStage, failureReason: "plugin_smoke_test_failed" };
+    const smoke = /^Plugin smoke test failed \((\d{3})\)$/u.exec(detail);
+    if (smoke)
+      return {
+        failureStage,
+        failureReason: "plugin_smoke_test_failed",
+        failureDetail: `Plugin smoke test returned HTTP ${smoke[1]}.`,
+        ...metadata,
+      };
     if (detail.includes("Service Binding is not available"))
-      return { failureStage, failureReason: "service_binding_pending" };
-    if (detail.startsWith("Migration hash mismatch"))
-      return { failureStage, failureReason: "migration_hash_mismatch" };
-    return { failureStage, failureReason: "unexpected_stage_failure" };
+      return {
+        failureStage,
+        failureReason: "service_binding_pending",
+        failureDetail:
+          "The plugin Service Binding was not available to the Core smoke test.",
+        ...metadata,
+      };
+    const migration = /^Migration hash mismatch: ([A-Za-z0-9_-]{1,100})$/u.exec(
+      detail,
+    );
+    if (migration)
+      return {
+        failureStage,
+        failureReason: "migration_hash_mismatch",
+        failureDetail: `Migration ${migration[1]} has a different stored hash.`,
+        ...metadata,
+      };
+    if (
+      detail ===
+      "Select the same package used at the beginning of the operation."
+    )
+      return {
+        failureStage,
+        failureReason: "plugin_package_hash_mismatch",
+        failureDetail:
+          "The selected package hashes differ from the original operation.",
+        ...metadata,
+      };
+    return {
+      failureStage,
+      failureReason: "unexpected_stage_failure",
+      failureDetail:
+        "Unexpected Installer stage failure. Use the request ID to locate server logs.",
+      ...metadata,
+    };
   } catch {
-    return { failureStage: "unknown", failureReason: "invalid_failure_record" };
+    return {
+      failureStage: "unknown",
+      failureReason: "invalid_failure_record",
+      failureDetail:
+        "The persisted failure record could not be decoded. Use the operation ID to locate server logs.",
+    };
   }
 };
 
@@ -269,7 +347,7 @@ installerRoutes.get(
       hasError: Boolean(operation.lastError),
       safeMessage:
         operation.state === "failed"
-          ? "The stage failed. Select the same package again to resume."
+          ? "The stage failed. Copy the safe support report and use its operation and request IDs to investigate."
           : undefined,
       ...(failure ?? {}),
     });
@@ -430,7 +508,12 @@ installerRoutes.post("/plugin-operations/:operationId/advance", async (c) => {
       {
         sql: "UPDATE plugin_operations SET state = 'failed', last_error = ? WHERE operation_id = ?",
         params: [
-          JSON.stringify({ from, detail: detail.slice(0, 500) }),
+          JSON.stringify({
+            from,
+            detail: detail.slice(0, 500),
+            requestId: c.get("requestId"),
+            failedAt: Date.now(),
+          }),
           operation.operationId,
         ],
       },

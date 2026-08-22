@@ -353,6 +353,18 @@ export const OPENAPI_DOCUMENT = {
         responses: { "201": { description: "Operation created" } },
       },
     },
+    "/api/v1/plugin-operations/{operationId}": {
+      get: {
+        parameters: [{ name: "operationId", in: "path", required: true }],
+        responses: {
+          "200": {
+            description:
+              "Installer operation with allowlisted, secret-free failure diagnostics",
+          },
+          "404": { description: "Installer operation not found" },
+        },
+      },
+    },
     "/api/v1/audit": {
       get: { responses: { "200": { description: "Audit trail" } } },
     },
