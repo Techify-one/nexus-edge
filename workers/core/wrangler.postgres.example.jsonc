@@ -1,0 +1,43 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "app-core",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-21",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": false,
+  "assets": {
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/health"],
+  },
+  "vars": {
+    "APP_VERSION": "1.0.0",
+    "APP_INSTALLATION_ID": "set-by-provision-command",
+    "DATABASE_PROVIDER": "postgres",
+    "BETTER_AUTH_URL": "https://app.example.com",
+    "TRUSTED_ORIGINS": "https://app.example.com",
+    "CORE_WORKER_NAME": "app-core",
+    "HYPERDRIVE_ID": "replace-with-hyperdrive-id",
+    "WEBHOOK_ALLOWED_DOMAINS": "",
+    "API_RATE_LIMIT_MAX": "120",
+    "API_RATE_LIMIT_WINDOW_SECONDS": "60",
+    "PLUGIN_COMPATIBILITY_FLAGS": "nodejs_compat",
+  },
+  "hyperdrive": [
+    { "binding": "HYPERDRIVE", "id": "replace-with-hyperdrive-id" },
+  ],
+  "queues": {
+    "producers": [{ "binding": "WEBHOOK_QUEUE", "queue": "app-webhooks" }],
+    "consumers": [
+      {
+        "queue": "app-webhooks",
+        "max_batch_size": 5,
+        "max_batch_timeout": 5,
+        "max_retries": 6,
+        "dead_letter_queue": "app-webhooks-dlq",
+      },
+    ],
+  },
+  "triggers": { "crons": ["* * * * *"] },
+}

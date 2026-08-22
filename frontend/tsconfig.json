@@ -1,0 +1,16 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "jsx": "react-jsx",
+    "rootDir": "src",
+    "outDir": "dist/types",
+    "declaration": true,
+    "types": ["vite/client", "@cloudflare/workers-types"]
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../workers/core" },
+    { "path": "../workers/plugin-crm" }
+  ]
+}

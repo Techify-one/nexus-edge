@@ -1,0 +1,29 @@
+{
+  "name": "@app/core-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./contract": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "wrangler deploy --dry-run --outdir dist --config wrangler.jsonc",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "wrangler dev --config wrangler.jsonc"
+  },
+  "dependencies": {
+    "@app/api-contracts": "workspace:*",
+    "@app/core-contract": "workspace:*",
+    "@app/database": "workspace:*",
+    "@app/db-schema": "workspace:*",
+    "@app/webhook-contract": "workspace:*",
+    "@better-auth/api-key": "1.7.1",
+    "@casl/ability": "7.0.1",
+    "@hono/zod-openapi": "1.6.1",
+    "@scalar/hono-api-reference": "0.11.16",
+    "better-auth": "1.7.1",
+    "hono": "4.13.3",
+    "semver": "7.8.5",
+    "zod": "4.4.3"
+  }
+}

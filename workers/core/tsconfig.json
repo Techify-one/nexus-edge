@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "rootDir": "src",
+    "outDir": "dist",
+    "declaration": true
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../../packages/core-contract" },
+    { "path": "../../packages/database" },
+    { "path": "../../packages/db-schema" },
+    { "path": "../../packages/webhook-contract" },
+    { "path": "../../packages/api-contracts" }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "name": "@app/frontend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@app/core-worker": "workspace:*",
+    "@app/plugin-crm": "workspace:*",
+    "@casl/ability": "7.0.1",
+    "@casl/react": "7.0.1",
+    "@hookform/resolvers": "5.9.1",
+    "@tanstack/react-query": "5.101.4",
+    "better-auth": "1.7.1",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "fflate": "0.8.3",
+    "hono": "4.13.3",
+    "lucide-react": "1.33.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-hook-form": "7.86.0",
+    "react-router-dom": "7.18.2",
+    "sonner": "2.0.8",
+    "tailwind-merge": "3.6.0",
+    "zod": "4.4.3"
+  }
+}

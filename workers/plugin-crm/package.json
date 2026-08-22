@@ -1,0 +1,22 @@
+{
+  "name": "@app/plugin-crm",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./contract": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --format=esm --platform=node --target=es2022 --outfile=dist/index.js --sourcemap",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "wrangler dev --config wrangler.jsonc"
+  },
+  "dependencies": {
+    "@app/api-contracts": "workspace:*",
+    "@app/core-contract": "workspace:*",
+    "@app/database": "workspace:*",
+    "hono": "4.13.3",
+    "zod": "4.4.3"
+  }
+}

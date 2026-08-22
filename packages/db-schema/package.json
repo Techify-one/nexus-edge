@@ -1,0 +1,18 @@
+{
+  "name": "@app/db-schema",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./d1": "./src/d1/index.ts",
+    "./postgres": "./src/postgres/index.ts",
+    "./common": "./src/common/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "drizzle-orm": "0.45.2"
+  }
+}

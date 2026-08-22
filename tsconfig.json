@@ -1,0 +1,14 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/core-contract" },
+    { "path": "./packages/database" },
+    { "path": "./packages/db-schema" },
+    { "path": "./packages/webhook-contract" },
+    { "path": "./packages/api-contracts" },
+    { "path": "./workers/core" },
+    { "path": "./workers/plugin-crm" },
+    { "path": "./workers/plugin-template" },
+    { "path": "./frontend" }
+  ]
+}

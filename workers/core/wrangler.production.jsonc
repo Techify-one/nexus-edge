@@ -1,0 +1,50 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "modular-workers-core",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-21",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": false,
+  "assets": {
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/health"],
+  },
+  "vars": {
+    "APP_VERSION": "1.0.0",
+    "APP_INSTALLATION_ID": "install_4c37c497557b62da6f2e29f23a9cb847",
+    "DATABASE_PROVIDER": "d1",
+    "BETTER_AUTH_URL": "https://modular-workers-core.francisconeto.workers.dev",
+    "TRUSTED_ORIGINS": "https://modular-workers-core.francisconeto.workers.dev",
+    "CORE_WORKER_NAME": "modular-workers-core",
+    "D1_DATABASE_ID": "475c01e1-ea6e-4f1a-8e27-2f025a092e62",
+    "WEBHOOK_ALLOWED_DOMAINS": "",
+    "API_RATE_LIMIT_MAX": "120",
+    "API_RATE_LIMIT_WINDOW_SECONDS": "60",
+    "PLUGIN_COMPATIBILITY_FLAGS": "nodejs_compat",
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "modular-workers-app-db",
+      "database_id": "475c01e1-ea6e-4f1a-8e27-2f025a092e62",
+      "migrations_dir": "migrations/d1",
+    },
+  ],
+  "queues": {
+    "producers": [
+      { "binding": "WEBHOOK_QUEUE", "queue": "modular-workers-webhooks" },
+    ],
+    "consumers": [
+      {
+        "queue": "modular-workers-webhooks",
+        "max_batch_size": 5,
+        "max_batch_timeout": 5,
+        "max_retries": 6,
+        "dead_letter_queue": "modular-workers-webhooks-dlq",
+      },
+    ],
+  },
+  "triggers": { "crons": ["* * * * *"] },
+}

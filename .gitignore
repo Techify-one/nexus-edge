@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.wrangler/
+.dev.vars
+.env
+.env.*
+!.env.example
+artifacts/
+backups/
+coverage/
+playwright-report/
+test-results/
+*.log
+*.local
+*.tsbuildinfo
+modular-workers-app.zip

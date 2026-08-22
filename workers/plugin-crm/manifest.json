@@ -1,0 +1,21 @@
+{
+  "id": "crm",
+  "name": "CRM",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "coreMinVersion": "1.0.0",
+  "compatibilityDate": "2026-08-21",
+  "compatibilityFlags": ["nodejs_compat"],
+  "databaseDialects": ["d1", "postgres"],
+  "tablePrefix": "crm_",
+  "permissions": [
+    "crm.lead.read",
+    "crm.lead.create",
+    "crm.lead.update",
+    "crm.lead.delete"
+  ],
+  "menu": [
+    { "title": "CRM", "routeKey": "crm.home" },
+    { "title": "Leads", "routeKey": "crm.leads" }
+  ]
+}

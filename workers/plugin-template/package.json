@@ -1,0 +1,16 @@
+{
+  "name": "@app/plugin-template",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --format=esm --platform=node --target=es2022 --outfile=dist/index.js --sourcemap",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "wrangler dev --config wrangler.jsonc"
+  },
+  "dependencies": {
+    "@app/core-contract": "workspace:*",
+    "@app/database": "workspace:*",
+    "hono": "4.13.3"
+  }
+}

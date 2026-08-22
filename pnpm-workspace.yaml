@@ -1,0 +1,16 @@
+packages:
+  - packages/*
+  - workers/*
+  - frontend
+
+allowBuilds:
+  esbuild: true
+  workerd: true
+
+minimumReleaseAgeExclude:
+  - eslint@10.9.0
+  - react-hook-form@7.86.0
+
+onlyBuiltDependencies:
+  - esbuild
+  - workerd
