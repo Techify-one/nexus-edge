@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { KeyRound, Plus, Search, Trash2 } from "lucide-react";
+import { ExternalLink, KeyRound, Plus, Search, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { ConfigurableDataTable } from "../../components/ui/configurable-data-table.js";
@@ -32,6 +32,7 @@ type Permission = { id: string; key: string };
 export default function ApiKeysPage() {
   const { t, formatDate, formatDateTime } = useI18n();
   const client = useQueryClient();
+  const documentationUrl = new URL("/api/docs", window.location.origin).href;
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<ApiKey | null>(null);
   const [open, setOpen] = useState(false);
@@ -85,15 +86,26 @@ export default function ApiKeysPage() {
         title={t("nav.apiKeys")}
         description={t("apiKeys.description")}
         action={
-          <Button
-            onClick={() => {
-              setSecret("");
-              setOpen(true);
-            }}
-          >
-            <Plus className="h-4 w-4" />
-            {t("common.add")}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <a
+              href={documentationUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border bg-white px-4 py-2 text-sm font-semibold text-slate-800 transition hover:bg-slate-50"
+            >
+              <ExternalLink className="h-4 w-4" aria-hidden />
+              {t("apiKeys.documentation")}
+            </a>
+            <Button
+              onClick={() => {
+                setSecret("");
+                setOpen(true);
+              }}
+            >
+              <Plus className="h-4 w-4" />
+              {t("common.add")}
+            </Button>
+          </div>
         }
       />
       <div className="relative mb-4 max-w-md">

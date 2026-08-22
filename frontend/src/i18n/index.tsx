@@ -245,6 +245,7 @@ const ptBR = {
   "apiKeys.validityDays": "Validade em dias",
   "apiKeys.scopes": "Escopos",
   "apiKeys.create": "Criar chave",
+  "apiKeys.documentation": "Documentação da API",
 
   "webhooks.description": "Endpoints, eventos e entregas assinadas.",
   "webhooks.search": "Buscar endpoint",
@@ -608,6 +609,7 @@ const en: Record<TranslationKey, string> = {
   "apiKeys.validityDays": "Validity in days",
   "apiKeys.scopes": "Scopes",
   "apiKeys.create": "Create key",
+  "apiKeys.documentation": "API documentation",
   "webhooks.description": "Endpoints, events, and signed deliveries.",
   "webhooks.search": "Search endpoints",
   "webhooks.destination": "Destination",
