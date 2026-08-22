@@ -259,9 +259,14 @@ through the operation and request IDs. This report is diagnostic context for a
 developer, while Audit remains the durable user-visible history.
 
 Packages installed before export archiving was introduced have no recoverable
-copy of the inactive-provider migrations. Their download action remains
-unavailable until the same plugin is updated or reinstalled once from a valid
-package. Downloading is recorded as `core.plugin.package_downloaded` in Audit.
+copy of the inactive-provider migrations. On the first download attempt, the
+panel asks for the exact original `.plugin.zip`. The Core validates the plugin
+ID, installed version, manifest, Worker, both migration sets, runtime-value
+boundary, and every stored installation hash before archiving it. This recovery
+does not redeploy the Worker, run migrations, or read plugin business tables.
+A rebuilt or edited package is rejected. Recovery is recorded as
+`core.plugin.package_archived`, and downloading is recorded as
+`core.plugin.package_downloaded`, in Audit.
 
 Common failures:
 

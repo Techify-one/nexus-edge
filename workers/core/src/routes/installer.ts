@@ -878,6 +878,104 @@ installerRoutes.get(
   },
 );
 
+installerRoutes.post(
+  "/plugins/:pluginId/package",
+  requirePermission("core.plugin.export"),
+  async (c) => {
+    const pluginId = c.req.param("pluginId");
+    const plugin = await c
+      .get("db")
+      .first<{ installedVersion: string | null; status: string }>(
+        `SELECT installed_version AS "installedVersion", status
+           FROM plugins WHERE id = ?`,
+        [pluginId],
+      );
+    if (!plugin)
+      throw new AppError(404, "PLUGIN_NOT_FOUND", "Plugin not found.");
+    if (plugin.status !== "installed" || !plugin.installedVersion)
+      throw new AppError(
+        409,
+        "PLUGIN_PACKAGE_EXPORT_NOT_INSTALLED",
+        "Only an installed plugin can have its portable package restored.",
+      );
+
+    const operation = await c.get("db").first<Operation>(
+      `SELECT operation_id AS "operationId", plugin_id AS "pluginId", type, target_version AS "targetVersion", state,
+              manifest_sha256 AS "manifestSha256", worker_sha256 AS "workerSha256",
+              d1_migrations_sha256 AS "d1MigrationsSha256",
+              postgres_migrations_sha256 AS "postgresMigrationsSha256", last_error AS "lastError"
+         FROM plugin_operations
+        WHERE plugin_id = ? AND target_version = ? AND state = 'installed'
+        ORDER BY finished_at DESC`,
+      [pluginId, plugin.installedVersion],
+    );
+    if (!operation)
+      throw new AppError(
+        409,
+        "PLUGIN_PACKAGE_EXPORT_UNAVAILABLE",
+        "The original installation record is unavailable.",
+      );
+
+    const parts = await readPackage(c);
+    if (
+      parts.manifest.id !== pluginId ||
+      parts.manifest.version !== plugin.installedVersion
+    )
+      throw new AppError(
+        409,
+        "PLUGIN_PACKAGE_ARCHIVE_MISMATCH",
+        "Select the original package for this installed plugin and version.",
+      );
+    try {
+      validateManifestPolicy(
+        parts.manifest,
+        c.env.APP_VERSION,
+        c.env.PLUGIN_COMPATIBILITY_FLAGS,
+      );
+      if (!parts.worker) throw new Error("worker.mjs is required.");
+      const d1Ids = Object.keys(parts.d1Migrations).sort();
+      const postgresIds = Object.keys(parts.postgresMigrations).sort();
+      if (stableJson(d1Ids) !== stableJson(postgresIds))
+        throw new Error("Plugin migrations are not paired.");
+      migrationStatements(parts.d1Migrations, parts.manifest.tablePrefix);
+      migrationStatements(parts.postgresMigrations, parts.manifest.tablePrefix);
+      verifyPortablePackageBoundary(c.env, parts);
+      await verifyPackage(operation, parts);
+    } catch (error) {
+      if (error instanceof AppError) {
+        if (error.code === "PLUGIN_PACKAGE_HASH_MISMATCH")
+          throw new AppError(
+            409,
+            "PLUGIN_PACKAGE_ARCHIVE_MISMATCH",
+            "The selected file is not the exact package used for this installation.",
+          );
+        throw error;
+      }
+      throw new AppError(
+        422,
+        "PLUGIN_PACKAGE_INVALID",
+        "The selected plugin package is invalid.",
+      );
+    }
+
+    await c
+      .get("db")
+      .atomic(
+        archivePackageStatements(
+          operation.operationId,
+          parts,
+          dbTime(c.get("db")),
+        ),
+      );
+    await audit(c, "core.plugin.package_archived", "core.plugin", pluginId, {
+      version: plugin.installedVersion,
+      bytes: parts.rawBytes,
+      source: "verified_original_package",
+    });
+    return c.body(null, 204);
+  },
+);
+
 installerRoutes.delete(
   "/plugins/:pluginId",
   requirePermission("core.plugin.delete"),

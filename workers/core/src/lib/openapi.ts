@@ -364,6 +364,24 @@ export const OPENAPI_DOCUMENT = {
           },
         },
       },
+      post: {
+        parameters: [{ name: "pluginId", in: "path", required: true }],
+        requestBody: {
+          description:
+            "Exact original package used to restore export availability for a legacy installation; no deployment or migration is performed",
+          content: { "multipart/form-data": { schema: { type: "object" } } },
+        },
+        responses: {
+          "204": { description: "Portable package archive restored" },
+          "403": { description: "Plugin export permission required" },
+          "404": { description: "Plugin not found" },
+          "409": {
+            description:
+              "Plugin is not installed or package ID, version, or hashes do not match the installed artifact",
+          },
+          "422": { description: "Plugin package is invalid or unsafe" },
+        },
+      },
     },
     "/api/v1/plugin-operations": {
       get: { responses: { "200": { description: "Installer operations" } } },

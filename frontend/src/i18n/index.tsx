@@ -322,7 +322,11 @@ const ptBR = {
   "plugins.downloadPackage": "Baixar pacote",
   "plugins.packageDownloaded": "Pacote do plugin baixado.",
   "plugins.downloadUnavailable":
-    "Atualize ou reinstale este plugin uma vez para gerar o pacote portátil.",
+    "Selecione o pacote original uma vez para validar e liberar o download.",
+  "plugins.selectOriginalPackage":
+    "Selecione o arquivo .plugin.zip original usado nesta instalação. Ele será validado sem reinstalar o plugin ou alterar dados.",
+  "plugins.archivePackageMismatch":
+    "O arquivo selecionado não corresponde ao plugin e à versão instalados.",
   "plugins.provider": "Provider",
   "plugins.invalidPackage": "Pacote inválido.",
   "plugins.permissionRequired":
@@ -371,7 +375,9 @@ const ptBR = {
   "errors.PLUGIN_PACKAGE_EXPORT_NOT_INSTALLED":
     "Somente plugins instalados podem ser baixados.",
   "errors.PLUGIN_PACKAGE_EXPORT_UNAVAILABLE":
-    "O pacote portátil não está disponível. Atualize ou reinstale o plugin uma vez e tente novamente.",
+    "O pacote portátil não está disponível. Selecione o arquivo original para recuperá-lo com segurança.",
+  "errors.PLUGIN_PACKAGE_ARCHIVE_MISMATCH":
+    "O arquivo selecionado não é exatamente o pacote usado nesta instalação.",
   "errors.PLUGIN_PACKAGE_CONTAINS_RUNTIME_VALUE":
     "O pacote contém uma configuração ou credencial específica desta instalação e não pode ser instalado.",
   "errors.EMAIL_ALREADY_EXISTS": "Este e-mail já pertence a outro usuário.",
@@ -690,7 +696,11 @@ const en: Record<TranslationKey, string> = {
   "plugins.downloadPackage": "Download package",
   "plugins.packageDownloaded": "Plugin package downloaded.",
   "plugins.downloadUnavailable":
-    "Update or reinstall this plugin once to generate its portable package.",
+    "Select the original package once to verify it and enable download.",
+  "plugins.selectOriginalPackage":
+    "Select the original .plugin.zip used for this installation. It will be verified without reinstalling the plugin or changing data.",
+  "plugins.archivePackageMismatch":
+    "The selected file does not match the installed plugin and version.",
   "plugins.provider": "Provider",
   "plugins.invalidPackage": "Invalid package.",
   "plugins.permissionRequired":
@@ -737,7 +747,9 @@ const en: Record<TranslationKey, string> = {
   "errors.PLUGIN_PACKAGE_EXPORT_NOT_INSTALLED":
     "Only installed plugins can be downloaded.",
   "errors.PLUGIN_PACKAGE_EXPORT_UNAVAILABLE":
-    "The portable package is unavailable. Update or reinstall the plugin once and try again.",
+    "The portable package is unavailable. Select the original file to restore it safely.",
+  "errors.PLUGIN_PACKAGE_ARCHIVE_MISMATCH":
+    "The selected file is not exactly the package used for this installation.",
   "errors.PLUGIN_PACKAGE_CONTAINS_RUNTIME_VALUE":
     "The package contains configuration or credentials specific to this installation and cannot be installed.",
   "errors.EMAIL_ALREADY_EXISTS": "This email already belongs to another user.",

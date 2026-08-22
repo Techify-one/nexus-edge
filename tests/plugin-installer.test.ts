@@ -412,6 +412,139 @@ describe("CRM plugin installer", () => {
     });
   });
 
+  it("restores a legacy portable archive from the exact original package without reinstalling", async () => {
+    const parts = crmPackageParts();
+    const atomicSql: string[] = [];
+    const executedSql: string[] = [];
+    const response = await installerApp({
+      atomicSql,
+      executedSql,
+      plugin: {
+        installedVersion: parts.manifest.version,
+        status: "installed",
+      },
+      operation: {
+        operationId: "pop_legacy_restore",
+        pluginId: "crm",
+        type: "install",
+        targetVersion: parts.manifest.version,
+        state: "installed",
+        manifestSha256: await sha256(stableJson(parts.manifest)),
+        workerSha256: await sha256(parts.worker),
+        d1MigrationsSha256: await sha256(stableJson(parts.d1Migrations)),
+        postgresMigrationsSha256: await sha256(
+          stableJson(parts.postgresMigrations),
+        ),
+        lastError: null,
+      },
+    }).request(
+      "/plugins/crm/package",
+      { method: "POST", body: crmPackageBody() },
+      {
+        APP_VERSION: "1.0.0",
+        DATABASE_PROVIDER: "d1",
+        PLUGIN_COMPATIBILITY_FLAGS: "nodejs_compat",
+      } as CoreEnv,
+    );
+
+    expect(response.status).toBe(204);
+    expect(atomicSql).toContainEqual(
+      expect.stringContaining("INSERT INTO plugin_package_chunks"),
+    );
+    expect(
+      atomicSql.every((sql) => sql.includes("plugin_package_chunks")),
+    ).toBe(true);
+    expect(executedSql).toContainEqual(
+      expect.stringContaining("INSERT INTO audit_log"),
+    );
+  });
+
+  it("refuses to archive a rebuilt package for a legacy installation", async () => {
+    const parts = crmPackageParts();
+    const atomicSql: string[] = [];
+    const response = await installerApp({
+      atomicSql,
+      plugin: {
+        installedVersion: parts.manifest.version,
+        status: "installed",
+      },
+      operation: {
+        operationId: "pop_legacy_restore",
+        pluginId: "crm",
+        type: "install",
+        targetVersion: parts.manifest.version,
+        state: "installed",
+        manifestSha256: await sha256(stableJson(parts.manifest)),
+        workerSha256: await sha256(parts.worker),
+        d1MigrationsSha256: await sha256(stableJson(parts.d1Migrations)),
+        postgresMigrationsSha256: await sha256(
+          stableJson(parts.postgresMigrations),
+        ),
+        lastError: null,
+      },
+    }).request(
+      "/plugins/crm/package",
+      {
+        method: "POST",
+        body: crmPackageBody("export default { changed: true };"),
+      },
+      {
+        APP_VERSION: "1.0.0",
+        DATABASE_PROVIDER: "d1",
+        PLUGIN_COMPATIBILITY_FLAGS: "nodejs_compat",
+      } as CoreEnv,
+    );
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      code: "PLUGIN_PACKAGE_ARCHIVE_MISMATCH",
+    });
+    expect(atomicSql).toEqual([]);
+  });
+
+  it("refuses to archive a legacy package containing a current Nexus credential", async () => {
+    const parts = crmPackageParts();
+    const credentialWorker =
+      'const value = "runtime-secret-sentinel"; export default {};';
+    const atomicSql: string[] = [];
+    const response = await installerApp({
+      atomicSql,
+      plugin: {
+        installedVersion: parts.manifest.version,
+        status: "installed",
+      },
+      operation: {
+        operationId: "pop_unsafe_legacy_restore",
+        pluginId: "crm",
+        type: "install",
+        targetVersion: parts.manifest.version,
+        state: "installed",
+        manifestSha256: await sha256(stableJson(parts.manifest)),
+        workerSha256: await sha256(credentialWorker),
+        d1MigrationsSha256: await sha256(stableJson(parts.d1Migrations)),
+        postgresMigrationsSha256: await sha256(
+          stableJson(parts.postgresMigrations),
+        ),
+        lastError: null,
+      },
+    }).request(
+      "/plugins/crm/package",
+      { method: "POST", body: crmPackageBody(credentialWorker) },
+      {
+        APP_VERSION: "1.0.0",
+        BETTER_AUTH_SECRET: "runtime-secret-sentinel",
+        DATABASE_PROVIDER: "d1",
+        PLUGIN_COMPATIBILITY_FLAGS: "nodejs_compat",
+      } as CoreEnv,
+    );
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({
+      code: "PLUGIN_PACKAGE_CONTAINS_RUNTIME_VALUE",
+    });
+    expect(atomicSql).toEqual([]);
+  });
+
   it("reports a conflict instead of not-found for transitional plugin states", async () => {
     const response = await installerApp({
       plugin: {

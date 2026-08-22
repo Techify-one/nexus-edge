@@ -165,6 +165,8 @@ export default function PluginsPage() {
     stateKeys[state] ? t(stateKeys[state]) : state;
   const client = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
+  const archiveInputRef = useRef<HTMLInputElement>(null);
+  const archiveTargetRef = useRef<Plugin | null>(null);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Plugin | null>(null);
   const [parts, setParts] = useState<PluginParts | null>(null);
@@ -346,6 +348,40 @@ export default function PluginsPage() {
     },
     onError: (error: Error) => toast.error(error.message),
   });
+  const archivePackage = useMutation({
+    mutationFn: async ({ plugin, file }: { plugin: Plugin; file: File }) => {
+      const packageParts = await readPlugin(file);
+      if (
+        packageParts.manifest.id !== plugin.id ||
+        packageParts.manifest.version !== plugin.installedVersion
+      )
+        throw new Error(t("plugins.archivePackageMismatch"));
+      await api<void>(
+        `/api/v1/plugins/${encodeURIComponent(plugin.id)}/package`,
+        { method: "POST", body: bodyFor(packageParts) },
+      );
+      return plugin;
+    },
+    onSuccess: (plugin) => {
+      void client.invalidateQueries({ queryKey: ["plugins"] });
+      setSelected((current) =>
+        current?.id === plugin.id
+          ? { ...current, packageAvailable: true }
+          : current,
+      );
+      downloadPackage.mutate({ ...plugin, packageAvailable: true });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+  const requestPackageDownload = (plugin: Plugin) => {
+    if (Boolean(plugin.packageAvailable)) {
+      downloadPackage.mutate(plugin);
+      return;
+    }
+    archiveTargetRef.current = plugin;
+    toast.info(t("plugins.selectOriginalPackage"));
+    archiveInputRef.current?.click();
+  };
   return (
     <>
       <PageHeader
@@ -372,6 +408,18 @@ export default function PluginsPage() {
         accept=".zip,.plugin.zip"
         className="hidden"
         onChange={(event) => void choose(event.target.files?.[0])}
+      />
+      <input
+        ref={archiveInputRef}
+        type="file"
+        accept=".zip,.plugin.zip"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          const plugin = archiveTargetRef.current;
+          event.target.value = "";
+          if (file && plugin) archivePackage.mutate({ plugin, file });
+        }}
       />
       <div className="relative mb-4 max-w-md">
         <Search className="absolute left-3 top-3 h-5 w-5 text-slate-400" />
@@ -451,8 +499,10 @@ export default function PluginsPage() {
                       <Button
                         variant="ghost"
                         className="px-2"
-                        disabled={downloadPackage.isPending}
-                        onClick={() => downloadPackage.mutate(row)}
+                        disabled={
+                          downloadPackage.isPending || archivePackage.isPending
+                        }
+                        onClick={() => requestPackageDownload(row)}
                         aria-label={`${t("plugins.downloadPackage")} ${row.name}`}
                         title={
                           Boolean(row.packageAvailable)
@@ -671,13 +721,13 @@ export default function PluginsPage() {
               {canExport && selected.status === "installed" && (
                 <Button
                   variant="secondary"
-                  busy={downloadPackage.isPending}
+                  busy={downloadPackage.isPending || archivePackage.isPending}
                   title={
                     Boolean(selected.packageAvailable)
                       ? t("plugins.downloadPackage")
                       : t("plugins.downloadUnavailable")
                   }
-                  onClick={() => downloadPackage.mutate(selected)}
+                  onClick={() => requestPackageDownload(selected)}
                 >
                   <Download className="h-4 w-4" />
                   {t("plugins.downloadPackage")}
