@@ -131,8 +131,8 @@ For every new or migrated table:
 
 ## Request wording
 
-Because `CONTRIBUTING.md` makes this standard mandatory, a request can be as
-simple as:
+Because `AGENTS.md` makes this standard mandatory, a request can be as simple
+as:
 
 > Crie uma tabela de pedidos.
 

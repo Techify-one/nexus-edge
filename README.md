@@ -21,7 +21,7 @@ Nexus Edge is a lightweight, modular runtime for distributed applications. This 
 Requirements: Node.js 24+, pnpm 11.19+, and a Cloudflare account for testing real bindings.
 
 ```bash
-pnpm install
+pnpm install --frozen-lockfile
 pnpm typecheck
 pnpm test
 pnpm test:matrix
@@ -43,10 +43,9 @@ tests/                    contracts, security, and migrations
 docs/                     architecture, operations, and backup
 ```
 
-Automated development tools should start with the open-format
-[AGENTS.md](./AGENTS.md). People and tools should follow
-[CONTRIBUTING.md](./CONTRIBUTING.md) for the repository-wide engineering rules
-and [DEPLOYMENT.md](./DEPLOYMENT.md) to publish. These documents describe
+People and automated development tools should start with the open-format
+[AGENTS.md](./AGENTS.md) for repository-wide engineering rules and follow
+[DEPLOYMENT.md](./DEPLOYMENT.md) before publishing. These documents describe
 commands, invariants, and verification criteria without depending on a specific
 vendor.
 
@@ -63,8 +62,6 @@ The guide defines the required Wrangler build, manifest, paired migrations,
 private Service Binding, package layout, frontend registration, retry behavior,
 and release checks. Plugin tables use the same component, layout, behavior, and
 per-user Core preference storage as Core tables.
-
-The initial D1 environment is documented in `docs/DEPLOYMENT-STATUS.md`. `pnpm deploy:direct` is an official-API alternative when a Wrangler subprocess is unavailable. It reads deployment credentials from environment variables and preserves existing application secrets, installer credentials, and `PLUGIN_*` bindings when replacement values are omitted; the deployment token is never copied into the Worker automatically.
 
 ## Main commands
 

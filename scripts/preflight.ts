@@ -15,7 +15,6 @@ const requiredFiles = [
   "workers/plugin-crm/migrations/postgres/0001_init.sql",
   "frontend/src/main.tsx",
   "AGENTS.md",
-  "CONTRIBUTING.md",
   "DEPLOYMENT.md",
 ];
 const missing = requiredFiles.filter((file) => !existsSync(file));

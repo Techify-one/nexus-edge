@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const markdownFiles = (): string[] =>
@@ -31,5 +32,25 @@ describe("tool-neutral documentation", () => {
       forbidden.test(readFileSync(path, "utf8")),
     );
     expect(violations).toEqual([]);
+  });
+
+  it("keeps local Markdown links valid", () => {
+    const broken: string[] = [];
+    const linkPattern = /\[[^\]]*\]\(([^)]+)\)/gu;
+
+    for (const path of markdownFiles()) {
+      for (const match of readFileSync(path, "utf8").matchAll(linkPattern)) {
+        const target = match[1].trim();
+        if (/^(?:[a-z]+:|#)/iu.test(target)) continue;
+        const file = decodeURIComponent(target.split("#", 1)[0]).replace(
+          /^<|>$/gu,
+          "",
+        );
+        if (!existsSync(resolve(dirname(path), file)))
+          broken.push(`${path} -> ${target}`);
+      }
+    }
+
+    expect(broken).toEqual([]);
   });
 });

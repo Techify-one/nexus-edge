@@ -166,4 +166,5 @@ preserves and verifies all existing `PLUGIN_*` bindings.
 
 Worker versions in the Cloudflare dashboard/CLI can roll back code deployments. Databases and plugins have no automatic destructive rollback: back up before migrations. Uninstallation preserves tables. Do not change `DATABASE_PROVIDER` for an existing installation without an explicit export, restore, count-validation, and new-installation-ID procedure.
 
-See `docs/BACKUP-RESTORE.md` and `docs/IMPLEMENTATION-MAP.md` for operations and traceability.
+See `docs/BACKUP-RESTORE.md` for backup, restore, and provider-migration
+operations.

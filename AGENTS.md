@@ -6,7 +6,6 @@ and rely only on tracked documentation and executable repository commands.
 
 ## Start here
 
-- Read `CONTRIBUTING.md` before changing code or documentation.
 - Read `DEPLOYMENT.md` before changing or publishing infrastructure.
 - Read `docs/PLUGIN-DEVELOPMENT.md` before creating or changing a plugin.
 - Read `docs/DATA-TABLE-STANDARD.md` before creating or changing a record-list
@@ -32,14 +31,19 @@ and rely only on tracked documentation and executable repository commands.
 - Build plugin Workers with Wrangler dry-run and package them with
   `scripts/package-plugin.ts`; never substitute a raw Node bundle.
 - Keep plugin Workers private with `workers_dev` and preview URLs disabled.
+- Every new or modified record-list table must follow
+  `docs/DATA-TABLE-STANDARD.md` and use the canonical
+  `ConfigurableDataTable`. Do not expand automated-test allowances to admit a
+  parallel table implementation.
 
 ## Portability
 
-`AGENTS.md`, `CONTRIBUTING.md`, `DEPLOYMENT.md`, and `docs/` are the complete
-shared source of truth. Do not require proprietary prompts, plugins, skills,
-memory stores, connectors, or hidden state. A tool that does not discover
-`AGENTS.md` automatically may use a committed compatibility adapter only when
-the adapter imports this file without duplicating or extending its rules.
+`AGENTS.md`, `DEPLOYMENT.md`, `README.md`, and the topic guides under `docs/`
+are the complete shared source of truth. Do not require proprietary prompts,
+plugins, skills, memory stores, connectors, or hidden state. A tool that does
+not discover `AGENTS.md` automatically may use a committed compatibility
+adapter only when the adapter imports this file without duplicating or
+extending its rules.
 
 Nested directories may add another `AGENTS.md` only for genuinely local rules.
 The closest file applies to that subtree and must not weaken repository-wide
