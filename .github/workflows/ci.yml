@@ -1,7 +1,12 @@
 name: CI
+
 on:
   push:
   pull_request:
+
+permissions:
+  contents: read
+
 jobs:
   validate:
     runs-on: ubuntu-latest
@@ -16,6 +21,53 @@ jobs:
       - run: pnpm test
       - run: pnpm test:matrix
       - run: pnpm openapi:check
-      - run: pnpm build:frontend
-      - run: pnpm build:plugins
+      - run: pnpm build
       - run: pnpm verify:bundle
+
+  deploy-production:
+    name: Deploy production
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://modular-workers-core.francisconeto.workers.dev
+    concurrency:
+      group: modular-workers-core-production
+      cancel-in-progress: false
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CORE_WORKER_NAME: modular-workers-core
+      CORE_WRANGLER_CONFIG: workers/core/wrangler.production.jsonc
+      WORKER_URL: https://modular-workers-core.francisconeto.workers.dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 11.19.0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: Apply D1 migrations
+        run: >-
+          pnpm exec wrangler d1 migrations apply modular-workers-app-db
+          --remote --config "$CORE_WRANGLER_CONFIG"
+      - name: Deploy Core Worker
+        run: pnpm deploy:core
+      - name: Verify production
+        run: |
+          node --input-type=module <<'NODE'
+          const baseUrl = process.env.WORKER_URL;
+          for (const path of ["/health", "/api/v1/setup/status"]) {
+            const response = await fetch(`${baseUrl}${path}`);
+            if (!response.ok) {
+              throw new Error(`${path} returned HTTP ${response.status}`);
+            }
+            const body = await response.json();
+            if (path === "/health" && (!body.ok || body.provider !== "d1")) {
+              throw new Error(`Unexpected health response: ${JSON.stringify(body)}`);
+            }
+          }
+          NODE
