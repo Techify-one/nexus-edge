@@ -15,7 +15,8 @@ describe("application shell", () => {
       'sidebarHidden ? "w-0 border-r-0" : "w-60 border-r"',
     );
     expect(shell).toContain('sidebarHidden ? "lg:pl-0" : "lg:pl-60"');
-    expect(shell).toContain("fixed bottom-12 z-40 hidden h-7 w-7");
+    expect(shell).toContain("fixed top-1/2 z-40 hidden h-7 w-7");
+    expect(shell).toContain("-translate-x-1/2 -translate-y-1/2");
     expect(shell).toContain('sidebarHidden ? "left-3.5" : "left-60"');
     expect(shell).toContain('<ChevronLeft className="h-4 w-4" aria-hidden />');
     expect(shell).toContain('<ChevronRight className="h-4 w-4" aria-hidden />');

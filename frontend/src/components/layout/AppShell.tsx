@@ -131,7 +131,7 @@ export function AppShell() {
       </aside>
       <button
         type="button"
-        className={`fixed bottom-12 z-40 hidden h-7 w-7 -translate-x-1/2 place-items-center rounded-full border bg-white text-slate-500 shadow-sm transition-[left,color] duration-200 hover:text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 lg:grid ${sidebarHidden ? "left-3.5" : "left-60"}`}
+        className={`fixed top-1/2 z-40 hidden h-7 w-7 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border bg-white text-slate-500 shadow-sm transition-[left,color] duration-200 hover:text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 lg:grid ${sidebarHidden ? "left-3.5" : "left-60"}`}
         onClick={() => setSidebarHidden((current) => !current)}
         aria-label={sidebarHidden ? t("nav.expandMenu") : t("nav.collapseMenu")}
         title={sidebarHidden ? t("nav.expandMenu") : t("nav.collapseMenu")}
