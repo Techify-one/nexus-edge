@@ -167,12 +167,9 @@ export function AppShell() {
             >
               <Menu className="h-5 w-5" />
             </Button>
-            <div>
-              <p className="text-xs text-slate-500">{t("nav.panel")}</p>
-              <p className="max-w-[55vw] truncate text-sm font-semibold">
-                {location.pathname}
-              </p>
-            </div>
+            <p className="text-sm font-semibold text-slate-700">
+              {t("nav.panel")}
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <LanguageSwitcher />

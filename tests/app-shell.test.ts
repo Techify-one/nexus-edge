@@ -34,4 +34,13 @@ describe("application shell", () => {
     expect(shell).not.toContain("routeKey:");
     expect(shell).not.toMatch(/permission:\s*"(?!core\.)/u);
   });
+
+  it("does not expose the current route path in the header", () => {
+    const shell = readFileSync(
+      "frontend/src/components/layout/AppShell.tsx",
+      "utf8",
+    );
+
+    expect(shell).not.toContain("{location.pathname}");
+  });
 });

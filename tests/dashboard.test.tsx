@@ -6,14 +6,18 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import DashboardPage from "../frontend/src/features/dashboard.js";
 import { I18nProvider } from "../frontend/src/i18n/index.js";
+import { ability } from "../frontend/src/lib/ability.js";
 
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  window.localStorage.clear();
+  ability.update([]);
 });
 
-describe("Overview plugin navigation", () => {
-  it("lists every permitted installed plugin and searches all of its menu entries", async () => {
+describe("Overview navigation", () => {
+  it("renders Core modules and plugins as peers under one search", async () => {
+    ability.update([{ action: "manage", subject: "all" }]);
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>
@@ -60,18 +64,45 @@ describe("Overview plugin navigation", () => {
     );
 
     expect(
-      (await screen.findByRole("link", { name: /CRM/ })).getAttribute("href"),
+      (
+        await screen.findByRole("link", { name: /CRM/ }, { timeout: 5_000 })
+      ).getAttribute("href"),
     ).toBe("/app/crm");
     expect(
       screen.getByRole("link", { name: /Meta Ads/ }).getAttribute("href"),
     ).toBe("/app/meta-ads");
+    expect(
+      screen
+        .getByRole("link", { name: /Chaves de API|API keys/ })
+        .getAttribute("href"),
+    ).toBe("/app/settings/api-keys");
+    for (const moduleName of [
+      "Usuários|Users",
+      "Grupos|Groups",
+      "Webhooks",
+      "Plugins",
+      "Auditoria|Audit",
+    ])
+      expect(
+        screen.getByRole("link", { name: new RegExp(moduleName) }),
+      ).toBeTruthy();
 
-    fireEvent.change(
-      screen.getByRole("textbox", { name: /Buscar plugins|Search plugins/ }),
-      { target: { value: "contas" } },
-    );
+    const search = screen.getByRole("textbox", {
+      name: /Buscar módulos e plugins|Search modules and plugins/,
+    });
+    fireEvent.change(search, { target: { value: "contas" } });
 
     expect(screen.queryByRole("link", { name: /CRM/ })).toBeNull();
+    expect(
+      screen.queryByRole("link", { name: /Chaves de API|API keys/ }),
+    ).toBeNull();
     expect(screen.getByRole("link", { name: /Meta Ads/ })).toBeTruthy();
+
+    fireEvent.change(search, { target: { value: "api-keys" } });
+
+    expect(
+      screen.getByRole("link", { name: /Chaves de API|API keys/ }),
+    ).toBeTruthy();
+    expect(screen.queryByRole("link", { name: /Meta Ads/ })).toBeNull();
   });
 });
