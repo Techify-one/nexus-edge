@@ -18,6 +18,7 @@ describe("plugin colocation", () => {
       "frontend",
       "frontend/i18n.ts",
       "frontend/registry.ts",
+      "catalog.json",
       "src",
       "migrations/d1",
       "migrations/postgres",
@@ -35,7 +36,10 @@ describe("plugin colocation", () => {
       withFileTypes: true,
     })
       .filter(
-        (entry) => entry.isDirectory() && entry.name.startsWith("plugin-"),
+        (entry) =>
+          entry.isDirectory() &&
+          entry.name.startsWith("plugin-") &&
+          entry.name !== "plugin-catalog",
       )
       .map((entry) => entry.name);
     const fragmentedFrontend = readdirSync(

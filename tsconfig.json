@@ -7,6 +7,7 @@
     { "path": "./packages/webhook-contract" },
     { "path": "./packages/api-contracts" },
     { "path": "./workers/core" },
+    { "path": "./workers/plugin-catalog" },
     { "path": "./plugins/crm" },
     { "path": "./plugins/meta_ads" },
     { "path": "./plugins/template" },

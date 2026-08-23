@@ -4,6 +4,7 @@ Everything specific to Meta Ads is colocated here:
 
 - [`frontend/`](./frontend/) contains the Core-compiled Meta Ads pages, route
   registry, and translations;
+- [`catalog.json`](./catalog.json) contains its public catalog description;
 - [`src/`](./src/) contains the private Worker API and Meta client;
 - [`migrations/`](./migrations/) contains paired D1 and PostgreSQL migrations;
 - [`manifest.json`](./manifest.json) defines permissions, menus, and compatibility;

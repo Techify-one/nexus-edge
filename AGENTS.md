@@ -31,6 +31,10 @@ and rely only on tracked documentation and executable repository commands.
   commit only the intended changes and push them to `main`; the
   `deploy-production` job in `.github/workflows/ci.yml` validates the commit,
   applies D1 migrations, publishes the Core, and runs production smoke tests.
+- The same production job publishes the public `nexus-edge-plugins` catalog
+  Worker after the Core. Its catalog is discovered at runtime from
+  `plugins/*` on the public GitHub `main` branch; do not duplicate plugin ZIPs
+  or metadata under `workers/plugin-catalog`.
 - Do not run `pnpm deploy:core`, `pnpm deploy:direct`, or `wrangler deploy`
   locally for an ordinary production release. `pnpm deploy:core` is the
   publishing implementation used by GitHub Actions and preserves/verifies
@@ -45,6 +49,8 @@ and rely only on tracked documentation and executable repository commands.
 - Commit every generated `plugins/*/release/*.plugin.zip` with the plugin source
   that produced it. Packaging must remain reproducible, and CI must reject
   stale or missing tracked plugin artifacts.
+- A publicly downloadable plugin must keep `catalog.json`, `manifest.json`, and
+  `release/<plugin-id>.plugin.zip` together in `plugins/<plugin-id>/`.
 - Keep plugin Workers private with `workers_dev` and preview URLs disabled.
 - Every new or modified record-list table must follow
   `docs/DATA-TABLE-STANDARD.md` and use the canonical

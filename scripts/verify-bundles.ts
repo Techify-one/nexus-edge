@@ -1,10 +1,11 @@
 import { existsSync, readFileSync } from "node:fs";
 import { gzipSync } from "fflate";
 
-const pluginBundles = [
+const workerBundles = [
   "plugins/crm/dist/index.js",
   "plugins/meta_ads/dist/index.js",
   "plugins/template/dist/index.js",
+  "workers/plugin-catalog/dist/index.js",
 ];
 const unsupportedDynamicRequires = [
   "crypto",
@@ -19,7 +20,7 @@ const unsupportedDynamicRequires = [
   "util",
   "util/types",
 ];
-for (const bundlePath of pluginBundles) {
+for (const bundlePath of workerBundles) {
   if (!existsSync(bundlePath))
     throw new Error(`${bundlePath} is missing. Run pnpm build.`);
   const bundle = readFileSync(bundlePath, "utf8");
@@ -31,7 +32,7 @@ for (const bundlePath of pluginBundles) {
       `${bundlePath} contains unsupported dynamic Node.js requires: ${unsupported.join(", ")}`,
     );
 }
-for (const bundlePath of pluginBundles.filter(
+for (const bundlePath of workerBundles.filter(
   (path) => !path.includes("/template/"),
 )) {
   const workerBytes = gzipSync(readFileSync(bundlePath)).byteLength;

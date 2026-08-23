@@ -44,6 +44,8 @@ jobs:
       CORE_WORKER_NAME: modular-workers-core
       CORE_WRANGLER_CONFIG: workers/core/wrangler.production.jsonc
       WORKER_URL: https://modular-workers-core.francisconeto.workers.dev
+      CATALOG_WRANGLER_CONFIG: workers/plugin-catalog/wrangler.production.jsonc
+      CATALOG_WORKER_URL: https://nexus-edge-plugins.francisconeto.workers.dev
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -65,6 +67,8 @@ jobs:
           NODE
       - name: Deploy Core Worker
         run: pnpm deploy:core
+      - name: Deploy plugin catalog Worker
+        run: pnpm exec wrangler deploy --config "$CATALOG_WRANGLER_CONFIG"
       - name: Verify production
         run: |
           node --input-type=module <<'NODE'
@@ -78,5 +82,28 @@ jobs:
             if (path === "/health" && (!body.ok || body.provider !== "d1")) {
               throw new Error(`Unexpected health response: ${JSON.stringify(body)}`);
             }
+          }
+
+          const catalogUrl = process.env.CATALOG_WORKER_URL;
+          const healthResponse = await fetch(`${catalogUrl}/health`);
+          if (!healthResponse.ok) {
+            throw new Error(`Catalog /health returned HTTP ${healthResponse.status}`);
+          }
+          const health = await healthResponse.json();
+          if (!health.ok || health.service !== "nexus-edge-plugin-catalog") {
+            throw new Error(`Unexpected catalog health: ${JSON.stringify(health)}`);
+          }
+          const catalogResponse = await fetch(`${catalogUrl}/api/plugins`);
+          if (!catalogResponse.ok) {
+            throw new Error(`Catalog API returned HTTP ${catalogResponse.status}`);
+          }
+          const catalog = await catalogResponse.json();
+          const pluginIds = catalog.plugins?.map(({ id }) => id).sort();
+          if (JSON.stringify(pluginIds) !== JSON.stringify(["crm", "meta_ads"])) {
+            throw new Error(`Unexpected public catalog: ${JSON.stringify(catalog)}`);
+          }
+          const pageResponse = await fetch(catalogUrl);
+          if (!pageResponse.ok || !(await pageResponse.text()).includes("Plugins para Nexus Edge")) {
+            throw new Error("Catalog page returned an unexpected response");
           }
           NODE

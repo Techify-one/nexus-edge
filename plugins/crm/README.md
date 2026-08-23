@@ -4,6 +4,7 @@ Everything specific to CRM is colocated here:
 
 - [`frontend/`](./frontend/) contains the Core-compiled CRM pages, route
   registry, translations, and typed CRM API client;
+- [`catalog.json`](./catalog.json) contains its public catalog description;
 - [`src/`](./src/) contains the private Worker API and business logic;
 - [`migrations/`](./migrations/) contains paired D1 and PostgreSQL migrations;
 - [`manifest.json`](./manifest.json) defines permissions, menus, and compatibility;

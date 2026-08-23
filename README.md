@@ -15,6 +15,8 @@ Nexus Edge is a lightweight, modular runtime for distributed applications. This 
 - responsive SPA. New and migrated CRUD tables use per-user column order, visibility, sorting, live independent resizing, and a fixed actions/settings column;
 - Portuguese and English UI with typed catalogs, browser detection, persisted preference, and locale-aware date formatting;
 - equivalent migrations, tests, CI, OpenAPI, and safe deployment scripts.
+- public GitHub-synchronized plugin catalog with proxied ZIP downloads and
+  persistent download counts.
 
 ## Local development
 
@@ -40,6 +42,7 @@ plugins/           complete plugin packages: Worker, UI, migrations, and ZIP
   meta_ads/        complete Meta Ads plugin
   template/        complete base for new plugins
 workers/core/      Core, auth, API, gateway, webhooks, and installer
+workers/plugin-catalog/ public plugin catalog and counted download proxy
 scripts/           provisioning, packaging, and safe deployment
 tests/             contracts, security, and migrations
 docs/              architecture, operations, and backup
@@ -67,21 +70,26 @@ per-user Core preference storage as Core tables.
 
 ## Main commands
 
-| Command                   | Result                                                 |
-| ------------------------- | ------------------------------------------------------ |
-| `pnpm preflight`          | checks required files and reports placeholders/secrets |
-| `pnpm provision:d1`       | applies migrations and creates `app_settings` in D1    |
-| `pnpm provision:postgres` | applies all ordered migrations through `DATABASE_URL`  |
-| `pnpm build:frontend`     | builds the production SPA                              |
-| `pnpm build:plugins`      | builds the tracked CRM and Meta Ads plugin packages    |
-| `pnpm verify:artifacts`   | rejects stale or missing tracked plugin packages       |
-| `pnpm deploy:core`        | publishing primitive used by GitHub Actions            |
-| `pnpm openapi:check`      | verifies the minimum API map                           |
+| Command                     | Result                                                 |
+| --------------------------- | ------------------------------------------------------ |
+| `pnpm preflight`            | checks required files and reports placeholders/secrets |
+| `pnpm provision:d1`         | applies migrations and creates `app_settings` in D1    |
+| `pnpm provision:postgres`   | applies all ordered migrations through `DATABASE_URL`  |
+| `pnpm build:frontend`       | builds the production SPA                              |
+| `pnpm build:plugins`        | builds the tracked CRM and Meta Ads plugin packages    |
+| `pnpm build:plugin-catalog` | validates the public catalog Worker bundle             |
+| `pnpm verify:artifacts`     | rejects stale or missing tracked plugin packages       |
+| `pnpm deploy:core`          | publishing primitive used by GitHub Actions            |
+| `pnpm openapi:check`        | verifies the minimum API map                           |
 
 Production releases are triggered by committing the intended changes and
 pushing them to `main`. The GitHub Actions workflow validates, migrates,
-publishes, and smoke-tests the production Worker. Do not invoke a local deploy
-command for an ordinary production release; see [DEPLOYMENT.md](./DEPLOYMENT.md).
+publishes, and smoke-tests the Core and public plugin catalog Workers. The
+catalog at `https://nexus-edge-plugins.francisconeto.workers.dev` discovers
+published plugin directories directly from GitHub, so a new `main` revision is
+visible automatically after its short cache expires. Do not invoke a local
+deploy command for an ordinary production release; see
+[DEPLOYMENT.md](./DEPLOYMENT.md).
 
 ## Operational security
 

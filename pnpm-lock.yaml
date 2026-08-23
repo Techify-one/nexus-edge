@@ -267,48 +267,6 @@ importers:
         specifier: 4.4.3
         version: 4.4.3
 
-  workers/core:
-    dependencies:
-      '@app/api-contracts':
-        specifier: workspace:*
-        version: link:../../packages/api-contracts
-      '@app/core-contract':
-        specifier: workspace:*
-        version: link:../../packages/core-contract
-      '@app/database':
-        specifier: workspace:*
-        version: link:../../packages/database
-      '@app/db-schema':
-        specifier: workspace:*
-        version: link:../../packages/db-schema
-      '@app/webhook-contract':
-        specifier: workspace:*
-        version: link:../../packages/webhook-contract
-      '@better-auth/api-key':
-        specifier: 1.7.1
-        version: 1.7.1(@better-auth/core@1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260821.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.9)(kysely@0.29.5)(nanostores@1.5.2))(@better-auth/utils@0.4.2)(better-auth@1.7.1(@cloudflare/workers-types@5.20260821.1)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260821.1)(@types/pg@8.23.1)(kysely@0.29.5)(pg@8.23.0))(pg@8.23.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vitest@4.1.11))(better-call@1.4.0(zod@4.4.3))
-      '@casl/ability':
-        specifier: 7.0.1
-        version: 7.0.1
-      '@hono/zod-openapi':
-        specifier: 1.6.1
-        version: 1.6.1(hono@4.13.3)(zod@4.4.3)
-      '@scalar/hono-api-reference':
-        specifier: 0.11.16
-        version: 0.11.16(hono@4.13.3)
-      better-auth:
-        specifier: 1.7.1
-        version: 1.7.1(@cloudflare/workers-types@5.20260821.1)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260821.1)(@types/pg@8.23.1)(kysely@0.29.5)(pg@8.23.0))(pg@8.23.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vitest@4.1.11)
-      hono:
-        specifier: 4.13.3
-        version: 4.13.3
-      semver:
-        specifier: 7.8.5
-        version: 7.8.5
-      zod:
-        specifier: 4.4.3
-        version: 4.4.3
-
   plugins/crm:
     dependencies:
       '@app/api-contracts':
@@ -353,6 +311,50 @@ importers:
       hono:
         specifier: 4.13.3
         version: 4.13.3
+
+  workers/core:
+    dependencies:
+      '@app/api-contracts':
+        specifier: workspace:*
+        version: link:../../packages/api-contracts
+      '@app/core-contract':
+        specifier: workspace:*
+        version: link:../../packages/core-contract
+      '@app/database':
+        specifier: workspace:*
+        version: link:../../packages/database
+      '@app/db-schema':
+        specifier: workspace:*
+        version: link:../../packages/db-schema
+      '@app/webhook-contract':
+        specifier: workspace:*
+        version: link:../../packages/webhook-contract
+      '@better-auth/api-key':
+        specifier: 1.7.1
+        version: 1.7.1(@better-auth/core@1.7.1(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.1)(@cloudflare/workers-types@5.20260821.1)(better-call@1.4.0(zod@4.4.3))(jose@6.2.9)(kysely@0.29.5)(nanostores@1.5.2))(@better-auth/utils@0.4.2)(better-auth@1.7.1(@cloudflare/workers-types@5.20260821.1)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260821.1)(@types/pg@8.23.1)(kysely@0.29.5)(pg@8.23.0))(pg@8.23.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vitest@4.1.11))(better-call@1.4.0(zod@4.4.3))
+      '@casl/ability':
+        specifier: 7.0.1
+        version: 7.0.1
+      '@hono/zod-openapi':
+        specifier: 1.6.1
+        version: 1.6.1(hono@4.13.3)(zod@4.4.3)
+      '@scalar/hono-api-reference':
+        specifier: 0.11.16
+        version: 0.11.16(hono@4.13.3)
+      better-auth:
+        specifier: 1.7.1
+        version: 1.7.1(@cloudflare/workers-types@5.20260821.1)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260821.1)(@types/pg@8.23.1)(kysely@0.29.5)(pg@8.23.0))(pg@8.23.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vitest@4.1.11)
+      hono:
+        specifier: 4.13.3
+        version: 4.13.3
+      semver:
+        specifier: 7.8.5
+        version: 7.8.5
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+
+  workers/plugin-catalog: {}
 
 packages:
 

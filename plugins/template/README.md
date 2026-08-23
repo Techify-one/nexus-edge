@@ -15,6 +15,13 @@ Before creating plugin UI, read:
 - `docs/DATA-TABLE-STANDARD.md`
 - `docs/INTERNATIONALIZATION.md`
 
+## Public catalog
+
+When the plugin is ready for public download, rename `catalog.example.json` to
+`catalog.json`, write its category and description, and commit the generated
+`release/<plugin-id>.plugin.zip`. The public catalog discovers those files from
+the GitHub `main` branch automatically.
+
 ## Frontend placement
 
 For a manifest with `"id": "inventory"`:

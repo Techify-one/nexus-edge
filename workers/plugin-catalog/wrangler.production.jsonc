@@ -1,0 +1,21 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "nexus-edge-plugins",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-23",
+  "workers_dev": true,
+  "preview_urls": false,
+  "vars": {
+    "GITHUB_OWNER": "Techify-one",
+    "GITHUB_REPOSITORY": "nexus-edge",
+    "GITHUB_REF": "main",
+    "CATALOG_CACHE_SECONDS": "60",
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "modular-workers-app-db",
+      "database_id": "475c01e1-ea6e-4f1a-8e27-2f025a092e62",
+    },
+  ],
+}
