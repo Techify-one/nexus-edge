@@ -16,5 +16,11 @@ counted atomically in the D1 `plugin_catalog_downloads` table. The GitHub tree
 and small metadata files have a 60-second edge cache; the ZIP is streamed from
 GitHub and is never duplicated in this directory.
 
+After a successful refresh, the Worker persists the last validated catalog
+metadata in `plugin_catalog_source_cache`. It uses that snapshot only when
+GitHub is temporarily unavailable; every normal refresh still reads GitHub,
+and package bytes continue to come from the immutable Git revision recorded by
+the successful refresh.
+
 Use the repository-wide verification workflow before publication. Production
 is deployed only by `.github/workflows/ci.yml` after the additive D1 migrations.

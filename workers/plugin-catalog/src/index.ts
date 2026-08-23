@@ -34,6 +34,65 @@ type CloudflareCacheStorage = CacheStorage & { default: Cache };
 let memoryFallback:
   { cacheKey: string; expiresAt: number; sources: CatalogSource[] } | undefined;
 
+const catalogSnapshotKey = (env: Env): string =>
+  `${env.GITHUB_OWNER}/${env.GITHUB_REPOSITORY}@${env.GITHUB_REF}`;
+
+const isCatalogSource = (value: unknown): value is CatalogSource => {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<CatalogSource>;
+  return (
+    typeof candidate.id === "string" &&
+    pluginIdPattern.test(candidate.id) &&
+    typeof candidate.name === "string" &&
+    typeof candidate.version === "string" &&
+    typeof candidate.coreMinVersion === "string" &&
+    typeof candidate.category === "string" &&
+    typeof candidate.description === "string" &&
+    typeof candidate.archiveSize === "number" &&
+    Number.isSafeInteger(candidate.archiveSize) &&
+    typeof candidate.archiveUrl === "string" &&
+    candidate.archiveUrl.startsWith("https://raw.githubusercontent.com/") &&
+    typeof candidate.sourceUrl === "string" &&
+    candidate.sourceUrl.startsWith("https://github.com/")
+  );
+};
+
+const loadCatalogSnapshot = async (
+  env: Env,
+): Promise<CatalogSource[] | null> => {
+  const row = await env.DB.prepare(
+    `SELECT payload_json AS payloadJson
+       FROM plugin_catalog_source_cache
+      WHERE cache_key = ?`,
+  )
+    .bind(catalogSnapshotKey(env))
+    .first<{ payloadJson: string }>();
+  if (!row) return null;
+  try {
+    const sources: unknown = JSON.parse(row.payloadJson);
+    return Array.isArray(sources) && sources.every(isCatalogSource)
+      ? sources
+      : null;
+  } catch {
+    return null;
+  }
+};
+
+const saveCatalogSnapshot = async (
+  env: Env,
+  sources: CatalogSource[],
+): Promise<void> => {
+  await env.DB.prepare(
+    `INSERT INTO plugin_catalog_source_cache(cache_key, payload_json, updated_at)
+     VALUES (?, ?, ?)
+     ON CONFLICT(cache_key) DO UPDATE SET
+       payload_json = excluded.payload_json,
+       updated_at = excluded.updated_at`,
+  )
+    .bind(catalogSnapshotKey(env), JSON.stringify(sources), Date.now())
+    .run();
+};
+
 export const loadCatalogSources = async (
   env: Env,
   context?: ExecutionContext,
@@ -52,12 +111,25 @@ export const loadCatalogSources = async (
   )
     return memoryFallback.sources;
 
-  const sources = await discoverCatalogSources(env);
+  let sources: CatalogSource[];
+  try {
+    sources = await discoverCatalogSources(env);
+  } catch (error) {
+    const snapshot = await loadCatalogSnapshot(env);
+    if (!snapshot) throw error;
+    console.warn("GitHub catalog unavailable; serving the last D1 snapshot");
+    sources = snapshot;
+  }
   memoryFallback = {
     cacheKey: key.url,
     expiresAt: Date.now() + seconds * 1_000,
     sources,
   };
+  const snapshotWrite = saveCatalogSnapshot(env, sources).catch((error) => {
+    console.warn("Unable to persist the GitHub catalog snapshot", error);
+  });
+  if (context) context.waitUntil(snapshotWrite);
+  else await snapshotWrite;
   if (edgeCache && context) {
     const response = Response.json(sources, {
       headers: {

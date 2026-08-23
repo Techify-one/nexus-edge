@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import worker from "../src/index.js";
-import type { Env } from "../src/env.js";
+import type { CatalogSource, Env } from "../src/env.js";
 import { discoverCatalogSources } from "../src/github.js";
 
 const manifest = {
@@ -15,6 +15,7 @@ const metadata = {
     "Organize leads e mantenha o histórico do relacionamento comercial.",
 };
 const tree = {
+  sha: "a".repeat(40),
   truncated: false,
   tree: [
     { path: "plugins/crm/catalog.json", type: "blob", size: 130, sha: "cat" },
@@ -58,6 +59,7 @@ class MemoryStatement {
   constructor(
     private readonly sql: string,
     private readonly counts: Map<string, number>,
+    private readonly snapshot: { value?: string },
   ) {}
 
   bind(...values: unknown[]): this {
@@ -74,19 +76,33 @@ class MemoryStatement {
     return { results, success: true, meta: {} } as D1Result<T>;
   }
 
+  async first<T>(): Promise<T | null> {
+    if (
+      this.sql.includes("FROM plugin_catalog_source_cache") &&
+      this.snapshot.value
+    )
+      return { payloadJson: this.snapshot.value } as T;
+    return null;
+  }
+
   async run(): Promise<D1Result> {
     if (this.sql.includes("INSERT INTO plugin_catalog_downloads")) {
       const id = String(this.bindings[0]);
       this.counts.set(id, (this.counts.get(id) ?? 0) + 1);
     }
+    if (this.sql.includes("INSERT INTO plugin_catalog_source_cache"))
+      this.snapshot.value = String(this.bindings[1]);
     return { results: [], success: true, meta: {} } as D1Result;
   }
 }
 
-const environment = (counts: Map<string, number>): Env =>
+const environment = (
+  counts: Map<string, number>,
+  snapshot: { value?: string } = {},
+): Env =>
   ({
     DB: {
-      prepare: (sql: string) => new MemoryStatement(sql, counts),
+      prepare: (sql: string) => new MemoryStatement(sql, counts, snapshot),
     } as unknown as D1Database,
     GITHUB_OWNER: "Techify-one",
     GITHUB_REPOSITORY: `nexus-edge-${crypto.randomUUID()}`,
@@ -178,5 +194,39 @@ describe("GitHub-backed plugin catalog", () => {
     );
     expect(response.status).toBe(502);
     expect(counts.has("crm")).toBe(false);
+  });
+
+  it("serves the last D1 snapshot during a temporary GitHub failure", async () => {
+    const snapshotSource: CatalogSource = {
+      id: "crm",
+      name: "CRM",
+      version: "1.0.0",
+      coreMinVersion: "1.0.0",
+      category: metadata.category,
+      description: metadata.description,
+      archiveSize: 212_000,
+      archiveUrl:
+        "https://raw.githubusercontent.com/Techify-one/nexus-edge/commit/plugins/crm/release/crm.plugin.zip",
+      sourceUrl:
+        "https://github.com/Techify-one/nexus-edge/tree/main/plugins/crm",
+    };
+    const env = environment(new Map(), {
+      value: JSON.stringify([snapshotSource]),
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(null, { status: 503 })),
+    );
+
+    const response = await worker.fetch(
+      new Request("https://catalog.example/api/plugins"),
+      env,
+      context,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      plugins: [{ id: "crm", name: "CRM" }],
+    });
   });
 });

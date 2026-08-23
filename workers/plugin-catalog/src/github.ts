@@ -10,6 +10,7 @@ interface GitTreeEntry {
 }
 
 interface GitTreeResponse {
+  sha?: unknown;
   truncated?: unknown;
   tree?: unknown;
 }
@@ -44,8 +45,13 @@ const requiredString = (
   return value.trim();
 };
 
-const rawFileUrl = (env: Env, path: string, blobSha: string): string =>
-  `https://raw.githubusercontent.com/${encodeURIComponent(env.GITHUB_OWNER)}/${encodeURIComponent(env.GITHUB_REPOSITORY)}/${encodeURIComponent(env.GITHUB_REF)}/${path}?blob=${encodeURIComponent(blobSha)}`;
+const rawFileUrl = (
+  env: Env,
+  path: string,
+  blobSha: string,
+  resolvedRef: string,
+): string =>
+  `https://raw.githubusercontent.com/${encodeURIComponent(env.GITHUB_OWNER)}/${encodeURIComponent(env.GITHUB_REPOSITORY)}/${encodeURIComponent(resolvedRef)}/${path}?blob=${encodeURIComponent(blobSha)}`;
 
 const repositoryFileUrl = (env: Env, path: string): string =>
   `https://github.com/${encodeURIComponent(env.GITHUB_OWNER)}/${encodeURIComponent(env.GITHUB_REPOSITORY)}/tree/${encodeURIComponent(env.GITHUB_REF)}/${path}`;
@@ -82,6 +88,10 @@ export const discoverCatalogSources = async (
     throw new Error("GitHub repository tree is truncated");
   if (!Array.isArray(payload.tree))
     throw new Error("GitHub repository tree is invalid");
+  const resolvedRef =
+    typeof payload.sha === "string" && /^[a-f0-9]{40}$/u.test(payload.sha)
+      ? payload.sha
+      : env.GITHUB_REF;
 
   const files = new Map<string, { size: number; sha: string }>();
   for (const candidate of payload.tree as GitTreeEntry[]) {
@@ -125,12 +135,12 @@ export const discoverCatalogSources = async (
       const [manifest, catalog] = await Promise.all([
         fetchJson<PluginManifestInput>(
           fetcher,
-          rawFileUrl(env, manifestPath, manifestFile.sha),
+          rawFileUrl(env, manifestPath, manifestFile.sha, resolvedRef),
           `${id} manifest`,
         ),
         fetchJson<PluginCatalogInput>(
           fetcher,
-          rawFileUrl(env, catalogPath, catalogFile.sha),
+          rawFileUrl(env, catalogPath, catalogFile.sha, resolvedRef),
           `${id} catalog metadata`,
         ),
       ]);
@@ -161,7 +171,7 @@ export const discoverCatalogSources = async (
           300,
         ),
         archiveSize: archiveFile.size,
-        archiveUrl: rawFileUrl(env, archivePath, archiveFile.sha),
+        archiveUrl: rawFileUrl(env, archivePath, archiveFile.sha, resolvedRef),
         sourceUrl: repositoryFileUrl(env, `plugins/${id}`),
       };
     }),

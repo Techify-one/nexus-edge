@@ -14,8 +14,8 @@ the `main` branch, D1, `workers/core/wrangler.production.jsonc`, the Worker
 The same workflow publishes the separate public plugin catalog Worker
 `nexus-edge-plugins` from `workers/plugin-catalog/wrangler.production.jsonc` at
 `https://nexus-edge-plugins.francisconeto.workers.dev`. It binds the production
-D1 only for the isolated `plugin_catalog_downloads` counter table. Plugin files
-and public metadata are not copied into that Worker: it discovers
+D1 for the isolated counter and last-known-source-cache tables. Plugin files
+and public metadata are not compiled into that Worker: it discovers
 `plugins/*/{catalog.json,manifest.json,release/*.plugin.zip}` directly from the
 public GitHub `main` branch at runtime.
 
@@ -41,8 +41,9 @@ GitHub Actions fails, stop and report or fix the failing commit, then push the
 fix; never bypass the failed workflow with a direct publish.
 
 The catalog shares the existing production D1. Its runtime code accesses only
-the service-scoped `plugin_catalog_downloads` table, its migration is additive,
-and it does not query Core or plugin business tables.
+the service-scoped `plugin_catalog_downloads` and
+`plugin_catalog_source_cache` tables, its migrations are additive, and it does
+not query Core or plugin business tables.
 
 ## 1. Initial provisioning and exceptional environments
 
