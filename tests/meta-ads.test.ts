@@ -5,6 +5,7 @@ import { mapWithConcurrency } from "../workers/plugin-meta_ads/src/index.js";
 import {
   discoverAccounts,
   extractMetaPurchases,
+  listInsights,
   normalizeAccountId,
   validateDateRange,
 } from "../workers/plugin-meta_ads/src/meta-client.js";
@@ -125,6 +126,32 @@ describe("Meta Ads plugin", () => {
     expect(() => validateDateRange("2024-01-01", "2026-08-22")).toThrow("366");
   });
 
+  it("uses Meta's maximum preset for the all-time period", async () => {
+    let requestedUrl = "";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        requestedUrl = String(input);
+        return Response.json({ data: [] });
+      }),
+    );
+
+    await listInsights(
+      {
+        DATABASE_PROVIDER: "d1",
+        META_ACCESS_TOKEN: "private-token",
+        META_API_VERSION: "v25.0",
+      },
+      "act_123456789",
+      ["123456789"],
+      { kind: "maximum" },
+    );
+
+    const params = new URL(requestedUrl).searchParams;
+    expect(params.get("date_preset")).toBe("maximum");
+    expect(params.has("time_range")).toBe(false);
+  });
+
   it("bounds Meta fan-out instead of opening one request per campaign", async () => {
     let active = 0;
     let maximum = 0;
@@ -187,6 +214,13 @@ describe("Meta Ads plugin", () => {
       "relative inline-flex h-7 w-12 shrink-0 items-center",
     );
     expect(dashboard).toContain("absolute left-1 top-1 h-5 w-5");
+    expect(dashboard).toContain('<option value="all">');
+    expect(dashboard).toContain("metaAds.date.all");
+    expect(dashboard).toContain("mb-1 flex h-5 items-center");
+    expect(dashboard).toContain(
+      'document.addEventListener("pointerdown", closeWhenClickingOutside)',
+    );
+    expect(dashboard).toContain("details.open = false");
     expect(table).toContain("sticky right-0");
     expect(table).toContain('title={t("table.columns")}');
     expect(shell).toContain("nexus.sidebar.hidden");

@@ -56,7 +56,14 @@ export type MetaInsight = {
         value?: string | undefined;
     }> | undefined;
 };
-export declare function listInsights(env: MetaAdsBindings, accountId: string, adIds: string[], since: string, until: string, signal?: AbortSignal): Promise<MetaInsight[]>;
+export type MetaInsightPeriod = {
+    kind: "maximum";
+} | {
+    kind: "range";
+    since: string;
+    until: string;
+};
+export declare function listInsights(env: MetaAdsBindings, accountId: string, adIds: string[], period: MetaInsightPeriod, signal?: AbortSignal): Promise<MetaInsight[]>;
 export declare function getObjectAccountId(env: MetaAdsBindings, objectId: string): Promise<string>;
 export declare function setObjectStatus(env: MetaAdsBindings, objectId: string, status: "ACTIVE" | "PAUSED"): Promise<void>;
 export declare function validateDateRange(since: string, until: string): void;

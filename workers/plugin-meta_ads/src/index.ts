@@ -39,6 +39,7 @@ const insightQueryInput = z.object({
   adIds: z.array(z.string().trim()).min(1).max(2_000),
   since: z.string().trim(),
   until: z.string().trim(),
+  allTime: z.boolean().optional().default(false),
   hideTestData: z.boolean().optional().default(true),
 });
 
@@ -130,8 +131,9 @@ const insightItems = async (
   adIds: string[],
   since: string,
   until: string,
+  allTime = false,
 ) => {
-  validateDateRange(since, until);
+  if (!allTime) validateDateRange(since, until);
   const batches: Array<{ accountId: string; adIds: string[] }> = [];
   for (const accountId of accountIds)
     for (let offset = 0; offset < adIds.length; offset += 100)
@@ -141,8 +143,7 @@ const insightItems = async (
       c.env,
       batch.accountId,
       batch.adIds,
-      since,
-      until,
+      allTime ? { kind: "maximum" } : { kind: "range", since, until },
       c.req.raw.signal,
     ),
   );
@@ -157,7 +158,7 @@ const insightItems = async (
 };
 
 app.get("/health", (c) =>
-  c.json({ ok: true, plugin: "meta_ads", version: "1.0.1" }),
+  c.json({ ok: true, plugin: "meta_ads", version: "1.0.2" }),
 );
 
 app.use("/*", async (c, next) => {
@@ -375,8 +376,11 @@ export const metaAdsRoutes = new Hono<MetaAdsEnv>()
     const adIds = parseCsv(c.req.query("adIds"), 500);
     const since = c.req.query("since") || "";
     const until = c.req.query("until") || "";
+    const allTime =
+      c.req.query("allTime") === "true" ||
+      c.req.query("datePreset") === "maximum";
     return c.json({
-      items: await insightItems(c, accountIds, adIds, since, until),
+      items: await insightItems(c, accountIds, adIds, since, until, allTime),
     });
   })
   .post("/insights/query", async (c) => {
@@ -390,6 +394,7 @@ export const metaAdsRoutes = new Hono<MetaAdsEnv>()
         [...new Set(input.adIds)],
         input.since,
         input.until,
+        input.allTime,
       ),
     });
   })

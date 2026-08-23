@@ -354,6 +354,29 @@ export const OPENAPI_DOCUMENT = {
     },
     "/api/v1/p/meta_ads/insights/query": {
       post: {
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["accountIds", "adIds", "since", "until"],
+                properties: {
+                  accountIds: { type: "array", items: { type: "string" } },
+                  adIds: { type: "array", items: { type: "string" } },
+                  since: { type: "string", format: "date" },
+                  until: { type: "string", format: "date" },
+                  allTime: {
+                    type: "boolean",
+                    description:
+                      "Use Meta's maximum date preset instead of the explicit date range.",
+                  },
+                  hideTestData: { type: "boolean" },
+                },
+              },
+            },
+          },
+        },
         responses: {
           "200": { description: "Batched Meta ad performance insights" },
         },

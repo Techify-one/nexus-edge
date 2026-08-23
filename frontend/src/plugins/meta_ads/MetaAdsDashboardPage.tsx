@@ -28,7 +28,8 @@ import { api } from "../../lib/api/core-client.js";
 import type { Ad, AdAccount, AdSet, Campaign, Insight } from "./types.js";
 
 type DatePreset =
-  "today" | "yesterday" | "last7" | "last30" | "lastYear" | "custom";
+  "today" | "yesterday" | "last7" | "last30" | "lastYear" | "all" | "custom";
+type DateRange = { since: string; until: string; allTime?: boolean };
 const TABLE_PAGE_SIZE = 100;
 
 type InsightRow = Insight & {
@@ -81,9 +82,11 @@ const readUrlFilters = (search = window.location.search): UrlFilters => {
         ? "last30"
         : date === "last_year" || date === "lastYear"
           ? "lastYear"
-          : date === "__range" || date === "custom"
-            ? "custom"
-            : "last7";
+          : date === "maximum" || date === "all"
+            ? "all"
+            : date === "__range" || date === "custom"
+              ? "custom"
+              : "last7";
   const accounts = csvParam(params, "accounts");
   const campaigns = csvParam(params, "campaigns");
   return {
@@ -128,6 +131,7 @@ const urlDatePreset = (preset: DatePreset): string => {
   if (preset === "last7") return "last_7d";
   if (preset === "last30") return "last_30d";
   if (preset === "lastYear") return "last_year";
+  if (preset === "all") return "maximum";
   if (preset === "custom") return "__range";
   return preset;
 };
@@ -158,7 +162,7 @@ const rangeFor = (
   preset: DatePreset,
   customSince: string,
   customUntil: string,
-) => {
+): DateRange => {
   const today = isoDate(new Date());
   if (preset === "today") return { since: today, until: today };
   if (preset === "yesterday") {
@@ -167,6 +171,8 @@ const rangeFor = (
   }
   if (preset === "last30") return { since: daysAgo(29), until: today };
   if (preset === "lastYear") return { since: daysAgo(364), until: today };
+  if (preset === "all")
+    return { since: daysAgo(364), until: today, allTime: true };
   if (preset === "custom")
     return { since: customSince, until: customUntil || customSince };
   return { since: daysAgo(6), until: today };
@@ -194,6 +200,21 @@ function SelectionPanel<T extends { id: string; name: string }>({
   clearLabel: string;
 }) {
   const [search, setSearch] = useState("");
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const closeWhenClickingOutside = (event: PointerEvent) => {
+      const details = detailsRef.current;
+      if (
+        details?.open &&
+        event.target instanceof Node &&
+        !details.contains(event.target)
+      )
+        details.open = false;
+    };
+    document.addEventListener("pointerdown", closeWhenClickingOutside);
+    return () =>
+      document.removeEventListener("pointerdown", closeWhenClickingOutside);
+  }, []);
   const visible = items.filter((item) =>
     item.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()),
   );
@@ -201,15 +222,15 @@ function SelectionPanel<T extends { id: string; name: string }>({
   const selectedItems = items.filter((item) => selected.has(item.id));
   return (
     <div className="min-w-0">
-      <div className="mb-1 flex items-center justify-between gap-2">
+      <div className="mb-1 flex h-5 items-center justify-between gap-2">
         <span className="truncate text-[11px] uppercase tracking-wide">
-          <Label>{label}</Label>
+          {label}
         </span>
         <span className="shrink-0 text-[11px] text-slate-500">
           {selected.size}/{items.length}
         </span>
       </div>
-      <details className="group relative">
+      <details ref={detailsRef} className="group relative">
         <summary
           className={`flex min-h-10 list-none items-center gap-2 rounded-xl border bg-white px-3 py-2 text-sm shadow-sm outline-none transition focus:ring-2 focus:ring-indigo-500 [&::-webkit-details-marker]:hidden ${disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:border-slate-300"}`}
           aria-disabled={disabled}
@@ -536,6 +557,7 @@ export default function MetaAdsDashboardPage() {
       debouncedAdKey,
       range.since,
       range.until,
+      range.allTime ?? false,
       hideTestData,
     ],
     ...META_QUERY_POLICY,
@@ -552,6 +574,7 @@ export default function MetaAdsDashboardPage() {
           adIds: requestedAdIds,
           since: range.since,
           until: range.until,
+          allTime: range.allTime ?? false,
           hideTestData,
         }),
       }),
@@ -884,12 +907,14 @@ export default function MetaAdsDashboardPage() {
           clearLabel={t("metaAds.filters.clear")}
         />
         <div className="min-w-0">
-          <label
-            htmlFor="meta-date-preset"
-            className="mb-1 block truncate text-[11px] uppercase tracking-wide"
-          >
-            {t("metaAds.filters.date")}
-          </label>
+          <div className="mb-1 flex h-5 items-center">
+            <label
+              htmlFor="meta-date-preset"
+              className="truncate text-[11px] uppercase tracking-wide"
+            >
+              {t("metaAds.filters.date")}
+            </label>
+          </div>
           <div className="relative">
             <Select
               id="meta-date-preset"
@@ -902,6 +927,7 @@ export default function MetaAdsDashboardPage() {
               <option value="last7">{t("metaAds.date.last7")}</option>
               <option value="last30">{t("metaAds.date.last30")}</option>
               <option value="lastYear">{t("metaAds.date.lastYear")}</option>
+              <option value="all">{t("metaAds.date.all")}</option>
               <option value="custom">{t("metaAds.date.custom")}</option>
             </Select>
             {preset === "custom" && (

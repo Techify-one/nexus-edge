@@ -283,24 +283,35 @@ export type MetaInsight = {
     | undefined;
 };
 
+export type MetaInsightPeriod =
+  { kind: "maximum" } | { kind: "range"; since: string; until: string };
+
 export async function listInsights(
   env: MetaAdsBindings,
   accountId: string,
   adIds: string[],
-  since: string,
-  until: string,
+  period: MetaInsightPeriod,
   signal?: AbortSignal,
 ): Promise<MetaInsight[]> {
   const filtering = JSON.stringify([
     { field: "ad.id", operator: "IN", value: adIds.map(assertObjectId) },
   ]);
+  const periodParams =
+    period.kind === "maximum"
+      ? { date_preset: "maximum" }
+      : {
+          time_range: JSON.stringify({
+            since: period.since,
+            until: period.until,
+          }),
+        };
   return getAll(
     env,
     `/${normalizeAccountId(accountId)}/insights`,
     {
       level: "ad",
       fields: "ad_id,ad_name,spend,inline_link_clicks,impressions,actions",
-      time_range: JSON.stringify({ since, until }),
+      ...periodParams,
       filtering,
     },
     signal,

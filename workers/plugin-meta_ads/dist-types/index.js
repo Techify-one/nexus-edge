@@ -22,6 +22,7 @@ const insightQueryInput = z.object({
     adIds: z.array(z.string().trim()).min(1).max(2_000),
     since: z.string().trim(),
     until: z.string().trim(),
+    allTime: z.boolean().optional().default(false),
     hideTestData: z.boolean().optional().default(true),
 });
 export async function mapWithConcurrency(items, concurrency, task) {
@@ -67,13 +68,14 @@ const assertConfiguredCampaigns = async (c, accountIds, campaignIds) => {
     if (campaignIds.some((campaignId) => !allowed.has(campaignId)))
         throw new MetaApiError("AD_ACCOUNT_NOT_CONFIGURED", "One or more campaigns do not belong to a requested enabled ad account.", 403);
 };
-const insightItems = async (c, accountIds, adIds, since, until) => {
-    validateDateRange(since, until);
+const insightItems = async (c, accountIds, adIds, since, until, allTime = false) => {
+    if (!allTime)
+        validateDateRange(since, until);
     const batches = [];
     for (const accountId of accountIds)
         for (let offset = 0; offset < adIds.length; offset += 100)
             batches.push({ accountId, adIds: adIds.slice(offset, offset + 100) });
-    const rows = await mapWithConcurrency(batches, 3, (batch) => listInsights(c.env, batch.accountId, batch.adIds, since, until, c.req.raw.signal));
+    const rows = await mapWithConcurrency(batches, 3, (batch) => listInsights(c.env, batch.accountId, batch.adIds, allTime ? { kind: "maximum" } : { kind: "range", since, until }, c.req.raw.signal));
     return rows.flat().map((row) => ({
         adId: row.ad_id,
         adName: row.ad_name || row.ad_id,
@@ -83,7 +85,7 @@ const insightItems = async (c, accountIds, adIds, since, until) => {
         purchases: extractMetaPurchases(row.actions),
     }));
 };
-app.get("/health", (c) => c.json({ ok: true, plugin: "meta_ads", version: "1.0.1" }));
+app.get("/health", (c) => c.json({ ok: true, plugin: "meta_ads", version: "1.0.2" }));
 app.use("/*", async (c, next) => {
     if (c.req.path === "/health")
         return next();
@@ -231,8 +233,10 @@ export const metaAdsRoutes = new Hono()
     const adIds = parseCsv(c.req.query("adIds"), 500);
     const since = c.req.query("since") || "";
     const until = c.req.query("until") || "";
+    const allTime = c.req.query("allTime") === "true" ||
+        c.req.query("datePreset") === "maximum";
     return c.json({
-        items: await insightItems(c, accountIds, adIds, since, until),
+        items: await insightItems(c, accountIds, adIds, since, until, allTime),
     });
 })
     .post("/insights/query", async (c) => {
@@ -240,7 +244,7 @@ export const metaAdsRoutes = new Hono()
     const input = insightQueryInput.parse(await c.req.json());
     const accountIds = await assertConfiguredAccounts(c, input.accountIds);
     return c.json({
-        items: await insightItems(c, accountIds, [...new Set(input.adIds)], input.since, input.until),
+        items: await insightItems(c, accountIds, [...new Set(input.adIds)], input.since, input.until, input.allTime),
     });
 })
     .post("/status", async (c) => {

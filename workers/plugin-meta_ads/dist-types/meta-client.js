@@ -120,14 +120,22 @@ export const listAdSets = (env, campaignId, signal) => getAll(env, `/${assertObj
 export const listAds = (env, campaignId, signal) => getAll(env, `/${assertObjectId(campaignId)}/ads`, {
     fields: "id,name,status,effective_status,campaign_id,adset_id,creative{id,thumbnail_url,image_url}",
 }, signal);
-export async function listInsights(env, accountId, adIds, since, until, signal) {
+export async function listInsights(env, accountId, adIds, period, signal) {
     const filtering = JSON.stringify([
         { field: "ad.id", operator: "IN", value: adIds.map(assertObjectId) },
     ]);
+    const periodParams = period.kind === "maximum"
+        ? { date_preset: "maximum" }
+        : {
+            time_range: JSON.stringify({
+                since: period.since,
+                until: period.until,
+            }),
+        };
     return getAll(env, `/${normalizeAccountId(accountId)}/insights`, {
         level: "ad",
         fields: "ad_id,ad_name,spend,inline_link_clicks,impressions,actions",
-        time_range: JSON.stringify({ since, until }),
+        ...periodParams,
         filtering,
     }, signal);
 }
