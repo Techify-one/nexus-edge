@@ -26,7 +26,7 @@ const initials = (name: string): string =>
     .toLocaleUpperCase("pt-BR");
 
 const pluginCard = (plugin: PublicCatalogPlugin): string => `
-  <article class="plugin-card">
+  <article class="plugin-card" data-plugin-card>
     <div class="plugin-card__top">
       <div class="plugin-icon" aria-hidden="true">${escapeHtml(initials(plugin.name))}</div>
       <div class="plugin-heading">
@@ -72,8 +72,21 @@ export const renderCatalogPage = (
     0,
   );
   const cards = plugins.length
-    ? plugins.map(pluginCard).join("")
+    ? `${plugins.map(pluginCard).join("")}<div class="empty filter-empty" data-filter-empty hidden><h2>Nenhum plugin encontrado</h2><p>Tente buscar por outro nome, categoria ou descrição.</p></div>`
     : `<div class="empty"><h2>Nenhum plugin publicado</h2><p>Os plugins aparecerão aqui assim que seguirem o contrato público da pasta <code>plugins/&lt;id&gt;/</code>.</p></div>`;
+  const catalogTools = plugins.length
+    ? `<div class="hero-tools">
+        <label class="search" for="plugin-search">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+          <span class="sr-only">Buscar plugins</span>
+          <input id="plugin-search" type="search" placeholder="Buscar plugins" autocomplete="off" spellcheck="false" aria-controls="plugin-grid">
+        </label>
+        <div class="stats" aria-label="Resumo do catálogo">
+          <span class="stat" aria-live="polite"><strong data-filter-count>${plugins.length}</strong><span data-filter-label>${plugins.length === 1 ? "plugin disponível" : "plugins disponíveis"}</span></span>
+          <span class="stat"><strong data-total-downloads>${escapeHtml(formatDownloads(totalDownloads))}</strong>downloads realizados</span>
+        </div>
+      </div>`
+    : `<div class="stats" aria-label="Resumo do catálogo"><span class="stat"><strong>0</strong>plugins disponíveis</span></div>`;
 
   return `<!doctype html>
 <html lang="pt-BR">
@@ -122,6 +135,7 @@ export const renderCatalogPage = (
     .github-link svg { width: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
     .hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 36px; padding: 26px 0 22px; border-bottom: 1px solid var(--line); }
     .hero-copy { min-width: 0; }
+    .hero-tools { display: grid; gap: 8px; justify-items: end; }
     .live { display: inline-flex; align-items: center; gap: 7px; padding: 5px 9px; border: 1px solid rgba(8, 127, 91, .16); border-radius: 999px; color: var(--green); background: rgba(236, 253, 245, .78); font-size: 10px; font-weight: 800; letter-spacing: .045em; text-transform: uppercase; }
     .live::before { content: ""; width: 7px; height: 7px; border-radius: 999px; background: #10b981; box-shadow: 0 0 0 4px rgba(16, 185, 129, .12); }
     h1 { margin: 10px 0 7px; font-size: clamp(34px, 4.2vw, 48px); line-height: 1; letter-spacing: -.055em; }
@@ -129,6 +143,12 @@ export const renderCatalogPage = (
     .stats { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
     .stat { min-width: 116px; padding: 9px 12px; border: 1px solid rgba(203, 213, 225, .74); border-radius: 11px; background: rgba(255,255,255,.62); color: #697386; font-size: 11px; line-height: 1.2; text-align: left; }
     .stat strong { display: block; margin-bottom: 2px; color: var(--ink); font-size: 17px; line-height: 1; }
+    .search { position: relative; display: block; width: 320px; max-width: 100%; }
+    .search svg { position: absolute; top: 50%; left: 13px; width: 17px; transform: translateY(-50%); fill: none; stroke: #7b8495; stroke-width: 2; stroke-linecap: round; pointer-events: none; }
+    .search input { width: 100%; height: 40px; padding: 0 13px 0 40px; border: 1px solid rgba(203, 213, 225, .9); border-radius: 11px; color: var(--ink); background: rgba(255, 255, 255, .82); font: inherit; font-size: 14px; outline: none; box-shadow: 0 5px 16px rgba(35, 43, 70, .05); transition: border-color .16s ease, box-shadow .16s ease, background .16s ease; }
+    .search input::placeholder { color: #8a94a7; }
+    .search input:focus { border-color: #818cf8; background: #fff; box-shadow: 0 0 0 3px rgba(99, 102, 241, .13), 0 7px 20px rgba(35, 43, 70, .07); }
+    [hidden] { display: none !important; }
     .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
     .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; padding: 20px 0 72px; }
     .plugin-card { display: flex; flex-direction: column; min-height: 360px; padding: 26px; border: 1px solid rgba(210, 216, 228, .9); border-radius: 22px; background: var(--surface); box-shadow: var(--shadow); backdrop-filter: blur(12px); transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
@@ -164,6 +184,8 @@ export const renderCatalogPage = (
       .shell { width: min(100% - 28px, 1120px); }
       .hero { grid-template-columns: 1fr; align-items: start; gap: 16px; padding: 20px 0 18px; }
       h1 { font-size: clamp(34px, 10vw, 44px); }
+      .hero-tools { width: 100%; justify-items: start; }
+      .search { width: 100%; }
       .stats { justify-content: flex-start; }
       .grid { grid-template-columns: 1fr; padding-top: 16px; padding-bottom: 56px; }
       .plugin-card { min-height: 0; padding: 22px; }
@@ -199,14 +221,11 @@ export const renderCatalogPage = (
         <h1>Plugins para Nexus Edge</h1>
         <p>Baixe extensões abertas e verificáveis direto do repositório oficial e instale o ZIP pelo painel Instalador.</p>
       </div>
-      <div class="stats" aria-label="Resumo do catálogo">
-        <span class="stat"><strong>${plugins.length}</strong>${plugins.length === 1 ? "plugin disponível" : "plugins disponíveis"}</span>
-        <span class="stat"><strong data-total-downloads>${escapeHtml(formatDownloads(totalDownloads))}</strong>downloads realizados</span>
-      </div>
+      ${catalogTools}
     </section>
     <section class="shell" aria-labelledby="catalog-title">
       <h2 class="sr-only" id="catalog-title">Plugins disponíveis</h2>
-      <div class="grid">${cards}</div>
+      <div class="grid" id="plugin-grid">${cards}</div>
     </section>
   </main>
   <footer>
@@ -217,6 +236,30 @@ export const renderCatalogPage = (
   </footer>
   <script nonce="${escapeHtml(nonce)}">
     const numberFormatter = new Intl.NumberFormat("pt-BR");
+    const normalizeSearch = (value) => value
+      .normalize("NFD")
+      .replace(/\\p{Diacritic}/gu, "")
+      .toLocaleLowerCase("pt-BR");
+    const searchInput = document.querySelector("#plugin-search");
+    const pluginCards = [...document.querySelectorAll("[data-plugin-card]")];
+    const filterEmpty = document.querySelector("[data-filter-empty]");
+    const filterCount = document.querySelector("[data-filter-count]");
+    const filterLabel = document.querySelector("[data-filter-label]");
+    function filterPlugins() {
+      const query = normalizeSearch(searchInput?.value.trim() ?? "");
+      let visible = 0;
+      for (const card of pluginCards) {
+        const matches = !query || normalizeSearch(card.textContent ?? "").includes(query);
+        card.hidden = !matches;
+        if (matches) visible += 1;
+      }
+      if (filterEmpty) filterEmpty.hidden = visible !== 0;
+      if (filterCount) filterCount.textContent = numberFormatter.format(visible);
+      if (filterLabel) filterLabel.textContent = query
+        ? visible === 1 ? "resultado encontrado" : "resultados encontrados"
+        : visible === 1 ? "plugin disponível" : "plugins disponíveis";
+    }
+    searchInput?.addEventListener("input", filterPlugins);
     async function refreshDownloadCounts() {
       try {
         const response = await fetch("/api/plugins", { cache: "no-store", headers: { Accept: "application/json" } });

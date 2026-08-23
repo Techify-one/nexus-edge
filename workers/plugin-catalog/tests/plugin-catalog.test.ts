@@ -153,6 +153,9 @@ describe("GitHub-backed plugin catalog", () => {
     expect(page.status).toBe(200);
     const pageHtml = await page.text();
     expect(pageHtml).toContain("<h1>Plugins para Nexus Edge</h1>");
+    expect(pageHtml).toContain('id="plugin-search"');
+    expect(pageHtml).toContain("data-plugin-card");
+    expect(pageHtml).toContain("function filterPlugins()");
     expect(pageHtml).not.toContain("catalog-heading");
     expect(pageHtml).not.toContain("Plugins para<br>Nexus Edge");
 
