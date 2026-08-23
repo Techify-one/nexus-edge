@@ -25,5 +25,17 @@ for (const dialect of ["d1", "postgres"]) {
 }
 mkdirSync("artifacts", { recursive: true });
 const output = `artifacts/${id}.plugin.zip`;
-writeFileSync(output, zipSync(files, { level: 9 }));
+// ZIP metadata defaults to the current time, which would change an otherwise
+// identical tracked artifact on every build. A fixed local date keeps package
+// bytes reproducible across developer machines and CI time zones.
+const stableMtime = new Date(2000, 0, 1, 0, 0, 0);
+writeFileSync(
+  output,
+  zipSync(files, {
+    level: 9,
+    mtime: stableMtime,
+    os: 3,
+    attrs: 0o644 << 16,
+  }),
+);
 process.stdout.write(`${output}\n`);

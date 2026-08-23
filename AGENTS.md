@@ -25,11 +25,24 @@ and rely only on tracked documentation and executable repository commands.
 - Use additive migrations and stop on migration, provider, binding, or smoke-test
   errors.
 - Before deployment, run `pnpm typecheck`, `pnpm test`, `pnpm test:matrix`,
-  `pnpm openapi:check`, `pnpm build`, and `pnpm verify:bundle`.
-- Publish the Core with `pnpm deploy:core` so dynamic `PLUGIN_*` Service Bindings
-  are preserved and verified.
+  `pnpm openapi:check`, `pnpm build`, `pnpm verify:artifacts`, and
+  `pnpm verify:bundle`.
+- Production deployments are GitHub-driven. When the owner requests deployment,
+  commit only the intended changes and push them to `main`; the
+  `deploy-production` job in `.github/workflows/ci.yml` validates the commit,
+  applies D1 migrations, publishes the Core, and runs production smoke tests.
+- Do not run `pnpm deploy:core`, `pnpm deploy:direct`, or `wrangler deploy`
+  locally for an ordinary production release. `pnpm deploy:core` is the
+  publishing implementation used by GitHub Actions and preserves/verifies
+  dynamic `PLUGIN_*` Service Bindings. A direct manual publish requires an
+  explicit owner request for an exceptional recovery or non-production target.
+- If GitHub Actions fails, stop and report or fix the failing commit; never
+  bypass a failed workflow with a local direct deployment.
 - Build plugin Workers with Wrangler dry-run and package them with
   `scripts/package-plugin.ts`; never substitute a raw Node bundle.
+- Commit every generated `artifacts/*.plugin.zip` with the plugin source that
+  produced it. Packaging must remain reproducible, and CI must reject stale or
+  missing tracked plugin artifacts.
 - Keep plugin Workers private with `workers_dev` and preview URLs disabled.
 - Every new or modified record-list table must follow
   `docs/DATA-TABLE-STANDARD.md` and use the canonical

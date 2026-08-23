@@ -22,6 +22,7 @@ jobs:
       - run: pnpm test:matrix
       - run: pnpm openapi:check
       - run: pnpm build
+      - run: pnpm verify:artifacts
       - run: pnpm verify:bundle
 
   deploy-production:

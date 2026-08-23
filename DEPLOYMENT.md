@@ -55,10 +55,14 @@ pnpm test:matrix
 pnpm openapi:check
 pnpm build:frontend
 pnpm build:plugins
+pnpm verify:artifacts
 pnpm verify:bundle
 ```
 
-The installable CRM artifact will be `artifacts/crm.plugin.zip`.
+The installable packages will be `artifacts/crm.plugin.zip` and
+`artifacts/meta_ads.plugin.zip`. They are reproducible tracked release outputs;
+commit them with the source that generated them. CI rebuilds and compares the
+packages so a stale or missing artifact blocks deployment.
 
 ## 3A. D1 path
 

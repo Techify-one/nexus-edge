@@ -177,8 +177,8 @@ pnpm --filter @app/plugin-inventory build
 node --import tsx scripts/package-plugin.ts inventory
 ```
 
-The resulting `artifacts/inventory.plugin.zip` must contain exactly the expected
-install inputs:
+The resulting `artifacts/inventory.plugin.zip` is a reproducible, versioned
+release output and must contain exactly the expected install inputs:
 
 ```text
 manifest.json
@@ -189,8 +189,10 @@ migrations/postgres/*.sql
 
 Do not hand-build the ZIP or package TypeScript source as `worker.mjs`. The raw
 combined install input must not exceed 4 MiB, and the gzipped Worker must not
-exceed 3 MiB. Artifacts are local build outputs and must not contain source
-maps, credentials, `.dev.vars`, environment files, or unrelated files.
+exceed 3 MiB. Commit every generated `artifacts/*.plugin.zip` with its plugin
+source. CI rebuilds the deterministic packages and rejects stale, missing, or
+untracked plugin artifacts. Packages must not contain source maps, credentials,
+`.dev.vars`, environment files, or unrelated files.
 
 The Installer archives these exact validated inputs in bounded chunks after the
 package-hash check. An administrator with `core.plugin.export` can later
@@ -215,6 +217,7 @@ pnpm test
 pnpm test:matrix
 pnpm openapi:check
 pnpm build
+pnpm verify:artifacts
 pnpm verify:bundle
 pnpm format:check
 ```
