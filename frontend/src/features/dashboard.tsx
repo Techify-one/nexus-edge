@@ -16,7 +16,7 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   GripVertical,
   KeyRound,
@@ -28,7 +28,7 @@ import {
   Webhook,
   type LucideIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { Card, Input, PageHeader, Skeleton } from "../components/ui/index.js";
@@ -114,6 +114,8 @@ type OverviewPreferenceResponse = {
   config: OverviewPreferenceConfig | null;
   updatedAt: string | number | null;
 };
+
+const overviewPreferenceQueryKey = ["me", "overview-preference"] as const;
 
 const normalizeSearch = (value: string) =>
   value
@@ -216,10 +218,10 @@ function SortableOverviewCard({ card }: { card: OverviewCard }) {
 
 export default function DashboardPage() {
   const { t } = useI18n();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [cardOrder, setCardOrder] = useState<string[]>([]);
   const [hydrated, setHydrated] = useState(false);
-  const skipNextSave = useRef(false);
   const latestConfig = useRef<OverviewPreferenceConfig>({
     version: 1,
     itemOrder: [],
@@ -231,7 +233,7 @@ export default function DashboardPage() {
       api<{ plugins: PluginNavigation[] }>("/api/v1/me/plugin-navigation"),
   });
   const preference = useQuery({
-    queryKey: ["me", "overview-preference"],
+    queryKey: overviewPreferenceQueryKey,
     queryFn: () =>
       api<OverviewPreferenceResponse>("/api/v1/me/overview-preference"),
   });
@@ -242,11 +244,19 @@ export default function DashboardPage() {
         method: "PUT",
         body: JSON.stringify(config),
       }),
-    onSuccess: (_response, config) => {
-      if (JSON.stringify(latestConfig.current) === JSON.stringify(config))
+    onSuccess: (response, config) => {
+      if (JSON.stringify(latestConfig.current) === JSON.stringify(config)) {
+        queryClient.setQueryData(overviewPreferenceQueryKey, response);
         shouldFlush.current = false;
+      }
     },
-    onError: () => toast.error(t("dashboard.orderSaveFailed")),
+    onError: (_error, config) => {
+      if (JSON.stringify(latestConfig.current) === JSON.stringify(config))
+        void queryClient.invalidateQueries({
+          queryKey: overviewPreferenceQueryKey,
+        });
+      toast.error(t("dashboard.orderSaveFailed"));
+    },
   });
   const coreCards: OverviewCard[] = coreModules
     .filter((module) => !module.permission || can(module.permission))
@@ -295,7 +305,6 @@ export default function DashboardPage() {
         preference.data?.config?.itemOrder,
         availableIds,
       );
-      skipNextSave.current = true;
       latestConfig.current = { version: 1, itemOrder: normalized };
       setCardOrder(normalized);
       setHydrated(true);
@@ -315,22 +324,7 @@ export default function DashboardPage() {
     preference.isPending,
   ]);
 
-  const currentConfig = useMemo<OverviewPreferenceConfig>(
-    () => ({ version: 1, itemOrder: cardOrder }),
-    [cardOrder],
-  );
-  latestConfig.current = currentConfig;
-
-  useEffect(() => {
-    if (!hydrated) return;
-    if (skipNextSave.current) {
-      skipNextSave.current = false;
-      return;
-    }
-    shouldFlush.current = true;
-    const timer = window.setTimeout(() => savePreference(currentConfig), 300);
-    return () => window.clearTimeout(timer);
-  }, [currentConfig, hydrated, savePreference]);
+  latestConfig.current = { version: 1, itemOrder: cardOrder };
 
   const flushPreference = useCallback(() => {
     if (!hydrated || !shouldFlush.current) return;
@@ -345,10 +339,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     window.addEventListener("pagehide", flushPreference);
-    return () => {
-      window.removeEventListener("pagehide", flushPreference);
-      flushPreference();
-    };
+    return () => window.removeEventListener("pagehide", flushPreference);
   }, [flushPreference]);
 
   const cardById = new Map(cards.map((card) => [card.id, card]));
@@ -370,9 +361,23 @@ export default function DashboardPage() {
   );
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return;
-    setCardOrder((current) =>
-      reorderOverviewCardIds(current, String(active.id), String(over.id)),
+    const itemOrder = reorderOverviewCardIds(
+      latestConfig.current.itemOrder,
+      String(active.id),
+      String(over.id),
     );
+    const config: OverviewPreferenceConfig = { version: 1, itemOrder };
+    latestConfig.current = config;
+    shouldFlush.current = true;
+    setCardOrder(itemOrder);
+    queryClient.setQueryData<OverviewPreferenceResponse>(
+      overviewPreferenceQueryKey,
+      (current) => ({
+        config,
+        updatedAt: current?.updatedAt ?? null,
+      }),
+    );
+    savePreference(config);
   };
   const loading =
     !hydrated && (pluginNavigation.isPending || preference.isPending);
