@@ -196,9 +196,15 @@ describe("Meta Ads plugin", () => {
     );
     expect(dashboard).toContain('role="switch"');
     expect(dashboard).toContain(
-      "relative inline-flex h-6 w-11 shrink-0 items-center",
+      "app-switch relative inline-flex h-6 w-11 shrink-0 items-center",
     );
-    expect(dashboard).toContain("absolute left-0.5 top-0.5 h-5 w-5");
+    expect(dashboard).toContain(
+      "app-switch-thumb absolute left-0.5 top-0.5 h-5 w-5",
+    );
+    expect(dashboard).toContain("data-checked={hideTestData}");
+    expect(dashboard).not.toContain(
+      'hideTestData ? "bg-indigo-600" : "bg-slate-300"',
+    );
     expect(dashboard).toContain("metaAds.hideTestData");
     expect(dashboard).toContain("setSearchParams(params, { replace: true })");
     expect(dashboard).toContain('method: "POST"');

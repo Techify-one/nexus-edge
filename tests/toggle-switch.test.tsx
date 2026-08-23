@@ -27,6 +27,7 @@ describe("status switch", () => {
 
     expect(css).toContain(".app-switch {");
     expect(css).toContain('.app-switch[aria-checked="true"]');
+    expect(css).toContain('.app-switch[data-checked="true"]');
     expect(css).toContain(".app-switch-thumb {");
     expect(css).toContain("html.dark .app-switch");
   });

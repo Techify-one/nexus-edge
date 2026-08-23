@@ -711,25 +711,25 @@ export default function MetaAdsDashboardPage() {
         description={t("metaAds.description")}
         action={
           <div className="flex flex-wrap gap-2">
-            <button
+            <Button
               type="button"
+              variant="secondary"
               role="switch"
               aria-checked={hideTestData}
               aria-label={t("metaAds.filters.hideTestDataHint")}
               title={t("metaAds.filters.hideTestDataHint")}
-              className="flex min-h-10 items-center gap-3 rounded-xl border bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="gap-3 px-3 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
               onClick={() => setHideTestData((current) => !current)}
             >
               {t("metaAds.filters.hideTestData")}
               <span
-                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition ${hideTestData ? "bg-indigo-600" : "bg-slate-300"}`}
+                className="app-switch relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors"
+                data-checked={hideTestData}
                 aria-hidden
               >
-                <span
-                  className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${hideTestData ? "translate-x-5" : "translate-x-0"}`}
-                />
+                <span className="app-switch-thumb absolute left-0.5 top-0.5 h-5 w-5 rounded-full transition-transform" />
               </span>
-            </button>
+            </Button>
             {can("meta_ads.account.read") && (
               <Button
                 variant="secondary"
