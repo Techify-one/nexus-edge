@@ -179,10 +179,34 @@ describe("Meta Ads plugin", () => {
     expect(dashboard).toContain('method: "POST"');
     expect(dashboard).toContain("pagedInsightRows");
     expect(dashboard).toContain("setCreativePreview");
+    expect(dashboard).toContain("metaAds.dashboard.filters.v1");
+    expect(dashboard).toContain("window.localStorage.setItem(");
+    expect(dashboard).toContain("row.creative?.image_url ||");
+    expect(dashboard).toContain("h-[min(520px,75vh)] w-full");
+    expect(dashboard).toContain(
+      "relative inline-flex h-7 w-12 shrink-0 items-center",
+    );
+    expect(dashboard).toContain("absolute left-1 top-1 h-5 w-5");
     expect(table).toContain("sticky right-0");
     expect(table).toContain('title={t("table.columns")}');
     expect(shell).toContain("nexus.sidebar.hidden");
     expect(shell).toContain('startsWith("/app/meta-ads")');
+  });
+
+  it("only reloads Meta data for filter changes or an explicit refresh", () => {
+    const dashboard = readFileSync(
+      "frontend/src/plugins/meta_ads/MetaAdsDashboardPage.tsx",
+      "utf8",
+    );
+
+    expect(dashboard).toContain("refetchInterval: false");
+    expect(dashboard).toContain("refetchOnMount: false");
+    expect(dashboard).toContain("refetchOnReconnect: false");
+    expect(dashboard).toContain("refetchOnWindowFocus: false");
+    expect(dashboard).toContain("client.setQueriesData");
+    expect(dashboard).toContain(
+      'client.invalidateQueries({ queryKey: ["meta-ads"] })',
+    );
   });
 
   it("manages the Meta token only through private Worker secrets", () => {

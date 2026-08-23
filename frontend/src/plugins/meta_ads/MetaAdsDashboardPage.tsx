@@ -46,11 +46,24 @@ type UrlFilters = {
   campaigns: string[];
   adsets: string[];
   ads: string[];
+  hasAdsets: boolean;
+  hasAds: boolean;
   preset: DatePreset;
   since: string;
   until: string;
   hideTestData: boolean | null;
 };
+
+const FILTER_STORAGE_KEY = "metaAds.dashboard.filters.v1";
+const META_QUERY_POLICY = {
+  staleTime: Infinity,
+  gcTime: 30 * 60_000,
+  retry: false,
+  refetchInterval: false,
+  refetchOnMount: false,
+  refetchOnReconnect: false,
+  refetchOnWindowFocus: false,
+} as const;
 
 const csvParam = (params: URLSearchParams, key: string): string[] =>
   (params.get(key) || "")
@@ -58,8 +71,8 @@ const csvParam = (params: URLSearchParams, key: string): string[] =>
     .map((value) => value.trim())
     .filter(Boolean);
 
-const readUrlFilters = (): UrlFilters => {
-  const params = new URLSearchParams(window.location.search);
+const readUrlFilters = (search = window.location.search): UrlFilters => {
+  const params = new URLSearchParams(search);
   const date = params.get("date") || "last_7d";
   const preset: DatePreset =
     date === "today" || date === "yesterday"
@@ -86,6 +99,8 @@ const readUrlFilters = (): UrlFilters => {
         : [],
     adsets: csvParam(params, "adsets"),
     ads: csvParam(params, "ads"),
+    hasAdsets: params.has("adsets"),
+    hasAds: params.has("ads"),
     preset,
     since: params.get("from") || daysAgo(6),
     until: params.get("to") || isoDate(new Date()),
@@ -96,6 +111,17 @@ const readUrlFilters = (): UrlFilters => {
           ? false
           : null,
   };
+};
+
+const readInitialFilters = (): UrlFilters => {
+  if (window.location.search.length > 1) return readUrlFilters();
+  try {
+    const stored = window.localStorage.getItem(FILTER_STORAGE_KEY);
+    if (stored) return readUrlFilters(stored);
+  } catch {
+    // URL/default filters remain available when browser storage is blocked.
+  }
+  return readUrlFilters();
 };
 
 const urlDatePreset = (preset: DatePreset): string => {
@@ -289,7 +315,7 @@ export default function MetaAdsDashboardPage() {
   const client = useQueryClient();
   const initialUrlFiltersRef = useRef<UrlFilters | null>(null);
   if (!initialUrlFiltersRef.current)
-    initialUrlFiltersRef.current = readUrlFilters();
+    initialUrlFiltersRef.current = readInitialFilters();
   const initialUrlFilters = initialUrlFiltersRef.current;
   const initialAdSetsApplied = useRef(false);
   const initialAdsApplied = useRef(false);
@@ -338,14 +364,21 @@ export default function MetaAdsDashboardPage() {
     };
     setList("accounts", selectedAccounts);
     setList("campaigns", selectedCampaigns);
-    setList("adsets", selectedAdSets);
-    setList("ads", selectedAds);
+    if (selectedCampaigns.size) {
+      params.set("adsets", [...selectedAdSets].sort().join(","));
+      params.set("ads", [...selectedAds].sort().join(","));
+    }
     params.set("date", urlDatePreset(preset));
     if (preset === "custom") {
       if (customSince) params.set("from", customSince);
       if (customUntil) params.set("to", customUntil);
     }
     params.set("internal", hideTestData ? "1" : "0");
+    try {
+      window.localStorage.setItem(FILTER_STORAGE_KEY, params.toString());
+    } catch {
+      // The URL remains the source of truth when browser storage is blocked.
+    }
     setSearchParams(params, { replace: true });
   }, [
     customSince,
@@ -361,8 +394,7 @@ export default function MetaAdsDashboardPage() {
 
   const accounts = useQuery({
     queryKey: ["meta-ads", "accounts"],
-    staleTime: 300_000,
-    retry: false,
+    ...META_QUERY_POLICY,
     queryFn: ({ signal }) =>
       api<{ items: AdAccount[] }>("/api/v1/p/meta_ads/accounts", { signal }),
   });
@@ -371,9 +403,18 @@ export default function MetaAdsDashboardPage() {
     [accounts.data?.items],
   );
   useEffect(() => {
-    if (selectedAccounts.size || !enabledAccounts.length) return;
-    setSelectedAccounts(new Set([enabledAccounts[0]!.adAccountId]));
-  }, [enabledAccounts, selectedAccounts.size]);
+    if (!accounts.isSuccess) return;
+    const enabledIds = new Set(
+      enabledAccounts.map((account) => account.adAccountId),
+    );
+    setSelectedAccounts((current) => {
+      const valid = new Set([...current].filter((id) => enabledIds.has(id)));
+      if (valid.size) return valid.size === current.size ? current : valid;
+      return enabledAccounts[0]
+        ? new Set([enabledAccounts[0].adAccountId])
+        : valid;
+    });
+  }, [accounts.isSuccess, enabledAccounts]);
 
   const accountIds = useMemo(
     () => [...selectedAccounts].sort(),
@@ -382,9 +423,8 @@ export default function MetaAdsDashboardPage() {
   const accountKey = accountIds.join(",");
   const campaigns = useQuery({
     queryKey: ["meta-ads", "campaigns", accountKey],
-    enabled: accountIds.length > 0,
-    retry: false,
-    staleTime: 300_000,
+    ...META_QUERY_POLICY,
+    enabled: accounts.isSuccess && accountIds.length > 0,
     queryFn: ({ signal }) =>
       api<{ items: Campaign[] }>(
         `/api/v1/p/meta_ads/campaigns?accountIds=${encodeURIComponent(accountIds.join(","))}`,
@@ -403,9 +443,8 @@ export default function MetaAdsDashboardPage() {
   );
   const adsets = useQuery({
     queryKey: ["meta-ads", "adsets", accountKey, debouncedCampaignKey],
+    ...META_QUERY_POLICY,
     enabled: accountIds.length > 0 && requestedCampaignIds.length > 0,
-    retry: false,
-    staleTime: 300_000,
     queryFn: ({ signal }) =>
       api<{ items: AdSet[] }>(
         `/api/v1/p/meta_ads/adsets?accountIds=${encodeURIComponent(accountIds.join(","))}&campaignIds=${encodeURIComponent(requestedCampaignIds.join(","))}`,
@@ -414,9 +453,8 @@ export default function MetaAdsDashboardPage() {
   });
   const ads = useQuery({
     queryKey: ["meta-ads", "ads", accountKey, debouncedCampaignKey],
+    ...META_QUERY_POLICY,
     enabled: accountIds.length > 0 && requestedCampaignIds.length > 0,
-    retry: false,
-    staleTime: 300_000,
     queryFn: ({ signal }) =>
       api<{ items: Ad[] }>(
         `/api/v1/p/meta_ads/ads?accountIds=${encodeURIComponent(accountIds.join(","))}&campaignIds=${encodeURIComponent(requestedCampaignIds.join(","))}`,
@@ -440,13 +478,17 @@ export default function MetaAdsDashboardPage() {
       const restored = initialUrlFilters.adsets.filter((id) =>
         available.has(id),
       );
-      if (restored.length) {
+      if (initialUrlFilters.hasAdsets) {
         setSelectedAdSets(new Set(restored));
         return;
       }
     }
     setSelectedAdSets(available);
-  }, [adsets.data?.items, initialUrlFilters.adsets]);
+  }, [
+    adsets.data?.items,
+    initialUrlFilters.adsets,
+    initialUrlFilters.hasAdsets,
+  ]);
   const visibleAds = useMemo(() => {
     const rows = ads.data?.items || [];
     if (!selectedAdSets.size) return rows;
@@ -458,13 +500,18 @@ export default function MetaAdsDashboardPage() {
     if (!initialAdsApplied.current) {
       initialAdsApplied.current = true;
       const restored = initialUrlFilters.ads.filter((id) => available.has(id));
-      if (restored.length) {
+      if (initialUrlFilters.hasAds) {
         setSelectedAds(new Set(restored));
         return;
       }
     }
     setSelectedAds(available);
-  }, [ads.data?.items, initialUrlFilters.ads, visibleAds]);
+  }, [
+    ads.data?.items,
+    initialUrlFilters.ads,
+    initialUrlFilters.hasAds,
+    visibleAds,
+  ]);
   useEffect(() => {
     if (selectedCampaigns.size) return;
     setSelectedAdSets((current) =>
@@ -491,12 +538,11 @@ export default function MetaAdsDashboardPage() {
       range.until,
       hideTestData,
     ],
+    ...META_QUERY_POLICY,
     enabled:
       accountIds.length > 0 &&
       requestedAdIds.length > 0 &&
       Boolean(range.since && range.until),
-    retry: false,
-    staleTime: 60_000,
     queryFn: ({ signal }) =>
       api<{ items: Insight[] }>("/api/v1/p/meta_ads/insights/query", {
         method: "POST",
@@ -581,9 +627,36 @@ export default function MetaAdsDashboardPage() {
         method: "POST",
         body: JSON.stringify(input),
       }),
-    onSuccess: () => {
+    onSuccess: (_, input) => {
       toast.success(t("metaAds.statusUpdated"));
-      void client.invalidateQueries({ queryKey: ["meta-ads"] });
+      const resource =
+        input.objectType === "campaign"
+          ? "campaigns"
+          : input.objectType === "adset"
+            ? "adsets"
+            : "ads";
+      client.setQueriesData<{
+        items: Array<{
+          id: string;
+          status: string;
+          effective_status: string;
+        }>;
+      }>({ queryKey: ["meta-ads", resource] }, (current) =>
+        current
+          ? {
+              ...current,
+              items: current.items.map((item) =>
+                item.id === input.objectId
+                  ? {
+                      ...item,
+                      status: input.status,
+                      effective_status: input.status,
+                    }
+                  : item,
+              ),
+            }
+          : current,
+      );
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -918,9 +991,11 @@ export default function MetaAdsDashboardPage() {
                 key: "creative",
                 label: t("metaAds.columns.creative"),
                 render: (row) => {
-                  const image =
+                  const thumbnail =
                     row.creative?.thumbnail_url || row.creative?.image_url;
-                  return image ? (
+                  const preview =
+                    row.creative?.image_url || row.creative?.thumbnail_url;
+                  return thumbnail && preview ? (
                     <button
                       type="button"
                       className="rounded-lg outline-none ring-indigo-500 focus:ring-2"
@@ -928,16 +1003,16 @@ export default function MetaAdsDashboardPage() {
                         name: row.adName,
                       })}
                       onMouseEnter={() =>
-                        setCreativePreview({ url: image, name: row.adName })
+                        setCreativePreview({ url: preview, name: row.adName })
                       }
                       onMouseLeave={() => setCreativePreview(null)}
                       onFocus={() =>
-                        setCreativePreview({ url: image, name: row.adName })
+                        setCreativePreview({ url: preview, name: row.adName })
                       }
                       onBlur={() => setCreativePreview(null)}
                     >
                       <img
-                        src={image}
+                        src={thumbnail}
                         alt={t("metaAds.columns.creativeAlt", {
                           name: row.adName,
                         })}
@@ -1053,7 +1128,7 @@ export default function MetaAdsDashboardPage() {
                   type="button"
                   role="switch"
                   aria-checked={row.status === "ACTIVE"}
-                  className={`relative h-7 w-12 rounded-full transition focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:cursor-wait disabled:opacity-60 ${row.status === "ACTIVE" ? "bg-emerald-500" : "bg-slate-300"}`}
+                  className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:cursor-wait disabled:opacity-60 ${row.status === "ACTIVE" ? "bg-emerald-500" : "bg-slate-300"}`}
                   disabled={setStatus.isPending}
                   onClick={() => {
                     const next = row.status === "ACTIVE" ? "PAUSED" : "ACTIVE";
@@ -1080,7 +1155,7 @@ export default function MetaAdsDashboardPage() {
                   }
                 >
                   <span
-                    className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${row.status === "ACTIVE" ? "translate-x-6" : "translate-x-1"}`}
+                    className={`absolute left-1 top-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${row.status === "ACTIVE" ? "translate-x-5" : "translate-x-0"}`}
                     aria-hidden
                   />
                 </button>
@@ -1094,11 +1169,11 @@ export default function MetaAdsDashboardPage() {
           className="pointer-events-none fixed inset-0 z-[100] grid place-items-center bg-slate-950/35 p-8 backdrop-blur-[1px]"
           aria-hidden
         >
-          <div className="max-w-[min(720px,80vw)] rounded-2xl border border-white/20 bg-white p-2 shadow-2xl">
+          <div className="w-[min(560px,88vw)] rounded-2xl border border-white/20 bg-white p-2 shadow-2xl">
             <img
               src={creativePreview.url}
               alt=""
-              className="max-h-[75vh] max-w-full rounded-xl object-contain"
+              className="h-[min(520px,75vh)] w-full rounded-xl object-contain"
               referrerPolicy="no-referrer"
             />
             <p className="max-w-xl truncate px-2 py-1 text-center text-sm font-medium text-slate-700">
