@@ -190,7 +190,8 @@ describe("Meta Ads plugin", () => {
       "utf8",
     );
 
-    expect(dashboard).toContain(
+    expect(dashboard).toContain("SingleLineFilterBar");
+    expect(dashboard).not.toContain(
       "xl:grid-cols-[0.8fr_1.15fr_1.05fr_1.2fr_0.75fr]",
     );
     expect(dashboard).toContain('role="switch"');

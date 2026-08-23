@@ -140,6 +140,17 @@ export const Card = ({
     {...props}
   />
 );
+export const SingleLineFilterBar = ({
+  children,
+  className,
+  ...props
+}: HTMLAttributes<HTMLDivElement>) => (
+  <Card className={twMerge("p-3", className)} {...props}>
+    <div className="flex flex-nowrap gap-3 [&>*]:min-w-0 [&>*]:flex-1">
+      {children}
+    </div>
+  </Card>
+);
 export const Badge = ({
   children,
   tone = "neutral",

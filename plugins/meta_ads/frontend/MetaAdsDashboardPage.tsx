@@ -20,6 +20,7 @@ import {
   Label,
   PageHeader,
   Select,
+  SingleLineFilterBar,
   Skeleton,
 } from "../../../frontend/src/components/ui/index.js";
 import { useI18n } from "../../../frontend/src/i18n/index.js";
@@ -772,7 +773,7 @@ export default function MetaAdsDashboardPage() {
         </Card>
       )}
 
-      <Card className="mb-4 grid gap-3 p-3 xl:grid-cols-[0.8fr_1.15fr_1.05fr_1.2fr_0.75fr]">
+      <SingleLineFilterBar className="mb-4">
         <SelectionPanel
           label={t("metaAds.filters.accounts")}
           items={enabledAccounts.map((account) => ({
@@ -958,7 +959,7 @@ export default function MetaAdsDashboardPage() {
             )}
           </div>
         </div>
-      </Card>
+      </SingleLineFilterBar>
 
       <div className="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[

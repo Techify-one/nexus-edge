@@ -168,6 +168,16 @@ record-list table must use `ConfigurableDataTable` with an immutable
 sorting, accessibility, and Core-owned per-user preferences. Do not introduce a
 plugin-specific table or preference store.
 
+### Filter layout standard
+
+Every plugin screen with two or more related filters must render them inside
+the shared `SingleLineFilterBar` from `frontend/src/components/ui/index.tsx`.
+Keep all filter controls in one compact, non-wrapping row; filters must never
+grow into a second row and push the screen's primary content down. Use compact
+labels, truncation, and popovers for complex choices. If additional filters no
+longer remain usable in that row, group secondary options into a single
+overflow or advanced-filter popover instead of stacking another row.
+
 Document plugin endpoints in the Core OpenAPI map and add API, permission, UI,
 and interaction tests in the same change.
 
