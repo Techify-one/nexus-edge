@@ -170,7 +170,7 @@ importers:
         version: link:../workers/core
       '@app/plugin-crm':
         specifier: workspace:*
-        version: link:../workers/plugin-crm
+        version: link:../plugins/crm
       '@casl/ability':
         specifier: 7.0.1
         version: 7.0.1
@@ -309,7 +309,7 @@ importers:
         specifier: 4.4.3
         version: 4.4.3
 
-  workers/plugin-crm:
+  plugins/crm:
     dependencies:
       '@app/api-contracts':
         specifier: workspace:*
@@ -327,7 +327,7 @@ importers:
         specifier: 4.4.3
         version: 4.4.3
 
-  workers/plugin-meta_ads:
+  plugins/meta_ads:
     dependencies:
       '@app/core-contract':
         specifier: workspace:*
@@ -342,7 +342,7 @@ importers:
         specifier: 4.4.3
         version: 4.4.3
 
-  workers/plugin-template:
+  plugins/template:
     dependencies:
       '@app/core-contract':
         specifier: workspace:*

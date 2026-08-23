@@ -40,9 +40,11 @@ and rely only on tracked documentation and executable repository commands.
   bypass a failed workflow with a local direct deployment.
 - Build plugin Workers with Wrangler dry-run and package them with
   `scripts/package-plugin.ts`; never substitute a raw Node bundle.
-- Commit every generated `artifacts/*.plugin.zip` with the plugin source that
-  produced it. Packaging must remain reproducible, and CI must reject stale or
-  missing tracked plugin artifacts.
+- Keep every plugin-specific Worker, frontend, manifest, migration, and release
+  artifact under its single `plugins/<plugin-id>/` directory.
+- Commit every generated `plugins/*/release/*.plugin.zip` with the plugin source
+  that produced it. Packaging must remain reproducible, and CI must reject
+  stale or missing tracked plugin artifacts.
 - Keep plugin Workers private with `workers_dev` and preview URLs disabled.
 - Every new or modified record-list table must follow
   `docs/DATA-TABLE-STANDARD.md` and use the canonical

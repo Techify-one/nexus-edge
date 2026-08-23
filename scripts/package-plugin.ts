@@ -5,7 +5,7 @@ import { gzipSync, strToU8, zipSync } from "fflate";
 const id = process.argv[2];
 if (!id || !/^[a-z][a-z0-9_]{1,31}$/u.test(id))
   throw new Error("Use: tsx scripts/package-plugin.ts <plugin-id>");
-const root = `workers/plugin-${id}`;
+const root = `plugins/${id}`;
 const workerPath = join(root, "dist", "index.js");
 const worker = readFileSync(workerPath);
 if (gzipSync(worker).byteLength > 3 * 1024 * 1024)
@@ -23,8 +23,9 @@ for (const dialect of ["d1", "postgres"]) {
     );
   }
 }
-mkdirSync("artifacts", { recursive: true });
-const output = `artifacts/${id}.plugin.zip`;
+const releaseDirectory = join(root, "release");
+mkdirSync(releaseDirectory, { recursive: true });
+const output = join(releaseDirectory, `${id}.plugin.zip`);
 // ZIP metadata defaults to the current time, which would change an otherwise
 // identical tracked artifact on every build. A fixed local date keeps package
 // bytes reproducible across developer machines and CI time zones.

@@ -5,8 +5,6 @@ dist/
 .env
 .env.*
 !.env.example
-artifacts/*
-!artifacts/*.plugin.zip
 backups/
 coverage/
 playwright-report/

@@ -3,15 +3,15 @@
   "compilerOptions": {
     "composite": true,
     "jsx": "react-jsx",
-    "rootDir": "src",
+    "rootDir": "..",
     "outDir": "dist/types",
     "declaration": true,
     "types": ["vite/client", "@cloudflare/workers-types"]
   },
-  "include": ["src"],
+  "include": ["src", "../plugins/*/frontend"],
   "references": [
     { "path": "../workers/core" },
-    { "path": "../workers/plugin-crm" },
-    { "path": "../workers/plugin-meta_ads" }
+    { "path": "../plugins/crm" },
+    { "path": "../plugins/meta_ads" }
   ]
 }

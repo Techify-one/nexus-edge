@@ -1,6 +1,11 @@
 # Interface internationalization
 
-The SPA uses a small, typed i18n layer in `frontend/src/i18n/index.tsx`. It prevents scattered user-facing strings, keeps the Workers bundle small, and exposes the same contract to Core screens and compiled plugin screens.
+The SPA uses a small, typed i18n layer in `frontend/src/i18n/index.tsx`. Core
+messages live there; each plugin keeps its screen-specific catalogs in
+`plugins/<plugin-id>/frontend/i18n.ts`, and the Core catalog composes them. This
+prevents scattered user-facing strings, keeps plugin concerns colocated, keeps
+the Workers bundle small, and exposes the same contract to Core screens and
+compiled plugin screens.
 
 ## Behavior
 
@@ -23,5 +28,10 @@ The SPA uses a small, typed i18n layer in `frontend/src/i18n/index.tsx`. It prev
 3. Register the catalog in `resources`.
 4. Add `language.<locale>` to every existing catalog.
 5. Run `pnpm typecheck`, `pnpm test`, and `pnpm build:frontend`.
+
+When changing a plugin screen, add both `pt-BR` and `en` messages in that
+plugin's `frontend/i18n.ts`. Keep Core-wide error, permission, and navigation
+messages in the Core catalog. A new language must also be added to every plugin
+catalog before it is registered in `resources`.
 
 `Record<TranslationKey, string>` makes the build fail when a new catalog omits a translation key. Business data, IDs, proper names, permission keys, and technical plugin messages must not be translated as interface text. System-owned values that are shown to users should be mapped to locale keys at the presentation layer.

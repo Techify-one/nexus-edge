@@ -15,7 +15,7 @@ describe("frontend deployment recovery", () => {
       "utf8",
     );
     const dashboard = readFileSync(
-      "frontend/src/plugins/meta_ads/MetaAdsDashboardPage.tsx",
+      "plugins/meta_ads/frontend/MetaAdsDashboardPage.tsx",
       "utf8",
     );
 

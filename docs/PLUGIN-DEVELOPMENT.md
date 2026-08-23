@@ -1,7 +1,7 @@
 # Plugin development and packaging
 
 This is the authoritative guide for creating installable Nexus Edge plugins.
-Start from `workers/plugin-template`; do not create a Worker, package layout, or
+Start from `plugins/template`; do not create a Worker, package layout, or
 build command from memory.
 
 Plugin UI is compiled into the Core SPA. The plugin Worker is a private backend
@@ -13,23 +13,23 @@ reached only through a Cloudflare Service Binding and the Core gateway at
 For an example plugin named `inventory`:
 
 ```bash
-cp -R workers/plugin-template workers/plugin-inventory
+cp -R plugins/template plugins/inventory
 ```
 
 Replace every template identifier consistently:
 
-| Location                              | Required value                    |
-| ------------------------------------- | --------------------------------- |
-| directory                             | `workers/plugin-inventory`        |
-| `package.json` name                   | `@app/plugin-inventory`           |
-| `manifest.json` id                    | `inventory`                       |
-| `manifest.json` table prefix          | `inventory_`                      |
-| Wrangler Worker name                  | `app-plugin-inventory`            |
-| permission prefix                     | `inventory.`                      |
-| Core binding created by the Installer | `PLUGIN_INVENTORY`                |
-| Core gateway                          | `/api/v1/p/inventory/*`           |
-| frontend directory                    | `frontend/src/plugins/inventory/` |
-| table preference IDs                  | `plugin.inventory.<resource>`     |
+| Location                              | Required value                |
+| ------------------------------------- | ----------------------------- |
+| directory                             | `plugins/inventory`           |
+| `package.json` name                   | `@app/plugin-inventory`       |
+| `manifest.json` id                    | `inventory`                   |
+| `manifest.json` table prefix          | `inventory_`                  |
+| Wrangler Worker name                  | `app-plugin-inventory`        |
+| permission prefix                     | `inventory.`                  |
+| Core binding created by the Installer | `PLUGIN_INVENTORY`            |
+| Core gateway                          | `/api/v1/p/inventory/*`       |
+| frontend directory                    | `plugins/inventory/frontend/` |
+| table preference IDs                  | `plugin.inventory.<resource>` |
 
 Plugin IDs must match `^[a-z][a-z0-9_]{1,31}$`. Released IDs, permission keys,
 migration IDs, route keys, table IDs, and data-column keys are persistent
@@ -82,7 +82,7 @@ bundle can leave dynamic `__require(...)` calls for modules such as `events`,
 valid package during the Installer's `deploying` stage. Wrangler converts
 supported Node compatibility imports into the Worker module format.
 
-Add the new `workers/plugin-<id>/dist/index.js` path to
+Add the new `plugins/<id>/dist/index.js` path to
 `scripts/verify-bundles.ts`. The verification must reject unsupported dynamic
 Node built-in requires. Add the plugin build and packaging command to the root
 build workflow so CI exercises the installable artifact.
@@ -112,7 +112,7 @@ URLs. Do not manually add a public route during development or installation.
 Create matching files for both providers:
 
 ```text
-workers/plugin-inventory/migrations/
+plugins/inventory/migrations/
   d1/0001_init.sql
   postgres/0001_init.sql
 ```
@@ -146,13 +146,16 @@ titles and route keys are searchable there.
 
 For every manifest menu route:
 
-1. Create the page under `frontend/src/plugins/<plugin-id>/`.
-2. Register its lazy import in `frontend/src/plugins/registry.ts`.
-3. Add its Overview destination to `pluginRoutePaths` in
-   `frontend/src/plugins/registry.ts`.
+1. Create the page under `plugins/<plugin-id>/frontend/`.
+2. Register its lazy import and Overview destination in
+   `plugins/<plugin-id>/frontend/registry.ts`.
+3. Compose that plugin registry into the shared
+   `frontend/src/plugins/registry.ts` when adding a new plugin.
 4. Add the route key to the Core allowlist in
    `workers/core/src/installer/manifest.ts`.
-5. Add translated labels to every typed locale catalog.
+5. Add screen-specific translations to
+   `plugins/<plugin-id>/frontend/i18n.ts`; keep only Core-wide messages in the
+   shared typed catalog.
 6. Call only the Core gateway path `/api/v1/p/<plugin-id>/*` with the shared API
    client.
 
@@ -177,8 +180,9 @@ pnpm --filter @app/plugin-inventory build
 node --import tsx scripts/package-plugin.ts inventory
 ```
 
-The resulting `artifacts/inventory.plugin.zip` is a reproducible, versioned
-release output and must contain exactly the expected install inputs:
+The resulting `plugins/inventory/release/inventory.plugin.zip` is a
+reproducible, versioned release output and must contain exactly the expected
+install inputs:
 
 ```text
 manifest.json
@@ -189,10 +193,10 @@ migrations/postgres/*.sql
 
 Do not hand-build the ZIP or package TypeScript source as `worker.mjs`. The raw
 combined install input must not exceed 4 MiB, and the gzipped Worker must not
-exceed 3 MiB. Commit every generated `artifacts/*.plugin.zip` with its plugin
-source. CI rebuilds the deterministic packages and rejects stale, missing, or
-untracked plugin artifacts. Packages must not contain source maps, credentials,
-`.dev.vars`, environment files, or unrelated files.
+exceed 3 MiB. Commit every generated `plugins/*/release/*.plugin.zip` with its
+plugin source. CI rebuilds the deterministic packages and rejects stale,
+missing, or untracked plugin artifacts. Packages must not contain source maps,
+credentials, `.dev.vars`, environment files, or unrelated files.
 
 The Installer archives these exact validated inputs in bounded chunks after the
 package-hash check. An administrator with `core.plugin.export` can later
@@ -225,7 +229,7 @@ pnpm format:check
 Also inspect the package before installation:
 
 ```bash
-unzip -l artifacts/inventory.plugin.zip
+unzip -l plugins/inventory/release/inventory.plugin.zip
 ```
 
 For a production/staging install, verify all of the following:
@@ -314,5 +318,5 @@ true when the Installer or deployment code changes:
 - release the Installer lock atomically whenever a stage or package-hash check
   fails.
 
-Use `workers/plugin-crm` as the complete executable example and
-`workers/plugin-template` as the source for new plugin scaffolds.
+Use `plugins/crm` as the complete executable example and
+`plugins/template` as the source for new plugin scaffolds.

@@ -9,7 +9,7 @@ This is the mandatory repository standard for application tables that list recor
 - Preference API: `GET`, `PUT`, and `DELETE /api/v1/me/table-preferences/:tableId`
 - Persistence table: `user_table_preferences`, keyed by authenticated `user_id` plus `table_id`
 - Core reference: the main table in `frontend/src/features/users/UsersPage.tsx`
-- Plugin reference: `frontend/src/plugins/crm/LeadListPage.tsx`
+- Plugin reference: `plugins/crm/frontend/LeadListPage.tsx`
 
 Do not copy the component into a feature and do not build a parallel table abstraction. Extend the canonical component when a behavior should become standard everywhere.
 
@@ -48,13 +48,15 @@ No table-specific preference endpoint or migration is needed. Use the shared aut
 
 Plugins use exactly the same visual component and behavior as Core tables. There is no reduced or plugin-specific table variant.
 
-- Plugin frontend pages live under `frontend/src/plugins/<plugin-id>/` and are compiled into the Core SPA.
+- Plugin frontend pages live under `plugins/<plugin-id>/frontend/` and are compiled into the Core SPA.
 - Import `ConfigurableDataTable` from the shared Core frontend component. Do not duplicate it under the plugin directory.
 - Use `tableId="plugin.<manifest-id>.<resource>"`. The manifest ID segment must match the plugin's `manifest.json` ID.
 - Continue using the shared Core preference API. Do not add a preference table to plugin migrations and do not expose a plugin preference route.
 - The authenticated Core user ID remains the owner of the preference, so two users automatically receive independent plugin-table layouts.
 - Keep the same fixed `Ações` column and icon-only settings trigger. Plugin branding must not move, restyle, or replace this control.
-- Register plugin pages in `frontend/src/plugins/registry.ts` and follow the UI checklist in `workers/plugin-template/README.md`.
+- Register plugin pages in `plugins/<plugin-id>/frontend/registry.ts`, compose
+  that registry in `frontend/src/plugins/registry.ts`, and follow the UI
+  checklist in `plugins/template/README.md`.
 
 The CRM Leads page is the executable plugin reference and uses `tableId="plugin.crm.leads"`.
 

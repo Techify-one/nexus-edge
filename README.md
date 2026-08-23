@@ -33,14 +33,16 @@ Development uses the Core `wrangler.jsonc` through Cloudflare's official Vite pl
 ## Structure
 
 ```text
-frontend/                 React SPA
-packages/                 contracts, schemas, and database port
-workers/core/             Core, auth, API, gateway, webhooks, and installer
-workers/plugin-crm/       isolated CRM backend
-workers/plugin-template/  minimal base for new plugins
-scripts/                  provisioning, packaging, and safe deployment
-tests/                    contracts, security, and migrations
-docs/                     architecture, operations, and backup
+frontend/          shared React SPA shell and Core pages
+packages/          shared contracts, schemas, and database port
+plugins/           complete plugin packages: Worker, UI, migrations, and ZIP
+  crm/             complete CRM plugin
+  meta_ads/        complete Meta Ads plugin
+  template/        complete base for new plugins
+workers/core/      Core, auth, API, gateway, webhooks, and installer
+scripts/           provisioning, packaging, and safe deployment
+tests/             contracts, security, and migrations
+docs/              architecture, operations, and backup
 ```
 
 People and automated development tools should start with the open-format
@@ -57,7 +59,7 @@ make this configurable, per-user table contract mandatory for every
 implementation workflow.
 
 Follow [docs/PLUGIN-DEVELOPMENT.md](./docs/PLUGIN-DEVELOPMENT.md) and then copy
-[workers/plugin-template](./workers/plugin-template) when creating a plugin.
+[plugins/template](./plugins/template) when creating a plugin.
 The guide defines the required Wrangler build, manifest, paired migrations,
 private Service Binding, package layout, frontend registration, retry behavior,
 and release checks. Plugin tables use the same component, layout, behavior, and

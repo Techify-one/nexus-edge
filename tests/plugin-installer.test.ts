@@ -18,7 +18,7 @@ import type { PluginManifest } from "../workers/core/src/installer/manifest.js";
 import { installerRoutes } from "../workers/core/src/routes/installer.js";
 
 const crmPackageParts = () => {
-  const pluginRoot = "workers/plugin-crm";
+  const pluginRoot = "plugins/crm";
   const migration = (dialect: "d1" | "postgres") => ({
     "0001_init": readFileSync(
       `${pluginRoot}/migrations/${dialect}/0001_init.sql`,

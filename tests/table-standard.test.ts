@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
 const frontendSource = resolve(repositoryRoot, "frontend/src");
+const pluginsSource = resolve(repositoryRoot, "plugins");
 
 const legacyUsageCeiling = new Map<string, number>([
   ["frontend/src/features/users/UsersPage.tsx", 1],
@@ -25,7 +26,10 @@ const sourceFiles = (directory: string): string[] =>
 
 describe("repository data-table standard", () => {
   it("rejects new uses of the legacy DataTable component", () => {
-    const violations = sourceFiles(frontendSource).flatMap((path) => {
+    const violations = [
+      ...sourceFiles(frontendSource),
+      ...sourceFiles(pluginsSource),
+    ].flatMap((path) => {
       const source = readFileSync(path, "utf8");
       const usageCount = source.match(/<DataTable(?:\s|>)/gu)?.length ?? 0;
       if (!usageCount) return [];
@@ -45,7 +49,10 @@ describe("repository data-table standard", () => {
   });
 
   it("rejects new raw table implementations outside the canonical component", () => {
-    const violations = sourceFiles(frontendSource).flatMap((path) => {
+    const violations = [
+      ...sourceFiles(frontendSource),
+      ...sourceFiles(pluginsSource),
+    ].flatMap((path) => {
       const source = readFileSync(path, "utf8");
       const usageCount = source.match(/<table(?:\s|>)/gu)?.length ?? 0;
       if (!usageCount) return [];
@@ -81,18 +88,17 @@ describe("repository data-table standard", () => {
   });
 
   it("requires plugin tables to use the plugin preference namespace", () => {
-    const pluginSource = resolve(frontendSource, "plugins");
-    const violations = sourceFiles(pluginSource).flatMap((path) => {
+    const violations = sourceFiles(pluginsSource).flatMap((path) => {
       const source = readFileSync(path, "utf8");
       const tableCount =
         source.match(/<ConfigurableDataTable(?:\s|>)/gu)?.length ?? 0;
       if (!tableCount) return [];
-      const pluginId = relative(pluginSource, path).split(/[\\/]/u)[0];
+      const pluginId = relative(pluginsSource, path).split(/[\\/]/u)[0];
       const expectedPrefix = `tableId="plugin.${pluginId}.`;
       const namespacedIdCount = source.split(expectedPrefix).length - 1;
       const manifestPath = resolve(
         repositoryRoot,
-        `workers/plugin-${pluginId}/manifest.json`,
+        `plugins/${pluginId}/manifest.json`,
       );
       let manifestId = "";
       try {

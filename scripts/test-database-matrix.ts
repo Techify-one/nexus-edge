@@ -53,13 +53,13 @@ for (const dialect of ["d1", "postgres"] as const) {
 }
 for (const dialect of ["d1", "postgres"]) {
   const crm = readFileSync(
-    `workers/plugin-crm/migrations/${dialect}/0001_init.sql`,
+    `plugins/crm/migrations/${dialect}/0001_init.sql`,
     "utf8",
   );
   if (!crm.includes("crm_leads"))
     throw new Error(`CRM migration is missing for ${dialect}`);
   const metaAds = readFileSync(
-    `workers/plugin-meta_ads/migrations/${dialect}/0001_init.sql`,
+    `plugins/meta_ads/migrations/${dialect}/0001_init.sql`,
     "utf8",
   );
   if (!metaAds.includes("meta_ads_accounts"))

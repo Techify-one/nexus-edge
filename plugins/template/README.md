@@ -19,9 +19,12 @@ Before creating plugin UI, read:
 
 For a manifest with `"id": "inventory"`:
 
-1. Create pages under `frontend/src/plugins/inventory/`.
-2. Register lazy page imports and route keys in `frontend/src/plugins/registry.ts`.
-3. Add translated labels to the shared typed catalogs.
+1. Create pages under `plugins/inventory/frontend/`.
+2. Register lazy page imports and route keys in the plugin's own
+   `frontend/registry.ts`, then compose it into
+   `frontend/src/plugins/registry.ts` when adding the plugin.
+3. Add screen-specific `pt-BR` and `en` messages to the plugin's own
+   `frontend/i18n.ts`; keep only Core-wide messages in the shared catalog.
 4. Use the shared Core API client for `/api/v1/p/inventory/*` routes.
 5. Use `ConfigurableDataTable` for every record-list table.
 
@@ -30,7 +33,7 @@ Do not add a second table component, raw `<table>`, plugin-specific layout, or l
 ## Mandatory plugin-table pattern
 
 ```tsx
-import { ConfigurableDataTable } from "../../components/ui/configurable-data-table.js";
+import { ConfigurableDataTable } from "../../../frontend/src/components/ui/configurable-data-table.js";
 
 <ConfigurableDataTable
   tableId="plugin.inventory.products"
@@ -82,6 +85,7 @@ pnpm test
 pnpm test:matrix
 pnpm openapi:check
 pnpm build
+pnpm verify:artifacts
 pnpm verify:bundle
 pnpm format:check
 ```

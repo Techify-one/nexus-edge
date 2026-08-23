@@ -1,23 +1,20 @@
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { pluginManifestSchema } from "../workers/core/src/installer/manifest.js";
-import { mapWithConcurrency } from "../workers/plugin-meta_ads/src/index.js";
+import { pluginManifestSchema } from "../../../workers/core/src/installer/manifest.js";
+import { mapWithConcurrency } from "../src/index.js";
 import {
   discoverAccounts,
   extractMetaPurchases,
   listInsights,
   normalizeAccountId,
   validateDateRange,
-} from "../workers/plugin-meta_ads/src/meta-client.js";
+} from "../src/meta-client.js";
 
 afterEach(() => vi.unstubAllGlobals());
 
 describe("Meta Ads plugin", () => {
   it("ships an Installer-compatible manifest without account-specific values", () => {
-    const source = readFileSync(
-      "workers/plugin-meta_ads/manifest.json",
-      "utf8",
-    );
+    const source = readFileSync("plugins/meta_ads/manifest.json", "utf8");
     const manifest = pluginManifestSchema.parse(JSON.parse(source));
 
     expect(manifest.id).toBe("meta_ads");
@@ -181,7 +178,7 @@ describe("Meta Ads plugin", () => {
 
   it("keeps the dashboard controls compact and the critical actions visible", () => {
     const dashboard = readFileSync(
-      "frontend/src/plugins/meta_ads/MetaAdsDashboardPage.tsx",
+      "plugins/meta_ads/frontend/MetaAdsDashboardPage.tsx",
       "utf8",
     );
     const table = readFileSync(
@@ -229,7 +226,7 @@ describe("Meta Ads plugin", () => {
 
   it("only reloads Meta data for filter changes or an explicit refresh", () => {
     const dashboard = readFileSync(
-      "frontend/src/plugins/meta_ads/MetaAdsDashboardPage.tsx",
+      "plugins/meta_ads/frontend/MetaAdsDashboardPage.tsx",
       "utf8",
     );
 
@@ -245,7 +242,7 @@ describe("Meta Ads plugin", () => {
 
   it("manages the Meta token only through private Worker secrets", () => {
     const accountsPage = readFileSync(
-      "frontend/src/plugins/meta_ads/MetaAdsAccountsPage.tsx",
+      "plugins/meta_ads/frontend/MetaAdsAccountsPage.tsx",
       "utf8",
     );
     const cloudflare = readFileSync(

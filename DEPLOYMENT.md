@@ -59,10 +59,10 @@ pnpm verify:artifacts
 pnpm verify:bundle
 ```
 
-The installable packages will be `artifacts/crm.plugin.zip` and
-`artifacts/meta_ads.plugin.zip`. They are reproducible tracked release outputs;
-commit them with the source that generated them. CI rebuilds and compares the
-packages so a stale or missing artifact blocks deployment.
+The installable packages will be `plugins/crm/release/crm.plugin.zip` and
+`plugins/meta_ads/release/meta_ads.plugin.zip`. They are reproducible tracked
+release outputs; commit them with the source that generated them. CI rebuilds
+and compares the packages so a stale or missing artifact blocks deployment.
 
 ## 3A. D1 path
 
@@ -169,7 +169,7 @@ build the Worker with Wrangler dry-run, package it with
 
 1. Sign in as an administrator.
 2. Open `/app/plugins`.
-3. Click **Add** and select `artifacts/crm.plugin.zip`.
+3. Click **Add** and select `plugins/crm/release/crm.plugin.zip`.
 4. Review the version, sizes, migrations, menus, and permissions.
 5. Confirm the installation. The interface advances one stage per request and displays the persisted state.
 6. Verify `/app/crm/leads`, create/edit/delete one lead, and inspect `/app/audit`.

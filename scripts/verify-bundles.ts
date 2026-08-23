@@ -2,9 +2,9 @@ import { existsSync, readFileSync } from "node:fs";
 import { gzipSync } from "fflate";
 
 const pluginBundles = [
-  "workers/plugin-crm/dist/index.js",
-  "workers/plugin-meta_ads/dist/index.js",
-  "workers/plugin-template/dist/index.js",
+  "plugins/crm/dist/index.js",
+  "plugins/meta_ads/dist/index.js",
+  "plugins/template/dist/index.js",
 ];
 const unsupportedDynamicRequires = [
   "crypto",
@@ -32,7 +32,7 @@ for (const bundlePath of pluginBundles) {
     );
 }
 for (const bundlePath of pluginBundles.filter(
-  (path) => !path.includes("plugin-template"),
+  (path) => !path.includes("/template/"),
 )) {
   const workerBytes = gzipSync(readFileSync(bundlePath)).byteLength;
   if (workerBytes > 3 * 1024 * 1024)

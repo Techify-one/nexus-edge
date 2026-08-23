@@ -10,18 +10,18 @@ import type { PluginManifest } from "../workers/core/src/installer/manifest.js";
 
 const packageParts = () => ({
   manifest: JSON.parse(
-    readFileSync("workers/plugin-crm/manifest.json", "utf8"),
+    readFileSync("plugins/crm/manifest.json", "utf8"),
   ) as PluginManifest,
   worker: `export default {};\n${"x".repeat(130_000)}`,
   d1Migrations: {
     "0001_init": readFileSync(
-      "workers/plugin-crm/migrations/d1/0001_init.sql",
+      "plugins/crm/migrations/d1/0001_init.sql",
       "utf8",
     ),
   },
   postgresMigrations: {
     "0001_init": readFileSync(
-      "workers/plugin-crm/migrations/postgres/0001_init.sql",
+      "plugins/crm/migrations/postgres/0001_init.sql",
       "utf8",
     ),
   },

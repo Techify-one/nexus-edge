@@ -9,8 +9,8 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { ConfigurableDataTable } from "../../components/ui/configurable-data-table.js";
-import { Modal } from "../../components/ui/modal.js";
+import { ConfigurableDataTable } from "../../../frontend/src/components/ui/configurable-data-table.js";
+import { Modal } from "../../../frontend/src/components/ui/modal.js";
 import {
   Badge,
   Button,
@@ -20,14 +20,14 @@ import {
   PageHeader,
   PasswordInput,
   Skeleton,
-} from "../../components/ui/index.js";
-import { useI18n } from "../../i18n/index.js";
-import { can } from "../../lib/ability.js";
+} from "../../../frontend/src/components/ui/index.js";
+import { useI18n } from "../../../frontend/src/i18n/index.js";
+import { can } from "../../../frontend/src/lib/ability.js";
 import {
   api,
   idempotencyKey,
   recentReauthHeaders,
-} from "../../lib/api/core-client.js";
+} from "../../../frontend/src/lib/api/core-client.js";
 import type { AdAccount } from "./types.js";
 
 type Selected = AdAccount | "new" | null;

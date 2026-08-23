@@ -2,8 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { ConfigurableDataTable } from "../../components/ui/configurable-data-table.js";
-import { Modal } from "../../components/ui/modal.js";
+import { ConfigurableDataTable } from "../../../frontend/src/components/ui/configurable-data-table.js";
+import { Modal } from "../../../frontend/src/components/ui/modal.js";
 import {
   Badge,
   Button,
@@ -13,14 +13,14 @@ import {
   Select,
   Skeleton,
   Textarea,
-} from "../../components/ui/index.js";
-import { can } from "../../lib/ability.js";
+} from "../../../frontend/src/components/ui/index.js";
+import { can } from "../../../frontend/src/lib/ability.js";
 import {
   api,
   idempotencyKey,
   recentReauthHeaders,
-} from "../../lib/api/core-client.js";
-import { useI18n } from "../../i18n/index.js";
+} from "../../../frontend/src/lib/api/core-client.js";
+import { useI18n } from "../../../frontend/src/i18n/index.js";
 
 type Lead = {
   id: string;

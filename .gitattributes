@@ -1,1 +1,1 @@
-artifacts/*.plugin.zip binary
+plugins/*/release/*.plugin.zip binary
