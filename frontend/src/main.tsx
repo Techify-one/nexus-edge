@@ -20,6 +20,7 @@ import DashboardPage from "./features/dashboard.js";
 import { useI18n } from "./i18n/index.js";
 import { registerChunkRecovery } from "./lib/chunk-recovery.js";
 import { pluginUiRegistry } from "./plugins/registry.js";
+import { initializeTheme } from "./theme/index.js";
 import "./styles/globals.css";
 
 const UsersPage = lazy(() => import("./features/users/UsersPage.js"));
@@ -30,6 +31,7 @@ const PluginsPage = lazy(() => import("./features/plugins/PluginsPage.js"));
 const AuditPage = lazy(() => import("./features/audit/AuditPage.js"));
 
 registerChunkRecovery();
+initializeTheme();
 
 const pending = (
   <div className="space-y-4">

@@ -19,6 +19,7 @@ import { api } from "../../lib/api/core-client.js";
 import { APP_MARK, APP_NAME } from "../../lib/branding.js";
 import { Button } from "../ui/index.js";
 import { LanguageSwitcher } from "../i18n/LanguageSwitcher.js";
+import { ThemeToggle } from "../theme/ThemeToggle.js";
 import { useI18n, type TranslationKey } from "../../i18n/index.js";
 
 const items = [
@@ -172,6 +173,7 @@ export function AppShell() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             <LanguageSwitcher />
             <Button variant="ghost" onClick={logout}>
               <LogOut className="h-4 w-4" />

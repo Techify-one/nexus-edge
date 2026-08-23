@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { api, ApiError } from "../../lib/api/core-client.js";
 import { APP_MARK, APP_NAME } from "../../lib/branding.js";
 import { LanguageSwitcher } from "../../components/i18n/LanguageSwitcher.js";
+import { ThemeToggle } from "../../components/theme/ThemeToggle.js";
 import { useI18n, type TranslationKey } from "../../i18n/index.js";
 import {
   Button,
@@ -53,7 +54,8 @@ const AuthFrame = ({
 }) => (
   <main className="grid min-h-screen place-items-center bg-slate-50 p-4">
     <Card className="w-full max-w-md p-6 sm:p-8">
-      <div className="mb-4 flex justify-end">
+      <div className="mb-4 flex items-center justify-end gap-2">
+        <ThemeToggle />
         <LanguageSwitcher />
       </div>
       <div className="mb-6 flex items-center gap-3">

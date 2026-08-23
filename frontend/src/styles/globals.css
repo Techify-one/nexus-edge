@@ -25,6 +25,110 @@
   background: var(--background);
 }
 
+html.dark {
+  --background: #0f172a;
+  --foreground: #e2e8f0;
+  --card: #111827;
+  --muted: #1e293b;
+  --muted-foreground: #94a3b8;
+  --border: #334155;
+}
+
+/* Core and plugin routes share these utilities under the same document theme. */
+.dark .bg-white,
+.dark .bg-white\/95 {
+  background-color: var(--card);
+}
+.dark .bg-slate-50 {
+  background-color: var(--background);
+}
+.dark .bg-slate-100 {
+  background-color: #1e293b;
+}
+.dark .bg-slate-200 {
+  background-color: #334155;
+}
+.dark .bg-slate-300 {
+  background-color: #475569;
+}
+.dark .text-slate-900,
+.dark .text-slate-800 {
+  color: #f8fafc;
+}
+.dark .text-slate-700 {
+  color: #e2e8f0;
+}
+.dark .text-slate-600 {
+  color: #cbd5e1;
+}
+.dark .text-slate-500,
+.dark .text-slate-400,
+.dark .placeholder\:text-slate-400::placeholder {
+  color: #94a3b8;
+}
+.dark .border-slate-100,
+.dark .border-slate-200,
+.dark .border-slate-300 {
+  border-color: #334155;
+}
+.dark .bg-indigo-50,
+.dark .bg-indigo-50\/50 {
+  background-color: rgb(49 46 129 / 0.42);
+}
+.dark .text-indigo-700,
+.dark .text-indigo-600 {
+  color: #a5b4fc;
+}
+.dark .border-indigo-200 {
+  border-color: #6366f1;
+}
+.dark .bg-emerald-50 {
+  background-color: rgb(6 78 59 / 0.5);
+}
+.dark .text-emerald-700 {
+  color: #6ee7b7;
+}
+.dark .bg-amber-50 {
+  background-color: rgb(120 53 15 / 0.45);
+}
+.dark .text-amber-700 {
+  color: #fcd34d;
+}
+.dark .bg-red-50 {
+  background-color: rgb(127 29 29 / 0.45);
+}
+.dark .text-red-900,
+.dark .text-red-800,
+.dark .text-red-700,
+.dark .text-red-600 {
+  color: #fca5a5;
+}
+.dark .border-red-200 {
+  border-color: #991b1b;
+}
+.dark .bg-sky-50 {
+  background-color: rgb(12 74 110 / 0.45);
+}
+.dark .text-sky-700 {
+  color: #7dd3fc;
+}
+.dark .hover\:bg-slate-50:hover,
+.dark .hover\:bg-slate-100:hover,
+.dark .hover\:bg-slate-200:hover {
+  background-color: #1e293b;
+}
+.dark .hover\:bg-indigo-50:hover,
+.dark .hover\:bg-indigo-50\/50:hover,
+.dark .focus\:bg-indigo-50:focus,
+.dark .focus\:bg-indigo-50\/50:focus {
+  background-color: rgb(49 46 129 / 0.42);
+}
+.dark .hover\:text-slate-600:hover,
+.dark .hover\:text-slate-700:hover,
+.dark .hover\:text-slate-800:hover {
+  color: #f1f5f9;
+}
+
 * {
   box-sizing: border-box;
   border-color: var(--border);
