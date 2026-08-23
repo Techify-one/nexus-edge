@@ -41,6 +41,22 @@ export const tablePreferenceConfigSchema = z
   })
   .strict();
 
+const overviewItemIdSchema = z
+  .string()
+  .min(3)
+  .max(96)
+  .regex(/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/u);
+
+export const overviewPreferenceConfigSchema = z
+  .object({
+    version: z.literal(1),
+    itemOrder: z
+      .array(overviewItemIdSchema)
+      .max(128)
+      .refine((items) => new Set(items).size === items.length),
+  })
+  .strict();
+
 export const firstAdminSchema = z.object({
   name: z.string().trim().min(2).max(120),
   email: z.email().transform((value) => value.trim().toLowerCase()),

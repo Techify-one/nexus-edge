@@ -130,6 +130,61 @@ describe("granular authorization", () => {
     expect(executions[1]?.params).toEqual(["usr_actor", "core.users"]);
   });
 
+  it("stores the overview order only under the authenticated user", async () => {
+    const executions: Array<{
+      sql: string;
+      params: unknown[] | undefined;
+    }> = [];
+    const config = {
+      version: 1 as const,
+      itemOrder: ["plugin.crm", "core.users"],
+    };
+    const database = {
+      provider: "d1",
+      orm: {},
+      query: async () => [],
+      first: async (_sql: string, params?: unknown[]) => {
+        expect(params).toEqual(["usr_actor"]);
+        return {
+          configJson: JSON.stringify(config),
+          updatedAt: 123,
+        };
+      },
+      execute: async (sql: string, params?: unknown[]) => {
+        executions.push({ sql, params });
+        return { rowsAffected: 1 };
+      },
+      atomic: async () => [],
+      close: async () => undefined,
+    } as DatabasePort;
+    const app = new Hono<HonoEnv>();
+    app.use("*", async (context, next) => {
+      context.set("db", database);
+      context.set("principal", {
+        userId: "usr_actor",
+        authMethod: "cookie",
+      });
+      await next();
+    });
+    app.route("/", managementRoutes);
+
+    const getResponse = await app.request("/me/overview-preference");
+    expect(getResponse.status).toBe(200);
+    expect(await getResponse.json()).toMatchObject({ config });
+
+    const putResponse = await app.request("/me/overview-preference", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(config),
+    });
+    expect(putResponse.status).toBe(200);
+    expect(executions[0]?.params?.slice(0, 3)).toEqual([
+      "usr_actor",
+      1,
+      JSON.stringify(config),
+    ]);
+  });
+
   it("updates all editable user fields and hashes the password atomically", async () => {
     const atomicBatches: SqlStatement[][] = [];
     const database = {

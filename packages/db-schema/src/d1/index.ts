@@ -70,6 +70,17 @@ export const userTablePreferences = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.userId, t.tableId] })],
 );
+export const userOverviewPreferences = sqliteTable(
+  "user_overview_preferences",
+  {
+    userId: text("user_id")
+      .primaryKey()
+      .references(() => user.id, { onDelete: "cascade" }),
+    schemaVersion: integer("schema_version").notNull().default(1),
+    configJson: text("config_json").notNull(),
+    updatedAt: instant("updated_at").notNull(),
+  },
+);
 export const session = sqliteTable(
   "session",
   {

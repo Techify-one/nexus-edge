@@ -5,6 +5,7 @@ import {
   groupCreateSchema,
   invitationCreateSchema,
   listQuerySchema,
+  overviewPreferenceConfigSchema,
   tablePreferenceConfigSchema,
   tablePreferenceIdSchema,
   userCreateSchema,
@@ -278,6 +279,50 @@ managementRoutes.delete("/me/table-preferences/:tableId", async (c) => {
       [c.get("principal").userId, tableId],
     );
   return c.body(null, 204);
+});
+
+managementRoutes.get("/me/overview-preference", async (c) => {
+  const row = await c.get("db").first<{
+    configJson: unknown;
+    updatedAt: unknown;
+  }>(
+    `SELECT config_json AS "configJson", updated_at AS "updatedAt"
+       FROM user_overview_preferences
+      WHERE user_id = ?`,
+    [c.get("principal").userId],
+  );
+  if (!row) return c.json({ config: null, updatedAt: null }, 200, noStore);
+  const config = overviewPreferenceConfigSchema.safeParse(
+    parseJson<unknown>(row.configJson, null),
+  );
+  return c.json(
+    {
+      config: config.success ? config.data : null,
+      updatedAt: row.updatedAt,
+    },
+    200,
+    noStore,
+  );
+});
+
+managementRoutes.put("/me/overview-preference", async (c) => {
+  const config = await parseBody(c, overviewPreferenceConfigSchema);
+  const updatedAt = dbTime(c.get("db"));
+  await c.get("db").execute(
+    `INSERT INTO user_overview_preferences(user_id, schema_version, config_json, updated_at)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(user_id) DO UPDATE SET
+       schema_version = excluded.schema_version,
+       config_json = excluded.config_json,
+       updated_at = excluded.updated_at`,
+    [
+      c.get("principal").userId,
+      config.version,
+      JSON.stringify(config),
+      updatedAt,
+    ],
+  );
+  return c.json({ config, updatedAt }, 200, noStore);
 });
 
 managementRoutes.get("/me/plugin-navigation", async (c) => {

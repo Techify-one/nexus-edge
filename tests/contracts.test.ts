@@ -11,6 +11,7 @@ import {
   firstAdminSchema,
   invitationAcceptSchema,
   listQuerySchema,
+  overviewPreferenceConfigSchema,
   tablePreferenceConfigSchema,
   tablePreferenceIdSchema,
   userCreateSchema,
@@ -57,6 +58,27 @@ describe("contracts", () => {
       tablePreferenceConfigSchema.safeParse({
         ...preference,
         columnSizing: { name: 10 },
+      }).success,
+    ).toBe(false);
+  });
+  it("validates a unique, bounded personal overview order", () => {
+    const preference = {
+      version: 1 as const,
+      itemOrder: ["plugin.crm", "core.users", "core.api-keys"],
+    };
+    expect(overviewPreferenceConfigSchema.parse(preference)).toEqual(
+      preference,
+    );
+    expect(
+      overviewPreferenceConfigSchema.safeParse({
+        ...preference,
+        itemOrder: ["core.users", "core.users"],
+      }).success,
+    ).toBe(false);
+    expect(
+      overviewPreferenceConfigSchema.safeParse({
+        ...preference,
+        itemOrder: ["../users"],
       }).success,
     ).toBe(false);
   });

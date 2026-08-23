@@ -168,6 +168,25 @@ export const OPENAPI_DOCUMENT = {
           },
         },
       },
+      OverviewPreferenceConfig: {
+        type: "object",
+        additionalProperties: false,
+        required: ["version", "itemOrder"],
+        properties: {
+          version: { type: "integer", const: 1 },
+          itemOrder: {
+            type: "array",
+            maxItems: 128,
+            uniqueItems: true,
+            items: {
+              type: "string",
+              minLength: 3,
+              maxLength: 96,
+              pattern: "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+            },
+          },
+        },
+      },
     },
   },
   security: [{ cookieAuth: [] }, { bearerAuth: [] }, { apiKeyAuth: [] }],
@@ -231,6 +250,22 @@ export const OPENAPI_DOCUMENT = {
       delete: {
         parameters: [{ name: "tableId", in: "path", required: true }],
         responses: { "204": { description: "Preference reset" } },
+      },
+    },
+    "/api/v1/me/overview-preference": {
+      get: {
+        responses: { "200": { description: "Personal overview order" } },
+      },
+      put: {
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/OverviewPreferenceConfig" },
+            },
+          },
+        },
+        responses: { "200": { description: "Overview order saved" } },
       },
     },
     "/api/v1/me/api-keys": {

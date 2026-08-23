@@ -125,6 +125,10 @@ const ptBR = {
   "dashboard.openPlugin": "Abrir plugin",
   "dashboard.pluginWithoutPage": "Plugin sem página disponível",
   "dashboard.noResults": "Nenhum módulo ou plugin corresponde à busca.",
+  "dashboard.dragCard": "Arrastar {{name}} para reordenar",
+  "dashboard.savingOrder": "Salvando ordem da visão geral",
+  "dashboard.orderSaveFailed":
+    "Não foi possível salvar a ordem da visão geral.",
 
   "users.description": "Contas, grupos e convites.",
   "users.search": "Buscar por nome ou e-mail",
@@ -651,6 +655,9 @@ const en: Record<TranslationKey, string> = {
   "dashboard.openPlugin": "Open plugin",
   "dashboard.pluginWithoutPage": "Plugin without an available page",
   "dashboard.noResults": "No modules or plugins match your search.",
+  "dashboard.dragCard": "Drag {{name}} to reorder",
+  "dashboard.savingOrder": "Saving overview order",
+  "dashboard.orderSaveFailed": "Unable to save the overview order.",
   "users.description": "Accounts, groups, and invitations.",
   "users.search": "Search by name or email",
   "users.groups": "Groups",
