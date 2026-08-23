@@ -15,7 +15,12 @@ describe("application shell", () => {
       'sidebarHidden ? "w-0 border-r-0" : "w-60 border-r"',
     );
     expect(shell).toContain('sidebarHidden ? "lg:pl-0" : "lg:pl-60"');
-    expect(shell).toContain('className="hidden px-2 lg:inline-flex"');
+    expect(shell).toContain("fixed bottom-12 z-40 hidden h-7 w-7");
+    expect(shell).toContain('sidebarHidden ? "left-3.5" : "left-60"');
+    expect(shell).toContain('<ChevronLeft className="h-4 w-4" aria-hidden />');
+    expect(shell).toContain('<ChevronRight className="h-4 w-4" aria-hidden />');
+    expect(shell).not.toContain("PanelLeftClose");
+    expect(shell).not.toContain("PanelLeftOpen");
     expect(shell).not.toContain('sidebarCollapsed ? "w-20"');
   });
 

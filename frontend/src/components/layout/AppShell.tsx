@@ -1,11 +1,11 @@
 import {
+  ChevronLeft,
+  ChevronRight,
   KeyRound,
   LayoutDashboard,
   LogOut,
   Menu,
   Package,
-  PanelLeftClose,
-  PanelLeftOpen,
   ScrollText,
   Users,
   UserRoundCog,
@@ -129,6 +129,19 @@ export function AppShell() {
       >
         {!sidebarHidden && <div className="w-60">{nav()}</div>}
       </aside>
+      <button
+        type="button"
+        className={`fixed bottom-12 z-40 hidden h-7 w-7 -translate-x-1/2 place-items-center rounded-full border bg-white text-slate-500 shadow-sm transition-[left,color] duration-200 hover:text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 lg:grid ${sidebarHidden ? "left-3.5" : "left-60"}`}
+        onClick={() => setSidebarHidden((current) => !current)}
+        aria-label={sidebarHidden ? t("nav.expandMenu") : t("nav.collapseMenu")}
+        title={sidebarHidden ? t("nav.expandMenu") : t("nav.collapseMenu")}
+      >
+        {sidebarHidden ? (
+          <ChevronRight className="h-4 w-4" aria-hidden />
+        ) : (
+          <ChevronLeft className="h-4 w-4" aria-hidden />
+        )}
+      </button>
       {open && (
         <div className="fixed inset-0 z-40 lg:hidden">
           <button
@@ -153,23 +166,6 @@ export function AppShell() {
               aria-label={t("nav.openMenu")}
             >
               <Menu className="h-5 w-5" />
-            </Button>
-            <Button
-              variant="ghost"
-              className="hidden px-2 lg:inline-flex"
-              onClick={() => setSidebarHidden((current) => !current)}
-              aria-label={
-                sidebarHidden ? t("nav.expandMenu") : t("nav.collapseMenu")
-              }
-              title={
-                sidebarHidden ? t("nav.expandMenu") : t("nav.collapseMenu")
-              }
-            >
-              {sidebarHidden ? (
-                <PanelLeftOpen className="h-5 w-5" />
-              ) : (
-                <PanelLeftClose className="h-5 w-5" />
-              )}
             </Button>
             <div>
               <p className="text-xs text-slate-500">{t("nav.panel")}</p>
