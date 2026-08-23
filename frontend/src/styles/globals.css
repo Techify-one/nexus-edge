@@ -34,6 +34,41 @@ html.dark {
   --border: #334155;
 }
 
+.app-switch {
+  background-color: var(--border-strong, #cbd5e1);
+  border-color: color-mix(
+    in srgb,
+    var(--foreground) 18%,
+    var(--border-strong, #cbd5e1)
+  );
+  box-shadow: inset 0 1px 2px rgb(15 23 42 / 0.16);
+}
+.app-switch[aria-checked="true"] {
+  background-color: #059669;
+  border-color: #047857;
+}
+.app-switch-thumb {
+  background-color: #ffffff;
+  box-shadow:
+    0 1px 3px rgb(15 23 42 / 0.35),
+    0 0 0 1px rgb(15 23 42 / 0.08);
+  transform: translateX(0);
+}
+.app-switch[aria-checked="true"] .app-switch-thumb {
+  transform: translateX(1.25rem);
+}
+html.dark .app-switch {
+  background-color: #475569;
+  border-color: #64748b;
+}
+html.dark .app-switch[aria-checked="true"] {
+  background-color: #059669;
+  border-color: #34d399;
+}
+html.dark .app-switch-thumb {
+  background-color: #f8fafc;
+}
+
 /* Core and plugin routes share these utilities under the same document theme. */
 .dark .bg-white,
 .dark .bg-white\/95 {

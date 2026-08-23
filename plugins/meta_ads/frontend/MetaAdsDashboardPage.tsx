@@ -22,6 +22,7 @@ import {
   Select,
   SingleLineFilterBar,
   Skeleton,
+  ToggleSwitch,
 } from "../../../frontend/src/components/ui/index.js";
 import { useI18n } from "../../../frontend/src/i18n/index.js";
 import { can } from "../../../frontend/src/lib/ability.js";
@@ -1151,11 +1152,8 @@ export default function MetaAdsDashboardPage() {
             ]}
             actions={(row) =>
               can("meta_ads.ad.update") ? (
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={row.status === "ACTIVE"}
-                  className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:cursor-wait disabled:opacity-60 ${row.status === "ACTIVE" ? "bg-emerald-500" : "bg-slate-300"}`}
+                <ToggleSwitch
+                  checked={row.status === "ACTIVE"}
                   disabled={setStatus.isPending}
                   onClick={() => {
                     const next = row.status === "ACTIVE" ? "PAUSED" : "ACTIVE";
@@ -1180,12 +1178,7 @@ export default function MetaAdsDashboardPage() {
                       ? t("metaAds.pause", { name: row.adName })
                       : t("metaAds.activate", { name: row.adName })
                   }
-                >
-                  <span
-                    className={`absolute left-1 top-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${row.status === "ACTIVE" ? "translate-x-5" : "translate-x-0"}`}
-                    aria-hidden
-                  />
-                </button>
+                />
               ) : undefined
             }
           />

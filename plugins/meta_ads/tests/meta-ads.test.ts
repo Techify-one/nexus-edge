@@ -208,10 +208,9 @@ describe("Meta Ads plugin", () => {
     expect(dashboard).toContain("window.localStorage.setItem(");
     expect(dashboard).toContain("row.creative?.image_url ||");
     expect(dashboard).toContain("h-[min(520px,75vh)] w-full");
-    expect(dashboard).toContain(
-      "relative inline-flex h-7 w-12 shrink-0 items-center",
-    );
-    expect(dashboard).toContain("absolute left-1 top-1 h-5 w-5");
+    expect(dashboard).toContain("<ToggleSwitch");
+    expect(dashboard).toContain('checked={row.status === "ACTIVE"}');
+    expect(dashboard).not.toContain('"bg-emerald-500" : "bg-slate-300"');
     expect(dashboard).toContain('<option value="all">');
     expect(dashboard).toContain("metaAds.date.all");
     expect(dashboard).toContain("mb-1 flex h-5 items-center");

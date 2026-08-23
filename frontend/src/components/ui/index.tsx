@@ -44,6 +44,34 @@ export const Button = forwardRef<
 );
 Button.displayName = "Button";
 
+export const ToggleSwitch = forwardRef<
+  HTMLButtonElement,
+  Omit<
+    ButtonHTMLAttributes<HTMLButtonElement>,
+    "aria-checked" | "children" | "role"
+  > & {
+    checked: boolean;
+  }
+>(({ checked, className, type = "button", ...props }, ref) => (
+  <button
+    ref={ref}
+    type={type}
+    role="switch"
+    aria-checked={checked}
+    className={twMerge(
+      "app-switch relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:cursor-wait disabled:opacity-60",
+      className,
+    )}
+    {...props}
+  >
+    <span
+      className="app-switch-thumb absolute left-1 top-1 h-5 w-5 rounded-full transition-transform"
+      aria-hidden
+    />
+  </button>
+));
+ToggleSwitch.displayName = "ToggleSwitch";
+
 export const Input = forwardRef<
   HTMLInputElement,
   InputHTMLAttributes<HTMLInputElement>
