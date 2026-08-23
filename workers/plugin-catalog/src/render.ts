@@ -113,27 +113,25 @@ export const renderCatalogPage = (
     a { color: inherit; }
     a:focus-visible { outline: 3px solid rgba(79, 70, 229, .3); outline-offset: 3px; }
     .shell { width: min(1120px, calc(100% - 40px)); margin: 0 auto; }
-    .topbar { display: flex; align-items: center; justify-content: space-between; padding: 26px 0; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; padding: 18px 0 14px; }
     .brand { display: inline-flex; align-items: center; gap: 11px; text-decoration: none; font-size: 15px; font-weight: 760; letter-spacing: -.01em; }
     .brand-mark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; color: white; background: linear-gradient(135deg, #6366f1, #3730a3); box-shadow: 0 8px 20px rgba(79, 70, 229, .24); }
     .brand-mark svg { width: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
     .github-link { display: inline-flex; align-items: center; gap: 8px; color: #475569; font-size: 14px; font-weight: 650; text-decoration: none; }
     .github-link:hover { color: var(--accent); }
     .github-link svg { width: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-    .hero { padding: 82px 0 66px; text-align: center; }
-    .live { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border: 1px solid rgba(8, 127, 91, .16); border-radius: 999px; color: var(--green); background: rgba(236, 253, 245, .78); font-size: 12px; font-weight: 760; letter-spacing: .03em; text-transform: uppercase; }
+    .hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 36px; padding: 26px 0 22px; border-bottom: 1px solid var(--line); }
+    .hero-copy { min-width: 0; }
+    .live { display: inline-flex; align-items: center; gap: 7px; padding: 5px 9px; border: 1px solid rgba(8, 127, 91, .16); border-radius: 999px; color: var(--green); background: rgba(236, 253, 245, .78); font-size: 10px; font-weight: 800; letter-spacing: .045em; text-transform: uppercase; }
     .live::before { content: ""; width: 7px; height: 7px; border-radius: 999px; background: #10b981; box-shadow: 0 0 0 4px rgba(16, 185, 129, .12); }
-    h1 { max-width: 790px; margin: 24px auto 18px; font-size: clamp(42px, 7vw, 74px); line-height: .98; letter-spacing: -.06em; }
-    .hero p { max-width: 680px; margin: 0 auto; color: var(--muted); font-size: clamp(17px, 2.3vw, 20px); line-height: 1.65; }
-    .stats { display: flex; justify-content: center; gap: 10px; margin-top: 30px; flex-wrap: wrap; }
-    .stat { padding: 10px 14px; border: 1px solid rgba(203, 213, 225, .74); border-radius: 12px; background: rgba(255,255,255,.62); color: #586174; font-size: 13px; }
-    .stat strong { color: var(--ink); }
-    .catalog-heading { display: flex; align-items: end; justify-content: space-between; gap: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
-    .catalog-heading span { color: var(--accent); font-size: 12px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
-    .catalog-heading h2 { margin: 7px 0 0; font-size: clamp(25px, 3vw, 32px); letter-spacing: -.035em; }
-    .catalog-heading p { max-width: 430px; margin: 0; color: var(--muted); font-size: 14px; line-height: 1.6; text-align: right; }
-    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; padding: 28px 0 92px; }
-    .plugin-card { display: flex; flex-direction: column; min-height: 390px; padding: 28px; border: 1px solid rgba(210, 216, 228, .9); border-radius: 22px; background: var(--surface); box-shadow: var(--shadow); backdrop-filter: blur(12px); transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
+    h1 { margin: 10px 0 7px; font-size: clamp(34px, 4.2vw, 48px); line-height: 1; letter-spacing: -.055em; }
+    .hero p { max-width: 720px; margin: 0; color: var(--muted); font-size: 15px; line-height: 1.52; }
+    .stats { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+    .stat { min-width: 116px; padding: 9px 12px; border: 1px solid rgba(203, 213, 225, .74); border-radius: 11px; background: rgba(255,255,255,.62); color: #697386; font-size: 11px; line-height: 1.2; text-align: left; }
+    .stat strong { display: block; margin-bottom: 2px; color: var(--ink); font-size: 17px; line-height: 1; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; padding: 20px 0 72px; }
+    .plugin-card { display: flex; flex-direction: column; min-height: 360px; padding: 26px; border: 1px solid rgba(210, 216, 228, .9); border-radius: 22px; background: var(--surface); box-shadow: var(--shadow); backdrop-filter: blur(12px); transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
     .plugin-card:hover { transform: translateY(-3px); border-color: #c7d2fe; box-shadow: 0 28px 70px rgba(35, 43, 70, .13); }
     .plugin-card__top { display: flex; align-items: center; gap: 14px; }
     .plugin-icon { display: grid; flex: 0 0 auto; place-items: center; width: 50px; height: 50px; border: 1px solid #d9ddff; border-radius: 15px; color: var(--accent-dark); background: linear-gradient(145deg, #f5f7ff, #e0e7ff); font-size: 14px; font-weight: 850; letter-spacing: -.02em; }
@@ -164,11 +162,10 @@ export const renderCatalogPage = (
     .footer-inner a:hover { color: var(--accent); }
     @media (max-width: 760px) {
       .shell { width: min(100% - 28px, 1120px); }
-      .hero { padding: 58px 0 54px; }
-      h1 { font-size: clamp(40px, 14vw, 62px); }
-      .catalog-heading { align-items: start; flex-direction: column; }
-      .catalog-heading p { text-align: left; }
-      .grid { grid-template-columns: 1fr; padding-bottom: 64px; }
+      .hero { grid-template-columns: 1fr; align-items: start; gap: 16px; padding: 20px 0 18px; }
+      h1 { font-size: clamp(34px, 10vw, 44px); }
+      .stats { justify-content: flex-start; }
+      .grid { grid-template-columns: 1fr; padding-top: 16px; padding-bottom: 56px; }
       .plugin-card { min-height: 0; padding: 22px; }
     }
     @media (max-width: 470px) {
@@ -197,20 +194,18 @@ export const renderCatalogPage = (
   </header>
   <main>
     <section class="shell hero">
-      <span class="live">Sincronizado com o GitHub</span>
-      <h1>Plugins para<br>Nexus Edge</h1>
-      <p>Amplie sua instalação com plugins abertos, verificáveis e prontos para instalar. Cada download vem diretamente do repositório público oficial.</p>
+      <div class="hero-copy">
+        <span class="live">Sincronizado com o GitHub</span>
+        <h1>Plugins para Nexus Edge</h1>
+        <p>Baixe extensões abertas e verificáveis direto do repositório oficial e instale o ZIP pelo painel Instalador.</p>
+      </div>
       <div class="stats" aria-label="Resumo do catálogo">
-        <span class="stat"><strong>${plugins.length}</strong> ${plugins.length === 1 ? "plugin disponível" : "plugins disponíveis"}</span>
-        <span class="stat"><strong data-total-downloads>${escapeHtml(formatDownloads(totalDownloads))}</strong> downloads realizados</span>
-        <span class="stat">Fonte <strong>main/plugins/*</strong></span>
+        <span class="stat"><strong>${plugins.length}</strong>${plugins.length === 1 ? "plugin disponível" : "plugins disponíveis"}</span>
+        <span class="stat"><strong data-total-downloads>${escapeHtml(formatDownloads(totalDownloads))}</strong>downloads realizados</span>
       </div>
     </section>
     <section class="shell" aria-labelledby="catalog-title">
-      <div class="catalog-heading">
-        <div><span>Catálogo oficial</span><h2 id="catalog-title">Escolha e instale</h2></div>
-        <p>Baixe o arquivo ZIP e selecione-o no painel Instalador da sua instância do Nexus Edge.</p>
-      </div>
+      <h2 class="sr-only" id="catalog-title">Plugins disponíveis</h2>
       <div class="grid">${cards}</div>
     </section>
   </main>

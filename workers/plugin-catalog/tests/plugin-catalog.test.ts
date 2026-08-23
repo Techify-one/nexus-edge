@@ -151,7 +151,10 @@ describe("GitHub-backed plugin catalog", () => {
       context,
     );
     expect(page.status).toBe(200);
-    expect(await page.text()).toContain("Plugins para Nexus Edge");
+    const pageHtml = await page.text();
+    expect(pageHtml).toContain("<h1>Plugins para Nexus Edge</h1>");
+    expect(pageHtml).not.toContain("catalog-heading");
+    expect(pageHtml).not.toContain("Plugins para<br>Nexus Edge");
 
     const download = await worker.fetch(
       new Request("https://catalog.example/download/crm"),
