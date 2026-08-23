@@ -72,12 +72,26 @@ jobs:
       - name: Verify production
         run: |
           node --input-type=module <<'NODE'
+          const fetchEventually = async (url, label) => {
+            let lastStatus = "no response";
+            for (let attempt = 1; attempt <= 12; attempt += 1) {
+              try {
+                const response = await fetch(url);
+                if (response.ok) return response;
+                lastStatus = `HTTP ${response.status}`;
+              } catch (error) {
+                lastStatus = error instanceof Error ? error.message : String(error);
+              }
+              if (attempt < 12) {
+                await new Promise((resolve) => setTimeout(resolve, 5_000));
+              }
+            }
+            throw new Error(`${label} was not ready after 12 attempts: ${lastStatus}`);
+          };
+
           const baseUrl = process.env.WORKER_URL;
           for (const path of ["/health", "/api/v1/setup/status"]) {
-            const response = await fetch(`${baseUrl}${path}`);
-            if (!response.ok) {
-              throw new Error(`${path} returned HTTP ${response.status}`);
-            }
+            const response = await fetchEventually(`${baseUrl}${path}`, path);
             const body = await response.json();
             if (path === "/health" && (!body.ok || body.provider !== "d1")) {
               throw new Error(`Unexpected health response: ${JSON.stringify(body)}`);
@@ -85,25 +99,19 @@ jobs:
           }
 
           const catalogUrl = process.env.CATALOG_WORKER_URL;
-          const healthResponse = await fetch(`${catalogUrl}/health`);
-          if (!healthResponse.ok) {
-            throw new Error(`Catalog /health returned HTTP ${healthResponse.status}`);
-          }
+          const healthResponse = await fetchEventually(`${catalogUrl}/health`, "Catalog /health");
           const health = await healthResponse.json();
           if (!health.ok || health.service !== "nexus-edge-plugin-catalog") {
             throw new Error(`Unexpected catalog health: ${JSON.stringify(health)}`);
           }
-          const catalogResponse = await fetch(`${catalogUrl}/api/plugins`);
-          if (!catalogResponse.ok) {
-            throw new Error(`Catalog API returned HTTP ${catalogResponse.status}`);
-          }
+          const catalogResponse = await fetchEventually(`${catalogUrl}/api/plugins`, "Catalog API");
           const catalog = await catalogResponse.json();
           const pluginIds = catalog.plugins?.map(({ id }) => id).sort();
           if (JSON.stringify(pluginIds) !== JSON.stringify(["crm", "meta_ads"])) {
             throw new Error(`Unexpected public catalog: ${JSON.stringify(catalog)}`);
           }
-          const pageResponse = await fetch(catalogUrl);
-          if (!pageResponse.ok || !(await pageResponse.text()).includes("Plugins para Nexus Edge")) {
+          const pageResponse = await fetchEventually(catalogUrl, "Catalog page");
+          if (!(await pageResponse.text()).includes("Plugins para Nexus Edge")) {
             throw new Error("Catalog page returned an unexpected response");
           }
           NODE
