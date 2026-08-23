@@ -5,7 +5,6 @@ const workerBundles = [
   "plugins/crm/dist/index.js",
   "plugins/meta_ads/dist/index.js",
   "plugins/template/dist/index.js",
-  "workers/plugin-catalog/dist/index.js",
 ];
 const unsupportedDynamicRequires = [
   "crypto",

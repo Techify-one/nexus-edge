@@ -11,14 +11,6 @@ the `main` branch, D1, `workers/core/wrangler.production.jsonc`, the Worker
 `modular-workers-core`, and the canonical origin
 `https://modular-workers-core.francisconeto.workers.dev`.
 
-The same workflow publishes the separate public plugin catalog Worker
-`nexus-edge-plugins` from `workers/plugin-catalog/wrangler.production.jsonc` at
-`https://nexus-edge-plugins.francisconeto.workers.dev`. It binds the production
-D1 for the isolated counter and last-known-source-cache tables. Plugin files
-and public metadata are not compiled into that Worker: it discovers
-`plugins/*/{catalog.json,manifest.json,release/*.plugin.zip}` directly from the
-public GitHub `main` branch at runtime.
-
 For every ordinary production deployment, including an implementation request
 that asks for deployment immediately afterward:
 
@@ -30,8 +22,8 @@ that asks for deployment immediately afterward:
 
 The workflow installs locked dependencies, runs the full validation suite,
 applies remote D1 migrations, configures the Installer secrets from GitHub
-environment secrets, invokes `pnpm deploy:core`, publishes the catalog Worker,
-and smoke-tests both public origins.
+environment secrets, invokes `pnpm deploy:core`, and smoke-tests the Core
+origin.
 
 Do not run `pnpm deploy:core`, `pnpm deploy:direct`, or `wrangler deploy`
 locally for an ordinary production release. Those commands are retained as
@@ -39,11 +31,6 @@ deployment implementation or exceptional recovery tools. Use them only when
 the owner explicitly requests a manual recovery or a non-production target. If
 GitHub Actions fails, stop and report or fix the failing commit, then push the
 fix; never bypass the failed workflow with a direct publish.
-
-The catalog shares the existing production D1. Its runtime code accesses only
-the service-scoped `plugin_catalog_downloads` and
-`plugin_catalog_source_cache` tables, its migrations are additive, and it does
-not query Core or plugin business tables.
 
 ## 1. Initial provisioning and exceptional environments
 
@@ -68,7 +55,6 @@ pnpm test:matrix
 pnpm openapi:check
 pnpm build:frontend
 pnpm build:plugins
-pnpm build:plugin-catalog
 pnpm verify:artifacts
 pnpm verify:bundle
 ```
@@ -215,8 +201,6 @@ the independent `core.plugin.export` permission and are recorded in Audit.
 ## 7. Production verification
 
 - `/health` returns the expected version and provider;
-- the catalog `/health` and `/api/plugins` endpoints respond, and its page lists
-  CRM and Meta Ads from GitHub without incrementing their download counters;
 - setup completes and login works without a public sign-up route;
 - the language selector switches the complete interface between Portuguese and English and persists after reload;
 - every CRUD displays one row per record with search, add, click-to-open, edit, and delete;

@@ -25,13 +25,15 @@ installable release package without searching across feature folders.
 - [Meta Ads](./meta_ads/README.md)
 - [Plugin template](./template/README.md)
 
-The public catalog at `nexus-edge-plugins.francisconeto.workers.dev` discovers
-directories from the GitHub `main` branch at runtime. A plugin is published in
-that catalog when its directory contains a valid `catalog.json`,
-`manifest.json`, and `release/<plugin-id>.plugin.zip`. The name and versions
-come from the manifest; the public category and description come from
-`catalog.json`. The `template` directory is intentionally excluded because it
-does not contain public catalog metadata or a release archive.
+The independently deployed public catalog at
+`nexus-edge-plugins.francisconeto.workers.dev` discovers directories from the
+GitHub `main` branch at runtime. A plugin is published there when its directory
+contains a valid `catalog.json`, `manifest.json`, and
+`release/<plugin-id>.plugin.zip`. The name and versions come from the manifest;
+the public category and description come from `catalog.json`. The `template`
+directory is intentionally excluded because it does not contain public catalog
+metadata or a release archive. This repository contains only those plugin-owned
+inputs, not the catalog application or deployment.
 
 Each plugin owns its page registry under `frontend/registry.ts`. The shared
 `frontend/src/plugins/registry.ts` only composes those registries because final

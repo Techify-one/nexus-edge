@@ -33,10 +33,10 @@ and rely only on tracked documentation and executable repository commands.
   commit only the intended changes and push them to `main`; the
   `deploy-production` job in `.github/workflows/ci.yml` validates the commit,
   applies D1 migrations, publishes the Core, and runs production smoke tests.
-- The same production job publishes the public `nexus-edge-plugins` catalog
-  Worker after the Core. Its catalog is discovered at runtime from
-  `plugins/*` on the public GitHub `main` branch; do not duplicate plugin ZIPs
-  or metadata under `workers/plugin-catalog`.
+- The independently maintained public plugin catalog consumes
+  `plugins/*/{catalog.json,manifest.json,release/*.plugin.zip}` from this
+  repository. Keep those plugin-owned inputs current, but do not add catalog
+  application or deployment code here.
 - Do not run `pnpm deploy:core`, `pnpm deploy:direct`, or `wrangler deploy`
   locally for an ordinary production release. `pnpm deploy:core` is the
   publishing implementation used by GitHub Actions and preserves/verifies

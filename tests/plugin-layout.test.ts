@@ -36,10 +36,7 @@ describe("plugin colocation", () => {
       withFileTypes: true,
     })
       .filter(
-        (entry) =>
-          entry.isDirectory() &&
-          entry.name.startsWith("plugin-") &&
-          entry.name !== "plugin-catalog",
+        (entry) => entry.isDirectory() && entry.name.startsWith("plugin-"),
       )
       .map((entry) => entry.name);
     const fragmentedFrontend = readdirSync(

@@ -354,8 +354,6 @@ importers:
         specifier: 4.4.3
         version: 4.4.3
 
-  workers/plugin-catalog: {}
-
 packages:
 
   '@adobe/css-tools@4.5.0':
