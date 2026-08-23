@@ -14,6 +14,7 @@ Before creating plugin UI, read:
 - `docs/PLUGIN-DEVELOPMENT.md`
 - `docs/DATA-TABLE-STANDARD.md`
 - `docs/INTERNATIONALIZATION.md`
+- `docs/UI-STYLING-STANDARD.md`
 
 ## Public catalog
 
@@ -34,6 +35,9 @@ For a manifest with `"id": "inventory"`:
    `frontend/i18n.ts`; keep only Core-wide messages in the shared catalog.
 4. Use the shared Core API client for `/api/v1/p/inventory/*` routes.
 5. Use `ConfigurableDataTable` for every record-list table.
+6. Use the shared `Card`, form controls, `MetricCard`, and `DataValue`
+   components instead of fixed light/dark surface colors. This makes the Core
+   contrast hierarchy and both themes apply automatically.
 
 Do not add a second table component, raw `<table>`, plugin-specific layout, or local preference store.
 
@@ -79,6 +83,13 @@ The component supplies the shared layout and all required behavior:
 - fixed `Ações` column with an icon-only settings trigger;
 - reset, loading/empty states, and keyboard accessibility;
 - debounced preferences stored by authenticated Core user.
+- distinct headers, alternating rows, dividers, and hover/focus contrast in
+  both themes.
+
+For dashboard summaries and highlighted numeric cells, import `MetricCard` and
+`DataValue` from `frontend/src/components/ui/index.tsx`. Choose an intentional
+`accent`, `success`, `info`, or `warning` tone; do not reproduce their colors in
+plugin CSS.
 
 Always use `plugin.<manifest-id>.<resource>` as the immutable `tableId`. Column keys must also remain stable. Do not add plugin database migrations or plugin API routes for table preferences; the Core already owns `/api/v1/me/table-preferences/:tableId` and `user_table_preferences`.
 

@@ -17,19 +17,25 @@ Do not copy the component into a feature and do not build a parallel table abstr
 
 ## Required behavior
 
-| Capability    | Required implementation                                                                                                                                                                                                    |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Column order  | Drag by the grip in the header. Save the resulting stable column-key order per user.                                                                                                                                       |
-| Visibility    | The icon-only settings trigger is inside the fixed `Ações` header. Its menu shows every hideable data column and prevents hiding the final visible data column.                                                            |
-| Sorting       | Every data column supplies `sortValue`. Header clicks cycle the single-column sort state, which is saved per user.                                                                                                         |
-| Resizing      | Use `columnResizeMode: "onChange"`. The width follows the held pointer continuously and stops exactly at release. Use exact widths/`colgroup`; do not stretch the table in a way that changes a neighboring column.        |
-| Persistence   | Debounce writes to the authenticated preference API and flush pending state on page exit. Never make another user's preferences visible and never use shared/global state or `localStorage` as the source of truth.        |
-| Reset         | Delete the authenticated user's saved preference for that `tableId` and restore declared defaults.                                                                                                                         |
-| Actions       | Keep `Ações` fixed outside data-column ordering, hiding, sorting, and resizing. The column-settings control contains only the icon, plus accessible `aria-label` and `title`. Do not create a separate toolbar row for it. |
-| Accessibility | Preserve semantic table markup, keyboard row opening with Enter/Space, focus styling, accessible sorting state, drag labels, and resize separators.                                                                        |
-| States        | Preserve the standard loading skeleton and translated empty state.                                                                                                                                                         |
+| Capability    | Required implementation                                                                                                                                                                                                       |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Column order  | Drag by the grip in the header. Save the resulting stable column-key order per user.                                                                                                                                          |
+| Visibility    | The icon-only settings trigger is inside the fixed `Ações` header. Its menu shows every hideable data column and prevents hiding the final visible data column.                                                               |
+| Sorting       | Every data column supplies `sortValue`. Header clicks cycle the single-column sort state, which is saved per user.                                                                                                            |
+| Resizing      | Use `columnResizeMode: "onChange"`. The width follows the held pointer continuously and stops exactly at release. Use exact widths/`colgroup`; do not stretch the table in a way that changes a neighboring column.           |
+| Persistence   | Debounce writes to the authenticated preference API and flush pending state on page exit. Never make another user's preferences visible and never use shared/global state or `localStorage` as the source of truth.           |
+| Reset         | Delete the authenticated user's saved preference for that `tableId` and restore declared defaults.                                                                                                                            |
+| Actions       | Keep `Ações` fixed outside data-column ordering, hiding, sorting, and resizing. The column-settings control contains only the icon, plus accessible `aria-label` and `title`. Do not create a separate toolbar row for it.    |
+| Accessibility | Preserve semantic table markup, keyboard row opening with Enter/Space, focus styling, accessible sorting state, drag labels, and resize separators.                                                                           |
+| States        | Preserve the standard loading skeleton and translated empty state.                                                                                                                                                            |
+| Contrast      | Use the canonical semantic surfaces: a distinct header, alternating row backgrounds, clear dividers, and a shared hover/focus highlight in both light and dark themes. Do not override these with plugin-specific row colors. |
 
 The component always renders the fixed `Ações` column so the settings icon remains available even for a read-only list with no per-row action buttons.
+
+Numeric values that need emphasis should use the shared `DataValue` component
+with an intentional `accent`, `success`, `info`, or `warning` tone. Summary
+numbers above a table should use `MetricCard`. These components preserve
+contrast in both themes without hard-coded plugin colors.
 
 ## Stable identifiers and persistence
 

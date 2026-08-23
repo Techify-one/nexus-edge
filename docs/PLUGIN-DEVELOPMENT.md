@@ -158,6 +158,11 @@ For every manifest menu route:
    shared typed catalog.
 6. Call only the Core gateway path `/api/v1/p/<plugin-id>/*` with the shared API
    client.
+7. Build screens from the shared `Card`, form controls, `MetricCard`,
+   `DataValue`, and `ConfigurableDataTable` components. They provide the
+   semantic surface hierarchy, metric accents, alternating table rows, and
+   light/dark-theme contrast. Do not hard-code white, black, or plugin-specific
+   page/table surfaces.
 
 Do not add plugin routes, labels, permissions, or icons to
 `frontend/src/components/layout/AppShell.tsx`.

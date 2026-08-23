@@ -123,10 +123,10 @@ export function AppShell() {
     </>
   );
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="app-shell min-h-screen bg-slate-50">
       <aside
         aria-hidden={sidebarHidden}
-        className={`fixed inset-y-0 left-0 z-30 hidden overflow-hidden bg-white transition-[width] duration-200 lg:block ${sidebarHidden ? "w-0 border-r-0" : "w-60 border-r"}`}
+        className={`app-sidebar fixed inset-y-0 left-0 z-30 hidden overflow-hidden bg-white transition-[width] duration-200 lg:block ${sidebarHidden ? "w-0 border-r-0" : "w-60 border-r"}`}
       >
         {!sidebarHidden && <div className="w-60">{nav()}</div>}
       </aside>
@@ -158,7 +158,7 @@ export function AppShell() {
       <div
         className={`transition-[padding] duration-200 ${sidebarHidden ? "lg:pl-0" : "lg:pl-60"}`}
       >
-        <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b bg-white/95 px-4 backdrop-blur sm:px-6">
+        <header className="app-header sticky top-0 z-20 flex h-16 items-center justify-between border-b bg-white/95 px-4 backdrop-blur sm:px-6">
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"

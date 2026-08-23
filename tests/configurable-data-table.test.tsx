@@ -172,6 +172,20 @@ describe("configurable data table", () => {
       screen.getByRole("button", { name: /(ordenar|sort) name/i }),
     );
     const bodyRows = screen.getAllByRole("row").slice(1);
+    expect(
+      bodyRows.every((row) => row.classList.contains("app-table-row")),
+    ).toBe(true);
+    expect(
+      screen
+        .getByRole("table")
+        .parentElement?.classList.contains("app-table-shell"),
+    ).toBe(true);
+    expect(
+      screen
+        .getByRole("columnheader", { name: /name/i })
+        .closest("thead")
+        ?.classList.contains("app-table-head"),
+    ).toBe(true);
     expect(bodyRows[0]?.textContent).toContain("Alice");
     expect(bodyRows[1]?.textContent).toContain("Bob");
 

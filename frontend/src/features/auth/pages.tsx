@@ -52,7 +52,7 @@ const AuthFrame = ({
   description: string;
   children: ReactNode;
 }) => (
-  <main className="grid min-h-screen place-items-center bg-slate-50 p-4">
+  <main className="app-shell grid min-h-screen place-items-center bg-slate-50 p-4">
     <Card className="w-full max-w-md p-6 sm:p-8">
       <div className="mb-4 flex items-center justify-end gap-2">
         <ThemeToggle />

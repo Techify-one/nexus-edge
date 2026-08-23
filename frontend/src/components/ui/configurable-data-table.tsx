@@ -476,7 +476,7 @@ export function ConfigurableDataTable<T extends { id: string }>({
 
   return (
     <div>
-      <div className="overflow-x-auto rounded-2xl border bg-white shadow-sm">
+      <div className="app-table-shell overflow-x-auto rounded-2xl border bg-white shadow-sm">
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
@@ -494,7 +494,7 @@ export function ConfigurableDataTable<T extends { id: string }>({
               ))}
               <col style={{ width: actionsWidth }} />
             </colgroup>
-            <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <thead className="app-table-head bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
               {table.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id}>
                   <SortableContext
@@ -518,7 +518,7 @@ export function ConfigurableDataTable<T extends { id: string }>({
                       );
                     })}
                   </SortableContext>
-                  <th className="sticky right-0 z-20 w-36 border-l bg-slate-50 px-4 py-3 text-right shadow-[-6px_0_10px_-10px_rgba(15,23,42,0.45)]">
+                  <th className="app-table-head sticky right-0 z-20 w-36 border-l bg-slate-50 px-4 py-3 text-right shadow-[-6px_0_10px_-10px_rgba(15,23,42,0.45)]">
                     <div className="flex items-center justify-end gap-1.5">
                       <span>{t("common.actions")}</span>
                       {isSaving && (
@@ -593,7 +593,7 @@ export function ConfigurableDataTable<T extends { id: string }>({
                   tabIndex={0}
                   onKeyDown={(event) => keyOpen(event, row.original)}
                   onClick={() => onOpen(row.original)}
-                  className="group h-14 cursor-pointer border-t transition hover:bg-indigo-50/50 focus:bg-indigo-50/50"
+                  className="app-table-row group h-14 cursor-pointer border-t transition"
                 >
                   {row.getVisibleCells().map((cell) => (
                     <td
@@ -605,7 +605,7 @@ export function ConfigurableDataTable<T extends { id: string }>({
                     </td>
                   ))}
                   <td
-                    className="sticky right-0 z-10 w-36 border-l bg-white px-4 py-2 text-right shadow-[-6px_0_10px_-10px_rgba(15,23,42,0.45)] transition group-hover:bg-indigo-50 group-focus:bg-indigo-50"
+                    className="app-table-action-cell sticky right-0 z-10 w-36 border-l px-4 py-2 text-right shadow-[-6px_0_10px_-10px_rgba(15,23,42,0.45)] transition"
                     onClick={(event) => event.stopPropagation()}
                   >
                     {actions?.(row.original)}

@@ -16,8 +16,10 @@ import {
   Badge,
   Button,
   Card,
+  DataValue,
   Input,
   Label,
+  MetricCard,
   PageHeader,
   Select,
   SingleLineFilterBar,
@@ -964,15 +966,17 @@ export default function MetaAdsDashboardPage() {
 
       <div className="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[
-          [t("metaAds.kpi.ads"), integer(insightRows.length)],
-          [t("metaAds.kpi.spend"), currency(totalSpend)],
-          [t("metaAds.kpi.clicks"), integer(totalClicks)],
-          [t("metaAds.kpi.impressions"), integer(totalImpressions)],
-        ].map(([label, value]) => (
-          <Card key={label} className="p-4">
-            <p className="text-sm text-slate-500">{label}</p>
-            <p className="mt-1 text-xl font-bold">{value}</p>
-          </Card>
+          [t("metaAds.kpi.ads"), integer(insightRows.length), "accent"],
+          [t("metaAds.kpi.spend"), currency(totalSpend), "success"],
+          [t("metaAds.kpi.clicks"), integer(totalClicks), "info"],
+          [t("metaAds.kpi.impressions"), integer(totalImpressions), "warning"],
+        ].map(([label, value, tone]) => (
+          <MetricCard
+            key={label}
+            label={label}
+            value={value}
+            tone={tone as "accent" | "success" | "info" | "warning"}
+          />
         ))}
       </div>
 
@@ -1089,7 +1093,9 @@ export default function MetaAdsDashboardPage() {
               {
                 key: "spend",
                 label: t("metaAds.columns.spend"),
-                render: (row) => currency(row.spend),
+                render: (row) => (
+                  <DataValue tone="success">{currency(row.spend)}</DataValue>
+                ),
                 sortValue: (row) => row.spend,
                 size: 160,
                 minSize: 120,
@@ -1098,7 +1104,7 @@ export default function MetaAdsDashboardPage() {
               {
                 key: "clicks",
                 label: t("metaAds.columns.clicks"),
-                render: (row) => integer(row.clicks),
+                render: (row) => <DataValue>{integer(row.clicks)}</DataValue>,
                 sortValue: (row) => row.clicks,
                 size: 160,
                 minSize: 120,
@@ -1107,7 +1113,9 @@ export default function MetaAdsDashboardPage() {
               {
                 key: "cpc",
                 label: t("metaAds.columns.cpc"),
-                render: (row) => currency(row.cpc),
+                render: (row) => (
+                  <DataValue tone="info">{currency(row.cpc)}</DataValue>
+                ),
                 sortValue: (row) => row.cpc,
                 size: 140,
                 minSize: 110,
@@ -1116,7 +1124,11 @@ export default function MetaAdsDashboardPage() {
               {
                 key: "impressions",
                 label: t("metaAds.columns.impressions"),
-                render: (row) => integer(row.impressions),
+                render: (row) => (
+                  <DataValue tone="warning">
+                    {integer(row.impressions)}
+                  </DataValue>
+                ),
                 sortValue: (row) => row.impressions,
                 size: 170,
                 minSize: 120,
@@ -1125,7 +1137,7 @@ export default function MetaAdsDashboardPage() {
               {
                 key: "ctr",
                 label: t("metaAds.columns.ctr"),
-                render: (row) => percent(row.ctr),
+                render: (row) => <DataValue>{percent(row.ctr)}</DataValue>,
                 sortValue: (row) => row.ctr,
                 size: 140,
                 minSize: 110,
@@ -1134,7 +1146,9 @@ export default function MetaAdsDashboardPage() {
               {
                 key: "purchases",
                 label: t("metaAds.columns.purchases"),
-                render: (row) => integer(row.purchases),
+                render: (row) => (
+                  <DataValue tone="success">{integer(row.purchases)}</DataValue>
+                ),
                 sortValue: (row) => row.purchases,
                 size: 170,
                 minSize: 120,
@@ -1143,7 +1157,11 @@ export default function MetaAdsDashboardPage() {
               {
                 key: "cost_per_purchase",
                 label: t("metaAds.columns.costPerPurchase"),
-                render: (row) => currency(row.costPerPurchase),
+                render: (row) => (
+                  <DataValue tone="warning">
+                    {currency(row.costPerPurchase)}
+                  </DataValue>
+                ),
                 sortValue: (row) => row.costPerPurchase,
                 size: 200,
                 minSize: 140,

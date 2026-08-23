@@ -79,7 +79,7 @@ export const Input = forwardRef<
   <input
     ref={ref}
     className={twMerge(
-      "min-h-11 w-full rounded-xl border bg-white px-3 text-sm shadow-sm placeholder:text-slate-400",
+      "app-field min-h-11 w-full rounded-xl border bg-white px-3 text-sm shadow-sm placeholder:text-slate-400",
       className,
     )}
     {...props}
@@ -124,7 +124,7 @@ export const Select = forwardRef<
   <select
     ref={ref}
     className={twMerge(
-      "min-h-11 w-full rounded-xl border bg-white px-3 text-sm shadow-sm",
+      "app-field min-h-11 w-full rounded-xl border bg-white px-3 text-sm shadow-sm",
       className,
     )}
     {...props}
@@ -138,7 +138,7 @@ export const Textarea = forwardRef<
   <textarea
     ref={ref}
     className={twMerge(
-      "min-h-28 w-full rounded-xl border bg-white p-3 text-sm shadow-sm",
+      "app-field min-h-28 w-full rounded-xl border bg-white p-3 text-sm shadow-sm",
       className,
     )}
     {...props}
@@ -164,9 +164,54 @@ export const Card = ({
   ...props
 }: HTMLAttributes<HTMLDivElement>) => (
   <div
-    className={twMerge("rounded-2xl border bg-white p-5 shadow-sm", className)}
+    className={twMerge(
+      "app-card rounded-2xl border bg-white p-5 shadow-sm",
+      className,
+    )}
     {...props}
   />
+);
+
+export type DataTone = "accent" | "success" | "info" | "warning";
+
+export const MetricCard = ({
+  label,
+  value,
+  tone = "accent",
+  className,
+}: {
+  label: ReactNode;
+  value: ReactNode;
+  tone?: DataTone;
+  className?: string;
+}) => (
+  <Card className={twMerge(`metric-card metric-card-${tone} p-4`, className)}>
+    <p className="metric-label text-xs font-semibold uppercase tracking-wide">
+      {label}
+    </p>
+    <p className="metric-value mt-1.5 text-2xl font-bold tabular-nums">
+      {value}
+    </p>
+  </Card>
+);
+
+export const DataValue = ({
+  children,
+  tone = "accent",
+  className,
+}: {
+  children: ReactNode;
+  tone?: DataTone;
+  className?: string;
+}) => (
+  <span
+    className={twMerge(
+      `data-value data-value-${tone} inline-flex rounded-lg border px-2 py-1 font-semibold tabular-nums`,
+      className,
+    )}
+  >
+    {children}
+  </span>
 );
 export const SingleLineFilterBar = ({
   children,

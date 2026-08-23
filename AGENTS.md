@@ -12,6 +12,8 @@ and rely only on tracked documentation and executable repository commands.
   table.
 - Read `docs/INTERNATIONALIZATION.md` before changing user-facing text or locale
   behavior.
+- Read `docs/UI-STYLING-STANDARD.md` before creating or changing user-facing
+  screens or shared interface components.
 
 ## Required workflow
 
