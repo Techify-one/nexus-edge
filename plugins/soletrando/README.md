@@ -14,11 +14,15 @@ de requisições e envia apenas um contexto interno. Workers AI transcreve o
 
 - quatro fases fixas de dez palavras;
 - a palavra não aparece na tela infantil;
-- a gravação começa somente depois que a síntese de voz termina;
+- a criança pode ouvir a palavra quantas vezes quiser antes de soletrar;
+- o botão **Soletrar** só é liberado depois da primeira audição e é o único
+  que abre o microfone e inicia o cronômetro;
 - transcrição e avaliação ocorrem somente depois de **Enviar resposta**;
-- respostas ambíguas pedem nova gravação sem criar tentativa ou descontar
-  pontos;
+- uma sequência reconhecida diferente recebe zero em assertividade, velocidade
+  e pontos, com feedback claro de erro;
+- somente áudio vazio ou indecifrável pede nova gravação sem criar tentativa;
 - sessões ativas retomam na primeira posição ainda não respondida;
+- a próxima fase só é liberada após dez acertos consecutivos na mesma rodada;
 - a área infantil mantém manifesto e Service Worker instaláveis, restritos ao
   escopo `/soletrando/`;
 - D1 e PostgreSQL possuem migrações equivalentes;

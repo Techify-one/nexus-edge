@@ -8,6 +8,8 @@ import {
   Send,
   Share2,
   Sparkles,
+  ThumbsDown,
+  ThumbsUp,
   Volume2,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -63,6 +65,7 @@ export default function PracticePage() {
   const [summary, setSummary] = useState<PracticeSummary | null>(null);
   const [recording, setRecording] = useState(false);
   const [speaking, setSpeaking] = useState(false);
+  const [listened, setListened] = useState(false);
   const [sending, setSending] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [runningScore, setRunningScore] = useState(0);
@@ -72,7 +75,6 @@ export default function PracticePage() {
   const recordingStartedAtRef = useRef(0);
   const scoresRef = useRef<number[]>([]);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
-  const delayRef = useRef<number | null>(null);
 
   const loadProfile = useCallback(async () => {
     try {
@@ -98,7 +100,6 @@ export default function PracticePage() {
   useEffect(() => {
     void loadProfile();
     return () => {
-      if (delayRef.current !== null) window.clearTimeout(delayRef.current);
       if (utteranceRef.current) {
         utteranceRef.current.onend = null;
         utteranceRef.current.onerror = null;
@@ -150,24 +151,54 @@ export default function PracticePage() {
     recorder.start(250);
   };
 
-  const showPosition = (next: number) => {
+  const showPosition = (next: number, alreadyListened = false) => {
     setPosition(next);
     setFeedback(null);
     setCaptureError("");
     setRecording(false);
     setSpeaking(false);
+    setListened(alreadyListened);
     setMode("playing");
   };
 
-  const speakAndRecord = async (word = words[position] ?? "") => {
+  const speakWord = (word = words[position] ?? "") => {
     if (recording || speaking || sending) return;
+    setCaptureError("");
+    if (!word || !window.speechSynthesis || !window.SpeechSynthesisUtterance) {
+      setCaptureError(t("soletrando.practice.speechUnsupported"));
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(
+      word.toLocaleLowerCase("pt-BR"),
+    );
+    utterance.lang = "pt-BR";
+    utterance.rate = 0.82;
+    utterance.pitch = 1;
+    const voice = window.speechSynthesis
+      .getVoices()
+      .find((candidate) => candidate.lang.toLowerCase() === "pt-br");
+    if (voice) utterance.voice = voice;
+    utterance.onerror = () => {
+      utteranceRef.current = null;
+      setSpeaking(false);
+      setCaptureError(t("soletrando.practice.speechUnsupported"));
+    };
+    utterance.onend = () => {
+      utteranceRef.current = null;
+      setSpeaking(false);
+      setListened(true);
+    };
+    utteranceRef.current = utterance;
+    setSpeaking(true);
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const startSpelling = async () => {
+    if (!listened || recording || speaking || sending) return;
     setCaptureError("");
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
       setCaptureError(t("soletrando.practice.microphoneUnsupported"));
-      return;
-    }
-    if (!word || !window.speechSynthesis || !window.SpeechSynthesisUtterance) {
-      setCaptureError(t("soletrando.practice.speechUnsupported"));
       return;
     }
     try {
@@ -186,44 +217,10 @@ export default function PracticePage() {
         });
         streamRef.current = stream;
       }
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(
-        word.toLocaleLowerCase("pt-BR"),
-      );
-      utterance.lang = "pt-BR";
-      utterance.rate = 0.82;
-      utterance.pitch = 1;
-      const voice = window.speechSynthesis
-        .getVoices()
-        .find((candidate) => candidate.lang.toLowerCase() === "pt-br");
-      if (voice) utterance.voice = voice;
-      utterance.onerror = () => {
-        utteranceRef.current = null;
-        setSpeaking(false);
-        setCaptureError(t("soletrando.practice.speechUnsupported"));
-      };
-      utterance.onend = () => {
-        utteranceRef.current = null;
-        setSpeaking(false);
-        delayRef.current = window.setTimeout(() => {
-          delayRef.current = null;
-          try {
-            if (
-              !stream
-                .getAudioTracks()
-                .some((track) => track.readyState === "live")
-            )
-              throw new Error("microphone stopped");
-            stream.getAudioTracks().forEach((track) => (track.enabled = true));
-            startRecorder(stream);
-          } catch {
-            setCaptureError(t("soletrando.practice.recordingFailed"));
-          }
-        }, 250);
-      };
-      utteranceRef.current = utterance;
-      setSpeaking(true);
-      window.speechSynthesis.speak(utterance);
+      if (!stream.getAudioTracks().some((track) => track.readyState === "live"))
+        throw new Error("microphone stopped");
+      stream.getAudioTracks().forEach((track) => (track.enabled = true));
+      startRecorder(stream);
     } catch {
       setCaptureError(t("soletrando.practice.microphoneDenied"));
     }
@@ -253,10 +250,7 @@ export default function PracticePage() {
       setRunningScore(data.session.runningScore ?? 0);
       const next = data.session.nextPosition ?? 0;
       if (next >= 10) setMode("resume");
-      else {
-        showPosition(next);
-        await speakAndRecord(data.phase.words[next]);
-      }
+      else showPosition(next);
     } catch {
       setError(t("soletrando.practice.tryAgain"));
       setMode("dashboard");
@@ -351,7 +345,6 @@ export default function PracticePage() {
     }
     const next = position + 1;
     showPosition(next);
-    await speakAndRecord(words[next]);
   };
 
   const resume = async () => {
@@ -363,16 +356,10 @@ export default function PracticePage() {
     scoresRef.current = active.scores;
     setRunningScore(active.runningScore);
     if (active.nextPosition >= 10) await finishPhase();
-    else {
-      showPosition(active.nextPosition);
-      await speakAndRecord(active.words[active.nextPosition]);
-    }
+    else showPosition(active.nextPosition);
   };
 
-  const retry = async () => {
-    showPosition(position);
-    await speakAndRecord(words[position]);
-  };
+  const retry = () => showPosition(position, true);
 
   const share = async () => {
     const data = {
@@ -386,7 +373,7 @@ export default function PracticePage() {
 
   if (loading)
     return (
-      <main className="app-shell grid min-h-screen place-items-center p-6">
+      <main className="app-shell grid min-h-[100dvh] place-items-center px-3 py-4 sm:p-6">
         <div className="w-full max-w-lg space-y-4">
           <Skeleton className="h-16" />
           <Skeleton className="h-72" />
@@ -395,13 +382,16 @@ export default function PracticePage() {
     );
   if (!profile)
     return (
-      <main className="app-shell grid min-h-screen place-items-center p-6">
-        <Card className="max-w-md text-center">
+      <main className="app-shell grid min-h-[100dvh] place-items-center px-3 py-4 sm:p-6">
+        <Card className="w-full max-w-md p-5 text-center sm:p-6">
           <LockKeyhole className="mx-auto h-10 w-10 text-indigo-600" />
           <h1 className="mt-4 text-2xl font-bold">
             {t("soletrando.practice.invalidLink")}
           </h1>
-          <Button className="mt-5" onClick={() => void loadProfile()}>
+          <Button
+            className="mt-5 min-h-14 w-full text-base"
+            onClick={() => void loadProfile()}
+          >
             {t("soletrando.practice.tryAgain")}
           </Button>
         </Card>
@@ -409,8 +399,8 @@ export default function PracticePage() {
     );
   if (mode === "preparing")
     return (
-      <main className="app-shell grid min-h-screen place-items-center p-6">
-        <Card className="w-full max-w-md text-center">
+      <main className="app-shell grid min-h-[100dvh] place-items-center px-3 py-4 sm:p-6">
+        <Card className="w-full max-w-md p-5 text-center sm:p-6">
           <Sparkles className="mx-auto h-12 w-12 animate-pulse text-indigo-600" />
           <h1 className="mt-4 text-2xl font-bold">
             {t("soletrando.practice.loading")}
@@ -420,14 +410,14 @@ export default function PracticePage() {
     );
   if (mode === "resume" && profile.activeSession)
     return (
-      <main className="app-shell grid min-h-screen place-items-center p-6">
-        <Card className="w-full max-w-lg text-center">
+      <main className="app-shell grid min-h-[100dvh] place-items-center px-3 py-4 sm:p-6">
+        <Card className="w-full max-w-lg p-5 text-center sm:p-6">
           <Volume2 className="mx-auto h-12 w-12 text-indigo-600" />
           <p className="mt-4 text-sm font-semibold text-indigo-600">
             {t("soletrando.phase")} {profile.activeSession.phase} ·{" "}
             {Math.min(profile.activeSession.nextPosition + 1, 10)}/10
           </p>
-          <h1 className="mt-2 text-3xl font-bold">
+          <h1 className="mt-2 text-2xl font-bold sm:text-3xl">
             {t("soletrando.practice.resumeTitle")}
           </h1>
           <p className="mt-3 text-slate-500">
@@ -443,7 +433,7 @@ export default function PracticePage() {
               : t("soletrando.practice.showResult")}
           </Button>
           <Button
-            className="mt-2 w-full"
+            className="mt-2 min-h-12 w-full"
             variant="ghost"
             onClick={() => setMode("dashboard")}
           >
@@ -454,8 +444,8 @@ export default function PracticePage() {
     );
   if (mode === "playing")
     return (
-      <main className="app-shell min-h-screen p-4 sm:p-8">
-        <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-2xl flex-col">
+      <main className="app-shell min-h-[100dvh] px-3 py-4 sm:p-8">
+        <div className="mx-auto flex min-h-[calc(100dvh-2rem)] max-w-2xl flex-col sm:min-h-[calc(100dvh-4rem)]">
           <div className="mb-4 flex items-center justify-between">
             <span className="text-sm font-semibold text-slate-500">
               {t("soletrando.phase")} {phaseNumber}
@@ -468,30 +458,38 @@ export default function PracticePage() {
               style={{ width: `${(position + 1) * 10}%` }}
             />
           </div>
-          <Card className="my-6 flex flex-1 flex-col items-center justify-center text-center">
+          <Card className="my-4 flex flex-1 flex-col items-center justify-center p-4 text-center sm:my-6 sm:p-6">
             <p className="text-sm font-semibold uppercase tracking-wide text-indigo-600">
               {t("soletrando.practice.secretWord")}
             </p>
-            <div className="mt-6 grid h-24 w-24 place-items-center rounded-full bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40">
+            <div className="mt-5 grid h-20 w-20 place-items-center rounded-full bg-indigo-50 text-indigo-600 sm:mt-6 sm:h-24 sm:w-24 dark:bg-indigo-950/40">
               {recording ? (
-                <Mic className="h-12 w-12 animate-pulse" />
+                <Mic className="h-10 w-10 animate-pulse sm:h-12 sm:w-12" />
+              ) : sending ? (
+                <Sparkles className="h-10 w-10 animate-spin sm:h-12 sm:w-12" />
               ) : (
-                <Volume2 className="h-12 w-12" />
+                <Volume2 className="h-10 w-10 sm:h-12 sm:w-12" />
               )}
             </div>
-            <h1 className="mt-6 text-3xl font-bold">
-              {speaking
-                ? t("soletrando.practice.listenCarefully")
+            <h1 className="mt-5 text-2xl font-bold sm:mt-6 sm:text-3xl">
+              {sending
+                ? t("soletrando.practice.analyzing")
                 : recording
                   ? t("soletrando.practice.yourTurn")
-                  : t("soletrando.practice.readyToListen")}
+                  : speaking
+                    ? t("soletrando.practice.listenCarefully")
+                    : listened
+                      ? t("soletrando.practice.readyToSpell")
+                      : t("soletrando.practice.readyToListen")}
             </h1>
             <p className="mt-3 max-w-md text-slate-500">
-              {speaking
-                ? t("soletrando.practice.recordingAfterVoice")
-                : recording
-                  ? t("soletrando.practice.spellThenSend")
-                  : t("soletrando.practice.tapToListen")}
+              {recording
+                ? t("soletrando.practice.spellThenSend")
+                : sending
+                  ? t("soletrando.practice.audioAfterSend")
+                  : listened
+                    ? t("soletrando.practice.listenedInstructions")
+                    : t("soletrando.practice.listenInstructions")}
             </p>
             {recording && (
               <div className="mt-6 flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
@@ -514,27 +512,47 @@ export default function PracticePage() {
               </p>
             )}
           </Card>
-          <Button
-            className="min-h-16 w-full text-base"
-            disabled={sending || speaking}
-            onClick={() => void (recording ? sendAttempt() : speakAndRecord())}
-          >
-            {sending ? (
-              <Sparkles className="h-5 w-5 animate-spin" />
-            ) : recording ? (
-              <Send className="h-5 w-5" />
-            ) : (
-              <Volume2 className="h-5 w-5" />
-            )}
-            {sending
-              ? t("soletrando.practice.analyzing")
-              : speaking
-                ? t("soletrando.practice.speaking")
-                : recording
-                  ? t("soletrando.practice.send")
-                  : t("soletrando.practice.listen")}
-          </Button>
-          <p className="mt-3 text-center text-sm text-slate-500">
+          {recording || sending ? (
+            <Button
+              className="min-h-16 w-full shrink-0 text-base"
+              disabled={sending}
+              onClick={() => void sendAttempt()}
+            >
+              {sending ? (
+                <Sparkles className="h-5 w-5 animate-spin" />
+              ) : (
+                <Send className="h-5 w-5" />
+              )}
+              {sending
+                ? t("soletrando.practice.analyzing")
+                : t("soletrando.practice.send")}
+            </Button>
+          ) : (
+            <div className="grid shrink-0 gap-3 sm:grid-cols-2">
+              <Button
+                className="min-h-16 w-full text-base"
+                variant="secondary"
+                disabled={speaking}
+                onClick={() => speakWord()}
+              >
+                <Volume2 className="h-5 w-5" />
+                {speaking
+                  ? t("soletrando.practice.speaking")
+                  : listened
+                    ? t("soletrando.practice.listenAgain")
+                    : t("soletrando.practice.listen")}
+              </Button>
+              <Button
+                className="min-h-16 w-full text-base"
+                disabled={!listened || speaking}
+                onClick={() => void startSpelling()}
+              >
+                <Mic className="h-5 w-5" />
+                {t("soletrando.practice.spell")}
+              </Button>
+            </div>
+          )}
+          <p className="mt-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] text-center text-sm text-slate-500">
             {t("soletrando.practice.currentScore", { score: runningScore })}
           </p>
         </div>
@@ -546,18 +564,26 @@ export default function PracticePage() {
     const heard =
       feedback.status === "evaluated" ? feedback.attempt.heard : feedback.heard;
     return (
-      <main className="app-shell grid min-h-screen place-items-center p-6">
-        <Card className="w-full max-w-xl text-center">
-          <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40">
+      <main className="app-shell grid min-h-[100dvh] place-items-center px-3 py-4 sm:p-6">
+        <Card className="w-full max-w-xl p-5 text-center sm:p-6">
+          <div
+            className={
+              retrying
+                ? "mx-auto grid h-20 w-20 place-items-center rounded-full bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40"
+                : correct
+                  ? "mx-auto grid h-20 w-20 place-items-center rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300"
+                  : "mx-auto grid h-20 w-20 place-items-center rounded-full bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-300"
+            }
+          >
             {retrying ? (
               <RotateCcw className="h-10 w-10" />
             ) : correct ? (
-              <Check className="h-10 w-10" />
+              <ThumbsUp className="h-11 w-11" />
             ) : (
-              <Sparkles className="h-10 w-10" />
+              <ThumbsDown className="h-11 w-11" />
             )}
           </div>
-          <h1 className="mt-5 text-3xl font-bold">
+          <h1 className="mt-5 text-2xl font-bold sm:text-3xl">
             {retrying
               ? t("soletrando.practice.retryTitle")
               : correct
@@ -582,7 +608,7 @@ export default function PracticePage() {
             </Card>
           )}
           {feedback.status === "evaluated" && (
-            <div className="mt-5 grid grid-cols-3 gap-3">
+            <div className="mt-5 grid gap-3 sm:grid-cols-3">
               <MetricCard
                 label={t("soletrando.practice.accuracy")}
                 value={feedback.attempt.accuracyScore}
@@ -622,22 +648,37 @@ export default function PracticePage() {
   }
   if (mode === "finished" && summary)
     return (
-      <main className="app-shell grid min-h-screen place-items-center p-6">
-        <Card className="w-full max-w-xl text-center">
-          <Award className="mx-auto h-16 w-16 text-indigo-600" />
-          <p className="mt-4 text-sm font-semibold uppercase tracking-wide text-indigo-600">
-            {t("soletrando.practice.finished", { phase: summary.phase })}
+      <main className="app-shell grid min-h-[100dvh] place-items-center px-3 py-4 sm:p-6">
+        <Card className="w-full max-w-xl p-5 text-center sm:p-6">
+          {summary.passed ? (
+            <Award className="mx-auto h-16 w-16 text-emerald-600" />
+          ) : (
+            <RotateCcw className="mx-auto h-16 w-16 text-red-600" />
+          )}
+          <p
+            className={`mt-4 text-sm font-semibold uppercase tracking-wide ${summary.passed ? "text-emerald-600" : "text-red-600"}`}
+          >
+            {t(
+              summary.passed
+                ? "soletrando.practice.finished"
+                : "soletrando.practice.notPassed",
+              { phase: summary.phase },
+            )}
           </p>
-          <h1 className="mt-2 text-3xl font-bold">
-            {t("soletrando.practice.finishedDescription")}
+          <h1 className="mt-2 text-2xl font-bold sm:text-3xl">
+            {t(
+              summary.passed
+                ? "soletrando.practice.finishedDescription"
+                : "soletrando.practice.notPassedDescription",
+            )}
           </h1>
-          <p className="mt-6 text-6xl font-black text-indigo-600">
+          <p className="mt-5 text-5xl font-black text-indigo-600 sm:mt-6 sm:text-6xl">
             {summary.score}
           </p>
           <p className="text-sm text-slate-500">
             {t("soletrando.practice.outOf100")}
           </p>
-          <div className="mt-6 grid grid-cols-2 gap-3">
+          <div className="mt-6 grid gap-3 sm:grid-cols-2">
             <MetricCard
               label={t("soletrando.correctWords")}
               value={t("soletrando.practice.hits", {
@@ -651,16 +692,40 @@ export default function PracticePage() {
               tone="info"
             />
           </div>
-          <Button className="mt-6 w-full" onClick={() => setMode("dashboard")}>
-            {t("soletrando.practice.viewPhases")}
-          </Button>
-          <Button
-            className="mt-2 w-full"
-            variant="ghost"
-            onClick={() => void startPhase(summary.phase)}
-          >
-            {t("soletrando.practice.trainAgain")}
-          </Button>
+          {summary.passed ? (
+            <>
+              <Button
+                className="mt-6 min-h-14 w-full text-base"
+                onClick={() => setMode("dashboard")}
+              >
+                {t("soletrando.practice.viewPhases")}
+              </Button>
+              <Button
+                className="mt-2 min-h-12 w-full"
+                variant="ghost"
+                onClick={() => void startPhase(summary.phase)}
+              >
+                {t("soletrando.practice.trainAgain")}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                className="mt-6 min-h-14 w-full text-base"
+                onClick={() => void startPhase(summary.phase)}
+              >
+                <RotateCcw className="h-5 w-5" />
+                {t("soletrando.practice.tryPhaseAgain")}
+              </Button>
+              <Button
+                className="mt-2 min-h-12 w-full"
+                variant="ghost"
+                onClick={() => setMode("dashboard")}
+              >
+                {t("soletrando.practice.viewPhases")}
+              </Button>
+            </>
+          )}
         </Card>
       </main>
     );
@@ -668,14 +733,14 @@ export default function PracticePage() {
   const correct = profile.totals.correctCount;
   const attempts = profile.totals.attemptsCount;
   return (
-    <main className="app-shell min-h-screen p-4 sm:p-8">
+    <main className="app-shell min-h-[100dvh] px-3 py-4 sm:p-8">
       <div className="mx-auto max-w-5xl">
-        <div className="mb-5 flex items-center justify-between">
-          <div>
+        <div className="mb-5 flex items-start justify-between gap-3">
+          <div className="min-w-0">
             <p className="text-sm font-semibold text-indigo-600">
               {t("soletrando.practice.hello", { name: profile.child.name })}
             </p>
-            <h1 className="text-3xl font-bold">
+            <h1 className="text-2xl font-bold sm:text-3xl">
               {t("soletrando.practice.welcome")}
             </h1>
             <p className="mt-1 text-slate-500">
@@ -683,6 +748,7 @@ export default function PracticePage() {
             </p>
           </div>
           <Button
+            className="min-h-12 min-w-12 shrink-0 px-3"
             variant="secondary"
             onClick={() => void share()}
             aria-label={t("soletrando.practice.share")}
@@ -690,7 +756,7 @@ export default function PracticePage() {
             <Share2 className="h-5 w-5" />
           </Button>
         </div>
-        <div className="mb-6 grid gap-4 sm:grid-cols-3">
+        <div className="mb-6 grid gap-3 min-[420px]:grid-cols-3 sm:gap-4">
           <MetricCard
             label={t("soletrando.completedPhases")}
             value={`${profile.phases.filter((phase) => phase.completed).length}/4`}
@@ -707,7 +773,7 @@ export default function PracticePage() {
             tone="info"
           />
         </div>
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4 flex items-end justify-between gap-3">
           <h2 className="text-xl font-bold">
             {t("soletrando.practice.journey")}
           </h2>
@@ -717,7 +783,7 @@ export default function PracticePage() {
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           {profile.phases.map((phase) => (
-            <Card key={phase.id} className="flex flex-col">
+            <Card key={phase.id} className="flex flex-col p-5 sm:p-6">
               <div className="flex items-center justify-between">
                 <DataValue tone={phase.completed ? "success" : "accent"}>
                   {t("soletrando.phase")} {phase.id}
@@ -741,7 +807,7 @@ export default function PracticePage() {
                     : t("soletrando.practice.completePrevious")}
               </p>
               <Button
-                className="mt-5 w-full"
+                className="mt-5 min-h-14 w-full text-base"
                 disabled={!phase.unlocked}
                 onClick={() => void startPhase(phase.id)}
               >

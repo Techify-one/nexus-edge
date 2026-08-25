@@ -65,32 +65,37 @@ export const soletrandoFrontendMessages = {
     "soletrando.practice.bestScore": "Melhor nota: {{score}}",
     "soletrando.practice.resumeTitle": "Continue de onde parou",
     "soletrando.practice.resumeDescription":
-      "A próxima palavra continua secreta. Toque para escutar e soletrar.",
-    "soletrando.practice.resume": "Continuar e escutar",
+      "A próxima palavra continua secreta. Continue para ouvir quando quiser.",
+    "soletrando.practice.resume": "Continuar treino",
     "soletrando.practice.showResult": "Ver meu resultado",
     "soletrando.practice.secretWord": "Palavra secreta",
     "soletrando.practice.listenCarefully": "Escute com atenção",
     "soletrando.practice.yourTurn": "Agora é sua vez!",
     "soletrando.practice.readyToListen": "Pronta para ouvir?",
-    "soletrando.practice.recordingAfterVoice":
-      "A gravação começa quando a voz terminar.",
+    "soletrando.practice.readyToSpell": "Agora é hora de soletrar!",
+    "soletrando.practice.listenInstructions":
+      "Ouça a palavra. Você pode repetir quantas vezes quiser.",
+    "soletrando.practice.listenedInstructions":
+      "Pode ouvir novamente ou tocar em Soletrar quando estiver pronta.",
     "soletrando.practice.spellThenSend":
       "Soletre uma letra de cada vez e depois envie.",
-    "soletrando.practice.tapToListen": "Toque para ouvir a palavra.",
     "soletrando.practice.recording": "Gravando",
     "soletrando.practice.audioAfterSend":
       "O áudio só será transcrito depois que você enviar.",
     "soletrando.practice.listen": "Ouvir palavra",
+    "soletrando.practice.listenAgain": "Ouvir novamente",
+    "soletrando.practice.spell": "Soletrar",
     "soletrando.practice.speaking": "Falando a palavra…",
     "soletrando.practice.send": "Enviar resposta",
     "soletrando.practice.analyzing": "Transcrevendo e analisando…",
     "soletrando.practice.currentScore": "Placar atual: {{score}}",
     "soletrando.practice.retryTitle": "Não consegui ouvir direito",
-    "soletrando.practice.correctTitle": "Você acertou!",
-    "soletrando.practice.wrongTitle": "Quase lá!",
-    "soletrando.practice.correctDescription": "Sua soletração ficou certinha.",
+    "soletrando.practice.correctTitle": "Parabéns! Muito bem!",
+    "soletrando.practice.wrongTitle": "Não foi dessa vez",
+    "soletrando.practice.correctDescription":
+      "Você acertou a palavra. Continue assim!",
     "soletrando.practice.wrongDescription":
-      "Desta vez não ficou igual, mas cada tentativa ensina.",
+      "Você errou esta palavra. Tudo bem: capriche na próxima!",
     "soletrando.practice.understood": "Eu entendi",
     "soletrando.practice.accuracy": "Assertividade",
     "soletrando.practice.speed": "Velocidade",
@@ -98,7 +103,12 @@ export const soletrandoFrontendMessages = {
     "soletrando.practice.recordAgain": "Gravar novamente",
     "soletrando.practice.nextWord": "Próxima palavra",
     "soletrando.practice.finished": "Fase {{phase}} concluída",
-    "soletrando.practice.finishedDescription": "Você terminou as dez palavras.",
+    "soletrando.practice.finishedDescription":
+      "Parabéns! Você acertou as dez palavras seguidas e liberou a próxima fase.",
+    "soletrando.practice.notPassed": "Fase {{phase}} ainda não liberada",
+    "soletrando.practice.notPassedDescription":
+      "Você terminou a rodada. Para avançar, acerte as dez palavras seguidas.",
+    "soletrando.practice.tryPhaseAgain": "Tentar a fase novamente",
     "soletrando.practice.outOf100": "de 100 pontos",
     "soletrando.practice.hits": "{{count}}/10 acertos",
     "soletrando.practice.viewPhases": "Ver minhas fases",
@@ -182,32 +192,37 @@ export const soletrandoFrontendMessages = {
     "soletrando.practice.bestScore": "Best score: {{score}}",
     "soletrando.practice.resumeTitle": "Continue where you left off",
     "soletrando.practice.resumeDescription":
-      "The next word remains secret. Tap to listen and spell it.",
-    "soletrando.practice.resume": "Continue and listen",
+      "The next word remains secret. Continue and listen when you are ready.",
+    "soletrando.practice.resume": "Continue practice",
     "soletrando.practice.showResult": "View my result",
     "soletrando.practice.secretWord": "Secret word",
     "soletrando.practice.listenCarefully": "Listen carefully",
     "soletrando.practice.yourTurn": "Now it is your turn!",
     "soletrando.practice.readyToListen": "Ready to listen?",
-    "soletrando.practice.recordingAfterVoice":
-      "Recording starts after the voice ends.",
+    "soletrando.practice.readyToSpell": "Now it is time to spell!",
+    "soletrando.practice.listenInstructions":
+      "Listen to the word. You can repeat it as many times as you want.",
+    "soletrando.practice.listenedInstructions":
+      "Listen again or tap Spell when you are ready.",
     "soletrando.practice.spellThenSend":
       "Spell one letter at a time, then send.",
-    "soletrando.practice.tapToListen": "Tap to hear the word.",
     "soletrando.practice.recording": "Recording",
     "soletrando.practice.audioAfterSend":
       "Audio is transcribed only after you send it.",
     "soletrando.practice.listen": "Hear word",
+    "soletrando.practice.listenAgain": "Hear again",
+    "soletrando.practice.spell": "Spell",
     "soletrando.practice.speaking": "Speaking the word…",
     "soletrando.practice.send": "Send answer",
     "soletrando.practice.analyzing": "Transcribing and checking…",
     "soletrando.practice.currentScore": "Current score: {{score}}",
     "soletrando.practice.retryTitle": "I could not hear clearly",
-    "soletrando.practice.correctTitle": "You got it right!",
-    "soletrando.practice.wrongTitle": "Almost there!",
-    "soletrando.practice.correctDescription": "Your spelling was correct.",
+    "soletrando.practice.correctTitle": "Congratulations! Great job!",
+    "soletrando.practice.wrongTitle": "Not this time",
+    "soletrando.practice.correctDescription":
+      "You spelled the word correctly. Keep it up!",
     "soletrando.practice.wrongDescription":
-      "It was different this time, but every attempt helps.",
+      "This word was incorrect. That is okay: do your best on the next one!",
     "soletrando.practice.understood": "I understood",
     "soletrando.practice.accuracy": "Accuracy",
     "soletrando.practice.speed": "Speed",
@@ -215,7 +230,12 @@ export const soletrandoFrontendMessages = {
     "soletrando.practice.recordAgain": "Record again",
     "soletrando.practice.nextWord": "Next word",
     "soletrando.practice.finished": "Phase {{phase}} completed",
-    "soletrando.practice.finishedDescription": "You completed all ten words.",
+    "soletrando.practice.finishedDescription":
+      "Congratulations! You got all ten words right in a row and unlocked the next phase.",
+    "soletrando.practice.notPassed": "Phase {{phase}} is not unlocked yet",
+    "soletrando.practice.notPassedDescription":
+      "You finished the round. Get all ten words right in a row to advance.",
+    "soletrando.practice.tryPhaseAgain": "Try the phase again",
     "soletrando.practice.outOf100": "out of 100 points",
     "soletrando.practice.hits": "{{count}}/10 correct",
     "soletrando.practice.viewPhases": "View my phases",

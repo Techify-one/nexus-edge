@@ -130,5 +130,6 @@ export type PracticeSummary = {
   score: number;
   correctCount: number;
   totalTimeMs: number;
+  passed: boolean;
   nextPhase: number;
 };

@@ -25,8 +25,8 @@ export class SoletrandoRepository {
             this.db.query(`SELECT c.id, c.name, c.token, c.version,
                 c.created_at AS "createdAt", c.updated_at AS "updatedAt",
                 (SELECT COUNT(*) FROM soletrando_sessions s WHERE s.child_id = c.id) AS "sessionsCount",
-                (SELECT COUNT(DISTINCT s.phase) FROM soletrando_sessions s WHERE s.child_id = c.id AND s.status = 'completed') AS "completedPhases",
-                (SELECT MAX(s.score) FROM soletrando_sessions s WHERE s.child_id = c.id AND s.status = 'completed') AS "bestScore",
+                (SELECT COUNT(DISTINCT s.phase) FROM soletrando_sessions s WHERE s.child_id = c.id AND s.status = 'completed' AND s.correct_count = 10) AS "completedPhases",
+                (SELECT MAX(s.score) FROM soletrando_sessions s WHERE s.child_id = c.id AND s.status = 'completed' AND s.correct_count = 10) AS "bestScore",
                 (SELECT MAX(COALESCE(s.completed_at, s.started_at)) FROM soletrando_sessions s WHERE s.child_id = c.id) AS "lastActivity"
            FROM soletrando_children c
           WHERE (? IS NULL OR lower(c.name) LIKE lower(?))
@@ -158,7 +158,7 @@ export class SoletrandoRepository {
             return null;
         const [phaseResults, recentSessions, totals, activeSessions] = await Promise.all([
             this.db.query(`SELECT phase,MAX(score) AS "bestScore",MAX(completed_at) AS "completedAt",COUNT(*) AS "timesCompleted"
-             FROM soletrando_sessions WHERE child_id=? AND status='completed'
+             FROM soletrando_sessions WHERE child_id=? AND status='completed' AND correct_count=10
             GROUP BY phase ORDER BY phase`, [child.id]),
             this.db.query(`SELECT id,phase,score,correct_count AS "correctCount",total_time_ms AS "totalTimeMs",completed_at AS "completedAt"
              FROM soletrando_sessions WHERE child_id=? AND status='completed'
@@ -227,7 +227,7 @@ export class SoletrandoRepository {
     }
     completedPhases(childId) {
         return this.db.query(`SELECT DISTINCT phase FROM soletrando_sessions
-        WHERE child_id=? AND status='completed'`, [childId]);
+        WHERE child_id=? AND status='completed' AND correct_count=10`, [childId]);
     }
     activeSession(childId) {
         return this.db.first(`SELECT id,phase,started_at AS "startedAt" FROM soletrando_sessions

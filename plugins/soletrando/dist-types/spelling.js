@@ -99,10 +99,11 @@ export function parseSpelling(transcript) {
         unknownTokens,
     };
 }
+export const collapseRecognition = (transcript) => fold(transcript)
+    .replace(/[^a-z]/gu, "")
+    .toUpperCase();
 export const collapsedRecognitionMatches = (transcript, expected) => {
-    const collapsed = fold(transcript)
-        .replace(/[^a-z]/gu, "")
-        .toUpperCase();
+    const collapsed = collapseRecognition(transcript);
     return collapsed.length > 0 && collapsed === expected.toUpperCase();
 };
 export function levenshteinDistance(left, right) {
@@ -123,12 +124,19 @@ export function levenshteinDistance(left, right) {
 }
 export function scoreAttempt(expected, actual, elapsedMs) {
     const correct = expected === actual;
+    if (!correct)
+        return {
+            correct: false,
+            accuracyScore: 0,
+            speedScore: 0,
+            totalScore: 0,
+        };
     const longest = Math.max(expected.length, actual.length, 1);
     const similarity = Math.max(0, 1 - levenshteinDistance(expected, actual) / longest);
     const accuracyScore = Math.round(similarity * 80);
     const secondsPerLetter = elapsedMs / 1_000 / Math.max(expected.length, 1);
     const speedRatio = Math.max(0, Math.min(1, (4 - secondsPerLetter) / 2.5));
-    const speedScore = correct ? Math.round(speedRatio * 20) : 0;
+    const speedScore = Math.round(speedRatio * 20);
     return {
         correct,
         accuracyScore,

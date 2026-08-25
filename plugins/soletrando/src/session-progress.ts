@@ -3,6 +3,11 @@ export type AttemptProgressRow = {
   totalScore?: unknown;
 };
 
+export const isPerfectPhase = (
+  attemptCount: number,
+  correctCount: number,
+): boolean => attemptCount === 10 && correctCount === 10;
+
 export function summarizeSessionProgress(rows: AttemptProgressRow[]) {
   const positions = new Set(
     rows

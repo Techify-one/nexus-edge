@@ -4,8 +4,12 @@ import type { PluginContext, PluginPublicContext } from "@app/core-contract";
 import { z } from "zod";
 import type { SoletrandoEnv } from "./env.js";
 import { SoletrandoRepository } from "./repository.js";
-import { summarizeSessionProgress } from "./session-progress.js";
 import {
+  isPerfectPhase,
+  summarizeSessionProgress,
+} from "./session-progress.js";
+import {
+  collapseRecognition,
   collapsedRecognitionMatches,
   parseSpelling,
   scoreAttempt,
@@ -63,7 +67,7 @@ const isPublicContext = (value: unknown): value is PluginPublicContext => {
 };
 
 app.get("/health", (c) =>
-  c.json({ ok: true, plugin: "soletrando", version: "1.0.1" }),
+  c.json({ ok: true, plugin: "soletrando", version: "1.1.0" }),
 );
 
 app.use("/*", async (c, next) => {
@@ -408,8 +412,9 @@ export const soletrandoPublicRoutes = new Hono<SoletrandoEnv>()
     const parsed = parseSpelling(transcript);
     const collapsedMatch = collapsedRecognitionMatches(transcript, expected);
     const recognizedLetters =
-      parsed.letters || (collapsedMatch ? expected : "");
-    if ((parsed.ambiguous && !collapsedMatch) || !recognizedLetters)
+      parsed.letters ||
+      (collapsedMatch ? expected : collapseRecognition(transcript));
+    if (!recognizedLetters)
       return c.json(
         {
           status: "retry" as const,
@@ -473,7 +478,10 @@ export const soletrandoPublicRoutes = new Hono<SoletrandoEnv>()
           score: Number(session.score ?? 0),
           correctCount: Number(session.correctCount ?? 0),
           totalTimeMs: Number(session.totalTimeMs ?? 0),
-          nextPhase: Math.min(TOTAL_PHASES, Number(session.phase) + 1),
+          passed: isPerfectPhase(10, Number(session.correctCount ?? 0)),
+          nextPhase: isPerfectPhase(10, Number(session.correctCount ?? 0))
+            ? Math.min(TOTAL_PHASES, Number(session.phase) + 1)
+            : Number(session.phase),
         },
       });
     const aggregate = await repository(c).sessionAggregate(session.id);
@@ -487,6 +495,10 @@ export const soletrandoPublicRoutes = new Hono<SoletrandoEnv>()
     const score = Number(aggregate?.score ?? 0);
     const correctCount = Number(aggregate?.correctCount ?? 0);
     const totalTimeMs = Number(aggregate?.totalTimeMs ?? 0);
+    const passed = isPerfectPhase(
+      Number(aggregate?.attemptCount ?? 0),
+      correctCount,
+    );
     const completedAt = await repository(c).finishSession(
       session.id,
       score,
@@ -499,8 +511,11 @@ export const soletrandoPublicRoutes = new Hono<SoletrandoEnv>()
         score,
         correctCount,
         totalTimeMs,
+        passed,
         completedAt,
-        nextPhase: Math.min(TOTAL_PHASES, Number(session.phase) + 1),
+        nextPhase: passed
+          ? Math.min(TOTAL_PHASES, Number(session.phase) + 1)
+          : Number(session.phase),
       },
     });
   });

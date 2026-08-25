@@ -2,8 +2,8 @@ import { Hono } from "hono";
 import { createDatabase } from "@app/database";
 import { z } from "zod";
 import { SoletrandoRepository } from "./repository.js";
-import { summarizeSessionProgress } from "./session-progress.js";
-import { collapsedRecognitionMatches, parseSpelling, scoreAttempt, } from "./spelling.js";
+import { isPerfectPhase, summarizeSessionProgress, } from "./session-progress.js";
+import { collapseRecognition, collapsedRecognitionMatches, parseSpelling, scoreAttempt, } from "./spelling.js";
 import { transcribeSpelling, TranscriptionUnavailableError, } from "./transcription.js";
 import { getPhase, getWord, TOTAL_PHASES } from "./words.js";
 import { SOLETRANDO_ICON_SVG, SOLETRANDO_SERVICE_WORKER, soletrandoManifest, } from "./pwa.js";
@@ -36,7 +36,7 @@ const isPublicContext = (value) => {
     const context = value;
     return Boolean(context.requestId && context.pluginId === "soletrando");
 };
-app.get("/health", (c) => c.json({ ok: true, plugin: "soletrando", version: "1.0.1" }));
+app.get("/health", (c) => c.json({ ok: true, plugin: "soletrando", version: "1.1.0" }));
 app.use("/*", async (c, next) => {
     if (c.req.path === "/health")
         return next();
@@ -266,8 +266,9 @@ export const soletrandoPublicRoutes = new Hono()
     }
     const parsed = parseSpelling(transcript);
     const collapsedMatch = collapsedRecognitionMatches(transcript, expected);
-    const recognizedLetters = parsed.letters || (collapsedMatch ? expected : "");
-    if ((parsed.ambiguous && !collapsedMatch) || !recognizedLetters)
+    const recognizedLetters = parsed.letters ||
+        (collapsedMatch ? expected : collapseRecognition(transcript));
+    if (!recognizedLetters)
         return c.json({
             status: "retry",
             reason: "Não consegui entender as letras com segurança. Fale uma letra de cada vez.",
@@ -314,7 +315,10 @@ export const soletrandoPublicRoutes = new Hono()
                 score: Number(session.score ?? 0),
                 correctCount: Number(session.correctCount ?? 0),
                 totalTimeMs: Number(session.totalTimeMs ?? 0),
-                nextPhase: Math.min(TOTAL_PHASES, Number(session.phase) + 1),
+                passed: isPerfectPhase(10, Number(session.correctCount ?? 0)),
+                nextPhase: isPerfectPhase(10, Number(session.correctCount ?? 0))
+                    ? Math.min(TOTAL_PHASES, Number(session.phase) + 1)
+                    : Number(session.phase),
             },
         });
     const aggregate = await repository(c).sessionAggregate(session.id);
@@ -323,6 +327,7 @@ export const soletrandoPublicRoutes = new Hono()
     const score = Number(aggregate?.score ?? 0);
     const correctCount = Number(aggregate?.correctCount ?? 0);
     const totalTimeMs = Number(aggregate?.totalTimeMs ?? 0);
+    const passed = isPerfectPhase(Number(aggregate?.attemptCount ?? 0), correctCount);
     const completedAt = await repository(c).finishSession(session.id, score, correctCount, totalTimeMs);
     return c.json({
         summary: {
@@ -330,8 +335,11 @@ export const soletrandoPublicRoutes = new Hono()
             score,
             correctCount,
             totalTimeMs,
+            passed,
             completedAt,
-            nextPhase: Math.min(TOTAL_PHASES, Number(session.phase) + 1),
+            nextPhase: passed
+                ? Math.min(TOTAL_PHASES, Number(session.phase) + 1)
+                : Number(session.phase),
         },
     });
 });

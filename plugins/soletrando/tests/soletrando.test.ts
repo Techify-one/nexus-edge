@@ -2,8 +2,12 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { pluginManifestSchema } from "../../../workers/core/src/installer/manifest.js";
 import { SOLETRANDO_SERVICE_WORKER, soletrandoManifest } from "../src/pwa.js";
-import { summarizeSessionProgress } from "../src/session-progress.js";
 import {
+  isPerfectPhase,
+  summarizeSessionProgress,
+} from "../src/session-progress.js";
+import {
+  collapseRecognition,
   collapsedRecognitionMatches,
   parseSpelling,
   scoreAttempt,
@@ -88,6 +92,8 @@ describe("Soletrando plugin", () => {
       ambiguous: true,
     });
     expect(collapsedRecognitionMatches("b o l a", "BOLA")).toBe(true);
+    expect(collapseRecognition("boa")).toBe("BOA");
+    expect(collapsedRecognitionMatches("boa", "BOLA")).toBe(false);
   });
 
   it("scores accuracy and speed without using AI for the decision", () => {
@@ -97,11 +103,23 @@ describe("Soletrando plugin", () => {
       speedScore: 20,
       totalScore: 100,
     });
-    expect(scoreAttempt("BOLA", "BOA", 4_000)).toMatchObject({
+    expect(scoreAttempt("BOLA", "BOA", 4_000)).toEqual({
       correct: false,
-      accuracyScore: 60,
+      accuracyScore: 0,
       speedScore: 0,
+      totalScore: 0,
     });
+  });
+
+  it("unlocks a phase only after ten consecutive correct answers", () => {
+    expect(isPerfectPhase(10, 10)).toBe(true);
+    expect(isPerfectPhase(10, 9)).toBe(false);
+    expect(isPerfectPhase(9, 9)).toBe(false);
+    const repository = readFileSync(
+      "plugins/soletrando/src/repository.ts",
+      "utf8",
+    );
+    expect(repository).toContain("status='completed' AND correct_count=10");
   });
 
   it("resumes at the first unanswered position", () => {
@@ -132,13 +150,24 @@ describe("Soletrando plugin", () => {
     expect(practice).not.toContain(">{words[");
     expect(practice).not.toContain(">{word}");
     const onEnd = practice.indexOf("utterance.onend");
+    const startSpelling = practice.indexOf("const startSpelling");
     expect(onEnd).toBeGreaterThan(-1);
-    expect(practice.indexOf("track.enabled = true", onEnd)).toBeGreaterThan(
-      onEnd,
+    expect(practice.indexOf("setListened(true)", onEnd)).toBeGreaterThan(onEnd);
+    expect(startSpelling).toBeGreaterThan(onEnd);
+    expect(practice.slice(onEnd, startSpelling)).not.toContain(
+      "startRecorder(stream)",
     );
-    expect(practice.indexOf("startRecorder(stream);", onEnd)).toBeGreaterThan(
-      onEnd,
+    expect(practice.indexOf("getUserMedia", startSpelling)).toBeGreaterThan(
+      startSpelling,
     );
+    expect(
+      practice.indexOf("track.enabled = true", startSpelling),
+    ).toBeGreaterThan(startSpelling);
+    expect(
+      practice.indexOf("startRecorder(stream);", startSpelling),
+    ).toBeGreaterThan(startSpelling);
+    expect(practice).toContain("disabled={!listened || speaking}");
+    expect(practice).toContain("{recording || sending ? (");
   });
 
   it("keeps the installable child app scoped away from administration", () => {
@@ -153,5 +182,22 @@ describe("Soletrando plugin", () => {
     );
     expect(SOLETRANDO_SERVICE_WORKER).not.toContain("/api/");
     expect(SOLETRANDO_SERVICE_WORKER).toContain("/soletrando/");
+  });
+
+  it("renders child-friendly success and error feedback", () => {
+    const practice = readFileSync(
+      "plugins/soletrando/frontend/PracticePage.tsx",
+      "utf8",
+    );
+    const messages = readFileSync(
+      "plugins/soletrando/frontend/i18n.ts",
+      "utf8",
+    );
+    expect(practice).toContain("ThumbsUp");
+    expect(practice).toContain("ThumbsDown");
+    expect(practice).toContain("summary.passed");
+    expect(messages).toContain("Parabéns! Muito bem!");
+    expect(messages).toContain("Você errou esta palavra");
+    expect(messages).toContain("acerte as dez palavras seguidas");
   });
 });

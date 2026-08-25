@@ -1,3 +1,4 @@
+export const isPerfectPhase = (attemptCount, correctCount) => attemptCount === 10 && correctCount === 10;
 export function summarizeSessionProgress(rows) {
     const positions = new Set(rows
         .map((row) => Number(row.position))
