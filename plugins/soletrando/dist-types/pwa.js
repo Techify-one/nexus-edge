@@ -4,7 +4,7 @@ export const SOLETRANDO_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" view
   <path d="M22 24h20M22 32h16M22 40h12" stroke="#4f46e5" stroke-width="4" stroke-linecap="round"/>
 </svg>`;
 export const SOLETRANDO_SERVICE_WORKER = `const CACHE_PREFIX = "soletrando-shell-";
-const CACHE = CACHE_PREFIX + "v1.1.4";
+const CACHE = CACHE_PREFIX + "v1.1.5";
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => {
   event.waitUntil(

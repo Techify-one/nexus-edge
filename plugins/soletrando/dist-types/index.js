@@ -50,7 +50,7 @@ const isPublicContext = (value) => {
     const context = value;
     return Boolean(context.requestId && context.pluginId === "soletrando");
 };
-app.get("/health", (c) => c.json({ ok: true, plugin: "soletrando", version: "1.1.4" }));
+app.get("/health", (c) => c.json({ ok: true, plugin: "soletrando", version: "1.1.5" }));
 app.use("/*", async (c, next) => {
     if (c.req.path === "/health")
         return next();

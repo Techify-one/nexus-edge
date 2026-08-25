@@ -254,7 +254,7 @@ describe("Soletrando plugin", () => {
     );
   });
 
-  it("places the feedback action at the top of the result card", () => {
+  it("keeps the feedback action visible at the bottom of a compact mobile card", () => {
     const practice = readFileSync(
       "plugins/soletrando/frontend/PracticePage.tsx",
       "utf8",
@@ -268,12 +268,17 @@ describe("Soletrando plugin", () => {
     );
 
     expect(action).toBeGreaterThan(-1);
-    expect(action).toBeLessThan(feedbackScreen.indexOf("<ThumbsUp"));
+    expect(action).toBeGreaterThan(feedbackScreen.indexOf("<MetricCard"));
     expect(
       feedbackScreen.indexOf(
         "onClick={() => void (retrying ? retry() : nextWord())}",
         action + 1,
       ),
     ).toBe(-1);
+    expect(feedbackScreen).toContain(
+      'className="mt-3 grid grid-cols-3 gap-2 sm:mt-5 sm:gap-3"',
+    );
+    expect(feedbackScreen).toContain('className="mt-auto pt-3 sm:pt-6"');
+    expect(feedbackScreen).toContain("h-14 w-14");
   });
 });

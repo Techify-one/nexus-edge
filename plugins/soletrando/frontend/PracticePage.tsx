@@ -573,48 +573,33 @@ export default function PracticePage() {
         ? feedback.attempt.correctWord
         : undefined;
     return (
-      <main className="app-shell grid min-h-[100dvh] place-items-center px-3 py-4 sm:p-6">
-        <Card className="w-full max-w-xl p-5 text-center sm:p-6">
-          <Button
-            className="mb-6 min-h-14 w-full text-base"
-            onClick={() => void (retrying ? retry() : nextWord())}
-          >
-            {retrying ? (
-              <RotateCcw className="h-5 w-5" />
-            ) : (
-              <Play className="h-5 w-5" />
-            )}
-            {retrying
-              ? t("soletrando.practice.recordAgain")
-              : position === 9
-                ? t("soletrando.practice.showResult")
-                : t("soletrando.practice.nextWord")}
-          </Button>
+      <main className="app-shell flex min-h-[100dvh] px-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 sm:grid sm:place-items-center sm:p-6">
+        <Card className="flex min-h-0 w-full max-w-xl flex-1 flex-col p-3 text-center sm:flex-none sm:p-6">
           <div
             className={
               retrying
-                ? "mx-auto grid h-20 w-20 place-items-center rounded-full bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40"
+                ? "mx-auto grid h-14 w-14 place-items-center rounded-full bg-indigo-50 text-indigo-600 sm:h-20 sm:w-20 dark:bg-indigo-950/40"
                 : correct
-                  ? "mx-auto grid h-20 w-20 place-items-center rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300"
-                  : "mx-auto grid h-20 w-20 place-items-center rounded-full bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-300"
+                  ? "mx-auto grid h-14 w-14 place-items-center rounded-full bg-emerald-50 text-emerald-600 sm:h-20 sm:w-20 dark:bg-emerald-950/40 dark:text-emerald-300"
+                  : "mx-auto grid h-14 w-14 place-items-center rounded-full bg-red-50 text-red-600 sm:h-20 sm:w-20 dark:bg-red-950/40 dark:text-red-300"
             }
           >
             {retrying ? (
-              <RotateCcw className="h-10 w-10" />
+              <RotateCcw className="h-7 w-7 sm:h-10 sm:w-10" />
             ) : correct ? (
-              <ThumbsUp className="h-11 w-11" />
+              <ThumbsUp className="h-8 w-8 sm:h-11 sm:w-11" />
             ) : (
-              <ThumbsDown className="h-11 w-11" />
+              <ThumbsDown className="h-8 w-8 sm:h-11 sm:w-11" />
             )}
           </div>
-          <h1 className="mt-5 text-2xl font-bold sm:text-3xl">
+          <h1 className="mt-2 text-xl font-bold leading-tight sm:mt-5 sm:text-3xl">
             {retrying
               ? t("soletrando.practice.retryTitle")
               : correct
                 ? t("soletrando.practice.correctTitle")
                 : t("soletrando.practice.wrongTitle")}
           </h1>
-          <p className="mt-3 text-slate-500">
+          <p className="mt-1 text-sm leading-snug text-slate-500 sm:mt-3 sm:text-base">
             {retrying
               ? feedback.reason
               : correct
@@ -623,17 +608,17 @@ export default function PracticePage() {
           </p>
           {feedback.status === "evaluated" && heard && (
             <div
-              className={`mt-5 grid gap-3 ${correct ? "" : "sm:grid-cols-2"}`}
+              className={`mt-3 grid gap-2 sm:mt-5 sm:gap-3 ${correct ? "" : "grid-cols-2"}`}
             >
               {!correct && correctWord && (
-                <Card className="border-emerald-200 bg-emerald-50 text-center dark:border-emerald-800">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                <Card className="border-emerald-200 bg-emerald-50 p-3 text-center sm:p-5 dark:border-emerald-800">
+                  <p className="text-[10px] font-semibold uppercase leading-tight tracking-wide text-emerald-700 sm:text-xs dark:text-emerald-300">
                     {t("soletrando.practice.correctWord")}
                   </p>
-                  <p className="mt-2 text-2xl font-black text-emerald-700 dark:text-emerald-300">
+                  <p className="mt-1 text-xl font-black text-emerald-700 sm:mt-2 sm:text-2xl dark:text-emerald-300">
                     {correctWord}
                   </p>
-                  <p className="mt-1 font-bold tracking-widest text-emerald-700 dark:text-emerald-300">
+                  <p className="mt-0.5 text-sm font-bold tracking-widest text-emerald-700 sm:mt-1 sm:text-base dark:text-emerald-300">
                     {correctWord.split("").join(" · ")}
                   </p>
                 </Card>
@@ -641,12 +626,12 @@ export default function PracticePage() {
               <Card
                 className={
                   correct
-                    ? "bg-slate-50 text-center"
-                    : "border-red-200 bg-red-50 text-center dark:border-red-800"
+                    ? "bg-slate-50 p-3 text-center sm:p-5"
+                    : "border-red-200 bg-red-50 p-3 text-center sm:p-5 dark:border-red-800"
                 }
               >
                 <p
-                  className={`text-xs font-semibold uppercase tracking-wide ${correct ? "text-slate-500" : "text-red-700 dark:text-red-300"}`}
+                  className={`text-[10px] font-semibold uppercase leading-tight tracking-wide sm:text-xs ${correct ? "text-slate-500" : "text-red-700 dark:text-red-300"}`}
                 >
                   {t(
                     correct
@@ -655,7 +640,7 @@ export default function PracticePage() {
                   )}
                 </p>
                 <p
-                  className={`mt-2 text-xl font-bold tracking-widest ${correct ? "" : "text-red-700 dark:text-red-300"}`}
+                  className={`mt-1 text-base font-bold tracking-widest sm:mt-2 sm:text-xl ${correct ? "" : "text-red-700 dark:text-red-300"}`}
                 >
                   {heard.split("").join(" · ")}
                 </p>
@@ -663,35 +648,59 @@ export default function PracticePage() {
             </div>
           )}
           {retrying && heard && (
-            <Card className="mt-5 bg-slate-50 text-center">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <Card className="mt-3 bg-slate-50 p-3 text-center sm:mt-5 sm:p-5">
+              <p className="text-[10px] font-semibold uppercase leading-tight tracking-wide text-slate-500 sm:text-xs">
                 {t("soletrando.practice.understood")}
               </p>
-              <p className="mt-2 text-xl font-bold tracking-widest">
+              <p className="mt-1 text-base font-bold tracking-widest sm:mt-2 sm:text-xl">
                 {heard.split("").join(" · ")}
               </p>
             </Card>
           )}
           {feedback.status === "evaluated" && (
-            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <div className="mt-3 grid grid-cols-3 gap-2 sm:mt-5 sm:gap-3">
               <MetricCard
+                className="min-w-0 p-2 [&_.metric-label]:text-[10px] [&_.metric-label]:leading-tight [&_.metric-value]:mt-1 [&_.metric-value]:text-xl sm:p-4 sm:[&_.metric-label]:text-xs sm:[&_.metric-value]:mt-1.5 sm:[&_.metric-value]:text-2xl"
                 label={t("soletrando.practice.accuracy")}
                 value={feedback.attempt.accuracyScore}
                 tone="info"
               />
               <MetricCard
+                className="min-w-0 p-2 [&_.metric-label]:text-[10px] [&_.metric-label]:leading-tight [&_.metric-value]:mt-1 [&_.metric-value]:text-xl sm:p-4 sm:[&_.metric-label]:text-xs sm:[&_.metric-value]:mt-1.5 sm:[&_.metric-value]:text-2xl"
                 label={t("soletrando.practice.speed")}
                 value={feedback.attempt.speedScore}
                 tone="warning"
               />
               <MetricCard
+                className="min-w-0 p-2 [&_.metric-label]:text-[10px] [&_.metric-label]:leading-tight [&_.metric-value]:mt-1 [&_.metric-value]:text-xl sm:p-4 sm:[&_.metric-label]:text-xs sm:[&_.metric-value]:mt-1.5 sm:[&_.metric-value]:text-2xl"
                 label={t("soletrando.practice.points")}
                 value={feedback.attempt.totalScore}
                 tone="success"
               />
             </div>
           )}
-          {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+          {error && (
+            <p className="mt-2 text-xs text-red-600 sm:mt-4 sm:text-sm">
+              {error}
+            </p>
+          )}
+          <div className="mt-auto pt-3 sm:pt-6">
+            <Button
+              className="min-h-12 w-full text-sm sm:min-h-14 sm:text-base"
+              onClick={() => void (retrying ? retry() : nextWord())}
+            >
+              {retrying ? (
+                <RotateCcw className="h-5 w-5" />
+              ) : (
+                <Play className="h-5 w-5" />
+              )}
+              {retrying
+                ? t("soletrando.practice.recordAgain")
+                : position === 9
+                  ? t("soletrando.practice.showResult")
+                  : t("soletrando.practice.nextWord")}
+            </Button>
+          </div>
         </Card>
       </main>
     );
