@@ -250,7 +250,30 @@ describe("Soletrando plugin", () => {
       '<Volume2 className="h-5 w-5" />\n                {speaking',
     );
     expect(practice).toContain(
-      'className="min-h-16 w-full text-base"\n                disabled={speaking}',
+      'className="min-h-16 w-full bg-sky-700 text-base text-white shadow-sm hover:bg-sky-800"\n                disabled={speaking}',
     );
+  });
+
+  it("places the feedback action at the top of the result card", () => {
+    const practice = readFileSync(
+      "plugins/soletrando/frontend/PracticePage.tsx",
+      "utf8",
+    );
+    const feedbackScreen = practice.slice(
+      practice.indexOf('if (mode === "feedback"'),
+      practice.indexOf('if (mode === "finished"'),
+    );
+    const action = feedbackScreen.indexOf(
+      "onClick={() => void (retrying ? retry() : nextWord())}",
+    );
+
+    expect(action).toBeGreaterThan(-1);
+    expect(action).toBeLessThan(feedbackScreen.indexOf("<ThumbsUp"));
+    expect(
+      feedbackScreen.indexOf(
+        "onClick={() => void (retrying ? retry() : nextWord())}",
+        action + 1,
+      ),
+    ).toBe(-1);
   });
 });

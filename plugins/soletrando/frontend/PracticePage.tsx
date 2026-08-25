@@ -536,7 +536,7 @@ export default function PracticePage() {
           ) : (
             <div className="grid shrink-0 gap-3 sm:grid-cols-2">
               <Button
-                className="min-h-16 w-full text-base"
+                className="min-h-16 w-full bg-sky-700 text-base text-white shadow-sm hover:bg-sky-800"
                 disabled={speaking}
                 onClick={() => speakWord()}
               >
@@ -575,6 +575,21 @@ export default function PracticePage() {
     return (
       <main className="app-shell grid min-h-[100dvh] place-items-center px-3 py-4 sm:p-6">
         <Card className="w-full max-w-xl p-5 text-center sm:p-6">
+          <Button
+            className="mb-6 min-h-14 w-full text-base"
+            onClick={() => void (retrying ? retry() : nextWord())}
+          >
+            {retrying ? (
+              <RotateCcw className="h-5 w-5" />
+            ) : (
+              <Play className="h-5 w-5" />
+            )}
+            {retrying
+              ? t("soletrando.practice.recordAgain")
+              : position === 9
+                ? t("soletrando.practice.showResult")
+                : t("soletrando.practice.nextWord")}
+          </Button>
           <div
             className={
               retrying
@@ -677,21 +692,6 @@ export default function PracticePage() {
             </div>
           )}
           {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
-          <Button
-            className="mt-6 min-h-14 w-full text-base"
-            onClick={() => void (retrying ? retry() : nextWord())}
-          >
-            {retrying ? (
-              <RotateCcw className="h-5 w-5" />
-            ) : (
-              <Play className="h-5 w-5" />
-            )}
-            {retrying
-              ? t("soletrando.practice.recordAgain")
-              : position === 9
-                ? t("soletrando.practice.showResult")
-                : t("soletrando.practice.nextWord")}
-          </Button>
         </Card>
       </main>
     );
