@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: production
-      url: https://modular-workers-core.francisconeto.workers.dev
+      url: https://hub.francisconeto.net.br
     concurrency:
       group: modular-workers-core-production
       cancel-in-progress: false
@@ -43,7 +43,7 @@ jobs:
       CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CORE_WORKER_NAME: modular-workers-core
       CORE_WRANGLER_CONFIG: workers/core/wrangler.production.jsonc
-      WORKER_URL: https://modular-workers-core.francisconeto.workers.dev
+      WORKER_URL: https://hub.francisconeto.net.br
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6

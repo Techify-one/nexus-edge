@@ -6,6 +6,12 @@
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
   "preview_urls": false,
+  "routes": [
+    {
+      "pattern": "hub.francisconeto.net.br",
+      "custom_domain": true,
+    },
+  ],
   "assets": {
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
@@ -15,8 +21,8 @@
     "APP_VERSION": "1.0.0",
     "APP_INSTALLATION_ID": "install_4c37c497557b62da6f2e29f23a9cb847",
     "DATABASE_PROVIDER": "d1",
-    "BETTER_AUTH_URL": "https://modular-workers-core.francisconeto.workers.dev",
-    "TRUSTED_ORIGINS": "https://modular-workers-core.francisconeto.workers.dev",
+    "BETTER_AUTH_URL": "https://hub.francisconeto.net.br",
+    "TRUSTED_ORIGINS": "https://hub.francisconeto.net.br",
     "CORE_WORKER_NAME": "modular-workers-core",
     "D1_DATABASE_ID": "475c01e1-ea6e-4f1a-8e27-2f025a092e62",
     "WEBHOOK_ALLOWED_DOMAINS": "",

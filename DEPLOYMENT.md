@@ -9,7 +9,7 @@ never silently switch between D1 and PostgreSQL.
 The production source of truth is `.github/workflows/ci.yml`. Production uses
 the `main` branch, D1, `workers/core/wrangler.production.jsonc`, the Worker
 `modular-workers-core`, and the canonical origin
-`https://modular-workers-core.francisconeto.workers.dev`.
+`https://hub.francisconeto.net.br`.
 
 For every ordinary production deployment, including an implementation request
 that asks for deployment immediately afterward:
