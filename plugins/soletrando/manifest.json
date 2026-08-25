@@ -1,0 +1,19 @@
+{
+  "id": "soletrando",
+  "name": "Soletrando",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "coreMinVersion": "1.0.0",
+  "compatibilityDate": "2026-08-25",
+  "compatibilityFlags": ["nodejs_compat"],
+  "databaseDialects": ["d1", "postgres"],
+  "runtimeBindings": ["ai"],
+  "tablePrefix": "soletrando_",
+  "permissions": [
+    "soletrando.child.read",
+    "soletrando.child.create",
+    "soletrando.child.update",
+    "soletrando.child.delete"
+  ],
+  "menu": [{ "title": "Soletrando", "routeKey": "soletrando.children" }]
+}

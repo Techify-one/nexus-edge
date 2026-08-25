@@ -9,6 +9,7 @@ import {
 } from "react";
 import { crmFrontendMessages } from "../../../plugins/crm/frontend/i18n.js";
 import { metaAdsFrontendMessages } from "../../../plugins/meta_ads/frontend/i18n.js";
+import { soletrandoFrontendMessages } from "../../../plugins/soletrando/frontend/i18n.js";
 
 export const supportedLocales = ["pt-BR", "en"] as const;
 export type AppLocale = (typeof supportedLocales)[number];
@@ -256,6 +257,10 @@ const ptBR = {
   "permissions.meta_ads.ad.read": "Visualizar anúncios da Meta",
   "permissions.meta_ads.ad.update": "Pausar e ativar anúncios da Meta",
   "permissions.meta_ads.insight.read": "Visualizar métricas do Meta Ads",
+  "permissions.soletrando.child.read": "Visualizar crianças e treinos",
+  "permissions.soletrando.child.create": "Cadastrar crianças",
+  "permissions.soletrando.child.update": "Editar crianças e renovar links",
+  "permissions.soletrando.child.delete": "Excluir crianças e históricos",
   "permissions.additional": "Permissão adicional do módulo",
   "permissionGroups.core.user": "Usuários",
   "permissionGroups.core.group": "Grupos e acessos",
@@ -268,6 +273,7 @@ const ptBR = {
   "permissionGroups.meta_ads.adset": "Meta Ads — Conjuntos",
   "permissionGroups.meta_ads.ad": "Meta Ads — Anúncios",
   "permissionGroups.meta_ads.insight": "Meta Ads — Métricas",
+  "permissionGroups.soletrando.child": "Soletrando — Crianças",
   "permissionGroups.additional": "Outras permissões do módulo",
 
   "apiKeys.description": "Credenciais pessoais para scripts e agentes.",
@@ -323,6 +329,7 @@ const ptBR = {
 
   ...crmFrontendMessages["pt-BR"],
   ...metaAdsFrontendMessages["pt-BR"],
+  ...soletrandoFrontendMessages["pt-BR"],
 
   "audit.description": "Ações administrativas e rastreabilidade por requestId.",
   "audit.search": "Buscar por ação",
@@ -669,6 +676,10 @@ const en: Record<TranslationKey, string> = {
   "permissions.meta_ads.ad.read": "View Meta ads",
   "permissions.meta_ads.ad.update": "Pause and activate Meta ads",
   "permissions.meta_ads.insight.read": "View Meta Ads metrics",
+  "permissions.soletrando.child.read": "View children and practice",
+  "permissions.soletrando.child.create": "Register children",
+  "permissions.soletrando.child.update": "Edit children and renew links",
+  "permissions.soletrando.child.delete": "Delete children and histories",
   "permissions.additional": "Additional module permission",
   "permissionGroups.core.user": "Users",
   "permissionGroups.core.group": "Groups and access",
@@ -681,6 +692,7 @@ const en: Record<TranslationKey, string> = {
   "permissionGroups.meta_ads.adset": "Meta Ads — Ad sets",
   "permissionGroups.meta_ads.ad": "Meta Ads — Ads",
   "permissionGroups.meta_ads.insight": "Meta Ads — Metrics",
+  "permissionGroups.soletrando.child": "Spelling Practice — Children",
   "permissionGroups.additional": "Other module permissions",
   "apiKeys.description": "Personal credentials for scripts and agents.",
   "apiKeys.search": "Search keys",
@@ -733,6 +745,7 @@ const en: Record<TranslationKey, string> = {
   "webhooks.rotate": "Rotate",
   ...crmFrontendMessages.en,
   ...metaAdsFrontendMessages.en,
+  ...soletrandoFrontendMessages.en,
   "audit.description": "Administrative actions and requestId traceability.",
   "audit.search": "Search by action",
   "audit.noEvents": "No events",

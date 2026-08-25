@@ -9,6 +9,7 @@
     { "path": "./workers/core" },
     { "path": "./plugins/crm" },
     { "path": "./plugins/meta_ads" },
+    { "path": "./plugins/soletrando" },
     { "path": "./plugins/template" },
     { "path": "./frontend" }
   ]

@@ -7,10 +7,20 @@ import {
   metaAdsPluginRoutePaths,
   metaAdsPluginUiRegistry,
 } from "../../../plugins/meta_ads/frontend/registry.js";
+import {
+  soletrandoPluginRoutePaths,
+  soletrandoPluginUiRegistry,
+} from "../../../plugins/soletrando/frontend/registry.js";
+export {
+  SoletrandoChildDetailPage,
+  SoletrandoPracticePage,
+} from "../../../plugins/soletrando/frontend/registry.js";
 
 type PluginPage = LazyExoticComponent<ComponentType>;
 export type PluginRouteKey =
-  keyof typeof crmPluginRoutePaths | keyof typeof metaAdsPluginRoutePaths;
+  | keyof typeof crmPluginRoutePaths
+  | keyof typeof metaAdsPluginRoutePaths
+  | keyof typeof soletrandoPluginRoutePaths;
 
 /**
  * Plugin UI is compiled into the Core SPA. Record-list pages registered here
@@ -20,6 +30,7 @@ export type PluginRouteKey =
 export const pluginUiRegistry: Record<PluginRouteKey, PluginPage> = {
   ...crmPluginUiRegistry,
   ...metaAdsPluginUiRegistry,
+  ...soletrandoPluginUiRegistry,
 };
 
 /**
@@ -30,6 +41,7 @@ export const pluginUiRegistry: Record<PluginRouteKey, PluginPage> = {
 export const pluginRoutePaths = {
   ...crmPluginRoutePaths,
   ...metaAdsPluginRoutePaths,
+  ...soletrandoPluginRoutePaths,
 } satisfies Record<PluginRouteKey, string>;
 
 export const resolvePluginRoute = (routeKey: string): string | undefined =>

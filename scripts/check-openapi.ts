@@ -5,6 +5,8 @@ const required = [
   "/api/v1/users",
   "/api/v1/groups",
   "/api/v1/p/crm/leads",
+  "/api/v1/p/soletrando/children",
+  "/api/v1/public/p/soletrando/play/{token}",
   "/api/v1/webhooks/endpoints",
   "/api/v1/plugin-operations",
   "/api/v1/audit",

@@ -300,6 +300,21 @@ importers:
         specifier: 4.4.3
         version: 4.4.3
 
+  plugins/soletrando:
+    dependencies:
+      '@app/core-contract':
+        specifier: workspace:*
+        version: link:../../packages/core-contract
+      '@app/database':
+        specifier: workspace:*
+        version: link:../../packages/database
+      hono:
+        specifier: 4.13.3
+        version: 4.13.3
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+
   plugins/template:
     dependencies:
       '@app/core-contract':

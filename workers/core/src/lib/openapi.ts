@@ -4,7 +4,7 @@ export const OPENAPI_DOCUMENT = {
     title: "Nexus Edge API",
     version: "1.0.0",
     description:
-      "API-first administration, CRM, webhooks and plugin installation.",
+      "API-first administration, private plugin gateways, webhooks and plugin installation.",
   },
   servers: [{ url: "/" }],
   components: {
@@ -350,6 +350,52 @@ export const OPENAPI_DOCUMENT = {
     "/api/v1/p/crm/leads": {
       get: { responses: { "200": { description: "Leads" } } },
       post: { responses: { "201": { description: "Lead created" } } },
+    },
+    "/api/v1/p/soletrando/children": {
+      post: {
+        responses: {
+          "201": { description: "Child and practice link created" },
+        },
+      },
+    },
+    "/api/v1/p/soletrando/children/{childId}": {
+      get: {
+        parameters: [{ name: "childId", in: "path", required: true }],
+        responses: { "200": { description: "Child practice history" } },
+      },
+      patch: {
+        parameters: [{ name: "childId", in: "path", required: true }],
+        responses: { "200": { description: "Child updated" } },
+      },
+      delete: {
+        parameters: [{ name: "childId", in: "path", required: true }],
+        responses: { "204": { description: "Child history deleted" } },
+      },
+    },
+    "/api/v1/public/p/soletrando/play/{token}": {
+      get: {
+        security: [],
+        parameters: [{ name: "token", in: "path", required: true }],
+        responses: {
+          "200": { description: "Public spelling practice profile" },
+        },
+      },
+    },
+    "/api/v1/public/p/soletrando/play/{token}/sessions": {
+      post: {
+        security: [],
+        parameters: [{ name: "token", in: "path", required: true }],
+        responses: { "201": { description: "Practice session started" } },
+      },
+    },
+    "/api/v1/public/p/soletrando/play/{token}/attempts": {
+      post: {
+        security: [],
+        parameters: [{ name: "token", in: "path", required: true }],
+        responses: {
+          "200": { description: "Audio transcribed and attempt evaluated" },
+        },
+      },
     },
     "/api/v1/p/meta_ads/accounts": {
       get: {

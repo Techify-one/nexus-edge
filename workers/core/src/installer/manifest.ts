@@ -26,6 +26,7 @@ export const pluginManifestSchema = z
     compatibilityDate,
     compatibilityFlags: z.array(z.string()).max(20),
     databaseDialects: z.tuple([z.literal("d1"), z.literal("postgres")]),
+    runtimeBindings: z.array(z.literal("ai")).max(1).optional(),
     tablePrefix: z.string(),
     permissions: z.array(permission).max(200),
     menu: z
@@ -60,6 +61,7 @@ export const CORE_ROUTE_KEYS = new Set([
   "meta_ads.home",
   "meta_ads.dashboard",
   "meta_ads.accounts",
+  "soletrando.children",
 ]);
 
 export function validateManifestPolicy(

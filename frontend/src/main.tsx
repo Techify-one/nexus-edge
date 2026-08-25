@@ -19,7 +19,11 @@ import {
 import DashboardPage from "./features/dashboard.js";
 import { useI18n } from "./i18n/index.js";
 import { registerChunkRecovery } from "./lib/chunk-recovery.js";
-import { pluginUiRegistry } from "./plugins/registry.js";
+import {
+  pluginUiRegistry,
+  SoletrandoChildDetailPage,
+  SoletrandoPracticePage,
+} from "./plugins/registry.js";
 import { initializeTheme } from "./theme/index.js";
 import "./styles/globals.css";
 
@@ -80,6 +84,10 @@ const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
   { path: "/accept-invite", element: <AcceptInvitePage /> },
   {
+    path: "/soletrando/c/:token",
+    element: lazyElement(SoletrandoPracticePage),
+  },
+  {
     path: "/app",
     element: <AuthenticatedLayout />,
     errorElement: <RouteErrorPage />,
@@ -107,6 +115,14 @@ const router = createBrowserRouter([
       {
         path: "meta-ads/accounts",
         element: lazyElement(pluginUiRegistry["meta_ads.accounts"]),
+      },
+      {
+        path: "soletrando",
+        element: lazyElement(pluginUiRegistry["soletrando.children"]),
+      },
+      {
+        path: "soletrando/children/:childId",
+        element: lazyElement(SoletrandoChildDetailPage),
       },
     ],
   },

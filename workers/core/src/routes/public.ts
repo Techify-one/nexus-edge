@@ -7,6 +7,7 @@ import { hashToken } from "../lib/crypto.js";
 import { AppError, noStore, parseBody } from "../lib/http.js";
 import { dbTime, numberTime, parseJson } from "../lib/values.js";
 import { auditAnonymous } from "../services/audit.js";
+import { publicPluginGatewayRoutes } from "./public-plugin-gateway.js";
 
 type BootstrapRow = {
   bootstrapState: "open" | "claimed" | "complete";
@@ -40,6 +41,8 @@ const findUser = (db: HonoEnv["Variables"]["db"], email: string) =>
   );
 
 export const publicRoutes = new Hono<HonoEnv>();
+
+publicRoutes.route("/public/p", publicPluginGatewayRoutes);
 
 publicRoutes.get("/setup/status", async (c) => {
   const settings = await c

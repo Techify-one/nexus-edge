@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
-const shippedPlugins = ["crm", "meta_ads"];
+const shippedPlugins = ["crm", "meta_ads", "soletrando"];
 
 describe("plugin colocation", () => {
   it.each(shippedPlugins)("keeps every %s concern in one directory", (id) => {

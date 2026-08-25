@@ -12,6 +12,7 @@
   "references": [
     { "path": "../workers/core" },
     { "path": "../plugins/crm" },
-    { "path": "../plugins/meta_ads" }
+    { "path": "../plugins/meta_ads" },
+    { "path": "../plugins/soletrando" }
   ]
 }

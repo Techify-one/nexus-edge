@@ -36,7 +36,11 @@ export async function uploadPluginWorker(
   env: CoreEnv,
   workerName: string,
   code: string,
-  manifest: { compatibilityDate: string; compatibilityFlags: string[] },
+  manifest: {
+    compatibilityDate: string;
+    compatibilityFlags: string[];
+    runtimeBindings?: Array<"ai"> | undefined;
+  },
 ): Promise<void> {
   const bindings: Binding[] = [
     {
@@ -57,6 +61,8 @@ export async function uploadPluginWorker(
       id: env.HYPERDRIVE_ID,
     });
   }
+  if (manifest.runtimeBindings?.includes("ai"))
+    bindings.push({ type: "ai", name: "AI" });
   const body = new FormData();
   body.set(
     "metadata",

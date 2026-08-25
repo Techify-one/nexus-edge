@@ -44,6 +44,8 @@ The manifest is strict and accepts only these fields:
 - a real `compatibilityDate` in `YYYY-MM-DD` format;
 - only compatibility flags allowed by the Core environment;
 - `databaseDialects: ["d1", "postgres"]` in that order;
+- optional `runtimeBindings`, currently limited to `["ai"]`, when the plugin
+  uses the account's Workers AI binding;
 - `tablePrefix` equal to `<id>_`;
 - namespaced permissions in `<id>.<resource>.<action>` form;
 - menu entries whose route keys are compiled into the Core.
@@ -61,6 +63,8 @@ and `wrangler.jsonc`. Keep these Wrangler security settings:
 ```
 
 The Installer supplies the production database binding and provider variable.
+For a manifest that declares `runtimeBindings: ["ai"]`, it also supplies a
+single `AI` binding without exposing Cloudflare credentials to the plugin.
 Never put Cloudflare tokens, passwords, connection strings, session cookies, or
 other secrets in the plugin, manifest, ZIP, migrations, or Wrangler file.
 

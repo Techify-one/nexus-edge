@@ -64,7 +64,20 @@ for (const dialect of ["d1", "postgres"]) {
   );
   if (!metaAds.includes("meta_ads_accounts"))
     throw new Error(`Meta Ads migration is missing for ${dialect}`);
+  const soletrando = readFileSync(
+    `plugins/soletrando/migrations/${dialect}/0001_init.sql`,
+    "utf8",
+  );
+  for (const table of [
+    "soletrando_children",
+    "soletrando_sessions",
+    "soletrando_attempts",
+  ])
+    if (!soletrando.includes(table))
+      throw new Error(
+        `Soletrando migration is missing ${table} for ${dialect}`,
+      );
 }
 process.stdout.write(
-  `D1/PostgreSQL matrix: ${left.length} equivalent tables, ${d1Migrations.length} paired Core migrations, and paired CRM/Meta Ads migrations.\n`,
+  `D1/PostgreSQL matrix: ${left.length} equivalent tables, ${d1Migrations.length} paired Core migrations, and paired CRM/Meta Ads/Soletrando migrations.\n`,
 );

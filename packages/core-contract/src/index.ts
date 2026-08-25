@@ -6,6 +6,11 @@ export type PluginContext = {
   requestId: string;
 };
 
+export type PluginPublicContext = {
+  pluginId: string;
+  requestId: string;
+};
+
 export type RequestPrincipal = {
   userId: string;
   authMethod: AuthMethod;

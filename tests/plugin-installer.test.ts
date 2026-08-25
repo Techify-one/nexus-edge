@@ -11,6 +11,7 @@ import {
   pluginSecretConfigured,
   putPluginSecret,
   replaceCoreBindings,
+  uploadPluginWorker,
 } from "../workers/core/src/installer/cloudflare.js";
 import { AppError } from "../workers/core/src/lib/http.js";
 import { archivePackageStatements } from "../workers/core/src/installer/package-archive.js";
@@ -565,6 +566,40 @@ describe("CRM plugin installer", () => {
 
 describe("Cloudflare plugin bindings", () => {
   afterEach(() => vi.unstubAllGlobals());
+
+  it("adds Workers AI only when the strict manifest requests it", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const metadata = (init?.body as FormData).get("metadata");
+        expect(metadata).toBeInstanceOf(Blob);
+        expect(JSON.parse(await (metadata as Blob).text())).toMatchObject({
+          bindings: expect.arrayContaining([
+            { type: "plain_text", name: "DATABASE_PROVIDER", text: "d1" },
+            { type: "d1", name: "DB", database_id: "database-id" },
+            { type: "ai", name: "AI" },
+          ]),
+        });
+        return Response.json({ success: true, result: {} });
+      }),
+    );
+
+    await uploadPluginWorker(
+      {
+        CF_API_TOKEN: "test-token",
+        CF_ACCOUNT_ID: "test-account",
+        DATABASE_PROVIDER: "d1",
+        D1_DATABASE_ID: "database-id",
+      } as CoreEnv,
+      "app-plugin-soletrando",
+      "export default {};",
+      {
+        compatibilityDate: "2026-08-25",
+        compatibilityFlags: ["nodejs_compat"],
+        runtimeBindings: ["ai"],
+      },
+    );
+  });
 
   it("patches Worker bindings as multipart JSON", async () => {
     const fetchMock = vi.fn(
