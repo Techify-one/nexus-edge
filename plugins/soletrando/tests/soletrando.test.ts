@@ -168,6 +168,23 @@ describe("Soletrando plugin", () => {
     ).toBeGreaterThan(startSpelling);
     expect(practice).toContain("disabled={!listened || speaking}");
     expect(practice).toContain("{recording || sending ? (");
+    expect(practice).toContain("controller.abort(), 30_000");
+  });
+
+  it("bounds and safely logs Workers AI transcription latency", () => {
+    const route = readFileSync("plugins/soletrando/src/index.ts", "utf8");
+    const transcription = readFileSync(
+      "plugins/soletrando/src/transcription.ts",
+      "utf8",
+    );
+
+    expect(transcription).toContain("TRANSCRIPTION_TIMEOUT_MS = 25_000");
+    expect(transcription).toContain(
+      '{ signal, tags: ["soletrando", "transcription"] }',
+    );
+    expect(route).toContain('event: "transcription_failed"');
+    expect(route).toContain('event: "transcription_completed"');
+    expect(route).toContain('return "AI_DAILY_LIMIT"');
   });
 
   it("keeps the installable child app scoped away from administration", () => {
@@ -196,8 +213,27 @@ describe("Soletrando plugin", () => {
     expect(practice).toContain("ThumbsUp");
     expect(practice).toContain("ThumbsDown");
     expect(practice).toContain("summary.passed");
+    expect(practice).toContain("feedback.attempt.correctWord");
+    expect(practice).toContain('"soletrando.practice.correctWord"');
+    expect(practice).toContain('"soletrando.practice.yourSpelling"');
+    expect(readFileSync("plugins/soletrando/src/index.ts", "utf8")).toContain(
+      "correctWord: expected",
+    );
     expect(messages).toContain("Parabéns! Muito bem!");
     expect(messages).toContain("Você errou esta palavra");
+    expect(messages).toContain("A palavra certa");
+    expect(messages).toContain("Você soletrou");
     expect(messages).toContain("acerte as dez palavras seguidas");
+  });
+
+  it("gives the listen action a recognizable child-friendly color", () => {
+    const practice = readFileSync(
+      "plugins/soletrando/frontend/PracticePage.tsx",
+      "utf8",
+    );
+
+    expect(practice).toContain(
+      "border-indigo-200 bg-indigo-50 text-base text-indigo-700 hover:bg-indigo-100",
+    );
   });
 });

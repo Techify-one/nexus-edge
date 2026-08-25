@@ -280,6 +280,8 @@ export default function PracticePage() {
 
   const sendAttempt = async () => {
     if (sending || !recording) return;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 30_000);
     try {
       setSending(true);
       const attemptElapsed = performance.now() - recordingStartedAtRef.current;
@@ -296,6 +298,7 @@ export default function PracticePage() {
       const data = await publicApi<AttemptFeedback>(`/play/${token}/attempts`, {
         method: "POST",
         body: form,
+        signal: controller.signal,
       });
       setFeedback(data);
       if (data.status === "evaluated") {
@@ -311,10 +314,13 @@ export default function PracticePage() {
     } catch {
       setFeedback({
         status: "retry",
-        reason: t("soletrando.practice.tryAgain"),
+        reason: controller.signal.aborted
+          ? t("soletrando.practice.transcriptionTimeout")
+          : t("soletrando.practice.tryAgain"),
       });
       setMode("feedback");
     } finally {
+      window.clearTimeout(timeout);
       setSending(false);
     }
   };
@@ -530,7 +536,7 @@ export default function PracticePage() {
           ) : (
             <div className="grid shrink-0 gap-3 sm:grid-cols-2">
               <Button
-                className="min-h-16 w-full text-base"
+                className="min-h-16 w-full border-indigo-200 bg-indigo-50 text-base text-indigo-700 hover:bg-indigo-100 dark:border-indigo-700 dark:text-indigo-200"
                 variant="secondary"
                 disabled={speaking}
                 onClick={() => speakWord()}
@@ -563,6 +569,10 @@ export default function PracticePage() {
     const correct = feedback.status === "evaluated" && feedback.attempt.correct;
     const heard =
       feedback.status === "evaluated" ? feedback.attempt.heard : feedback.heard;
+    const correctWord =
+      feedback.status === "evaluated"
+        ? feedback.attempt.correctWord
+        : undefined;
     return (
       <main className="app-shell grid min-h-[100dvh] place-items-center px-3 py-4 sm:p-6">
         <Card className="w-full max-w-xl p-5 text-center sm:p-6">
@@ -597,7 +607,48 @@ export default function PracticePage() {
                 ? t("soletrando.practice.correctDescription")
                 : t("soletrando.practice.wrongDescription")}
           </p>
-          {heard && (
+          {feedback.status === "evaluated" && heard && (
+            <div
+              className={`mt-5 grid gap-3 ${correct ? "" : "sm:grid-cols-2"}`}
+            >
+              {!correct && correctWord && (
+                <Card className="border-emerald-200 bg-emerald-50 text-center dark:border-emerald-800">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                    {t("soletrando.practice.correctWord")}
+                  </p>
+                  <p className="mt-2 text-2xl font-black text-emerald-700 dark:text-emerald-300">
+                    {correctWord}
+                  </p>
+                  <p className="mt-1 font-bold tracking-widest text-emerald-700 dark:text-emerald-300">
+                    {correctWord.split("").join(" · ")}
+                  </p>
+                </Card>
+              )}
+              <Card
+                className={
+                  correct
+                    ? "bg-slate-50 text-center"
+                    : "border-red-200 bg-red-50 text-center dark:border-red-800"
+                }
+              >
+                <p
+                  className={`text-xs font-semibold uppercase tracking-wide ${correct ? "text-slate-500" : "text-red-700 dark:text-red-300"}`}
+                >
+                  {t(
+                    correct
+                      ? "soletrando.practice.understood"
+                      : "soletrando.practice.yourSpelling",
+                  )}
+                </p>
+                <p
+                  className={`mt-2 text-xl font-bold tracking-widest ${correct ? "" : "text-red-700 dark:text-red-300"}`}
+                >
+                  {heard.split("").join(" · ")}
+                </p>
+              </Card>
+            </div>
+          )}
+          {retrying && heard && (
             <Card className="mt-5 bg-slate-50 text-center">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 {t("soletrando.practice.understood")}

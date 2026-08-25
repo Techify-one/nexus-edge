@@ -63,6 +63,20 @@ export async function uploadPluginWorker(
   }
   if (manifest.runtimeBindings?.includes("ai"))
     bindings.push({ type: "ai", name: "AI" });
+  const aiObservability = manifest.runtimeBindings?.includes("ai")
+    ? {
+        observability: {
+          enabled: true,
+          head_sampling_rate: 1,
+          logs: {
+            enabled: true,
+            invocation_logs: true,
+            head_sampling_rate: 1,
+            persist: true,
+          },
+        },
+      }
+    : {};
   const body = new FormData();
   body.set(
     "metadata",
@@ -72,6 +86,7 @@ export async function uploadPluginWorker(
           main_module: "worker.mjs",
           compatibility_date: manifest.compatibilityDate,
           compatibility_flags: manifest.compatibilityFlags,
+          ...aiObservability,
           // Runtime credentials are configured as private Worker secrets after
           // installation. Preserve them during package updates; their values
           // are never readable through the Cloudflare settings API.

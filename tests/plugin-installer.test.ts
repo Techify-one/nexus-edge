@@ -574,6 +574,16 @@ describe("Cloudflare plugin bindings", () => {
         const metadata = (init?.body as FormData).get("metadata");
         expect(metadata).toBeInstanceOf(Blob);
         expect(JSON.parse(await (metadata as Blob).text())).toMatchObject({
+          observability: {
+            enabled: true,
+            head_sampling_rate: 1,
+            logs: {
+              enabled: true,
+              invocation_logs: true,
+              head_sampling_rate: 1,
+              persist: true,
+            },
+          },
           bindings: expect.arrayContaining([
             { type: "plain_text", name: "DATABASE_PROVIDER", text: "d1" },
             { type: "d1", name: "DB", database_id: "database-id" },
@@ -597,6 +607,35 @@ describe("Cloudflare plugin bindings", () => {
         compatibilityDate: "2026-08-25",
         compatibilityFlags: ["nodejs_compat"],
         runtimeBindings: ["ai"],
+      },
+    );
+  });
+
+  it("does not enable AI observability for plugins without an AI binding", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const metadata = (init?.body as FormData).get("metadata");
+        expect(metadata).toBeInstanceOf(Blob);
+        expect(JSON.parse(await (metadata as Blob).text())).not.toHaveProperty(
+          "observability",
+        );
+        return Response.json({ success: true, result: {} });
+      }),
+    );
+
+    await uploadPluginWorker(
+      {
+        CF_API_TOKEN: "test-token",
+        CF_ACCOUNT_ID: "test-account",
+        DATABASE_PROVIDER: "d1",
+        D1_DATABASE_ID: "database-id",
+      } as CoreEnv,
+      "app-plugin-crm",
+      "export default {};",
+      {
+        compatibilityDate: "2026-08-25",
+        compatibilityFlags: ["nodejs_compat"],
       },
     );
   });

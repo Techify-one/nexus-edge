@@ -33,6 +33,20 @@ const childUpdateInput = childInput.extend({
 const phaseInput = z.object({ phase: z.number().int().min(1).max(4) });
 const tokenPattern = /^[A-Za-z0-9_-]{32,128}$/u;
 
+const transcriptionFailureCode = (cause: unknown): string => {
+  const detail =
+    cause instanceof Error
+      ? `${cause.name} ${cause.message}`.toLowerCase()
+      : String(cause).toLowerCase();
+  if (/\b3036\b|daily free allocation|account limited|quota/iu.test(detail))
+    return "AI_DAILY_LIMIT";
+  if (/\b3040\b|out of capacity/iu.test(detail)) return "AI_CAPACITY";
+  if (/\b3007\b|\b3008\b|abort|timeout/iu.test(detail)) return "AI_TIMEOUT";
+  if (cause instanceof TranscriptionUnavailableError)
+    return "AI_EMPTY_TRANSCRIPT";
+  return "AI_TRANSCRIPTION_ERROR";
+};
+
 const error = (
   c: Context<SoletrandoEnv>,
   status: 400 | 401 | 403 | 404 | 409 | 413 | 422 | 500 | 503,
@@ -67,7 +81,7 @@ const isPublicContext = (value: unknown): value is PluginPublicContext => {
 };
 
 app.get("/health", (c) =>
-  c.json({ ok: true, plugin: "soletrando", version: "1.1.0" }),
+  c.json({ ok: true, plugin: "soletrando", version: "1.1.1" }),
 );
 
 app.use("/*", async (c, next) => {
@@ -400,15 +414,36 @@ export const soletrandoPublicRoutes = new Hono<SoletrandoEnv>()
       );
 
     let transcript: string;
+    const transcriptionStartedAt = performance.now();
     try {
       transcript = await transcribeSpelling(audio, c.env);
     } catch (cause) {
+      console.error(
+        JSON.stringify({
+          plugin: "soletrando",
+          event: "transcription_failed",
+          requestId: c.get("publicContext")?.requestId,
+          code: transcriptionFailureCode(cause),
+          durationMs: Math.round(performance.now() - transcriptionStartedAt),
+          audioBytes: audio.size,
+        }),
+      );
       const reason =
         cause instanceof TranscriptionUnavailableError
           ? cause.message
           : "O reconhecimento de voz falhou. Tente novamente.";
       return c.json({ status: "retry" as const, reason }, 503);
     }
+    console.log(
+      JSON.stringify({
+        plugin: "soletrando",
+        event: "transcription_completed",
+        requestId: c.get("publicContext")?.requestId,
+        durationMs: Math.round(performance.now() - transcriptionStartedAt),
+        audioBytes: audio.size,
+        aiGatewayLogId: c.env.AI?.aiGatewayLogId ?? undefined,
+      }),
+    );
     const parsed = parseSpelling(transcript);
     const collapsedMatch = collapsedRecognitionMatches(transcript, expected);
     const recognizedLetters =
@@ -444,6 +479,7 @@ export const soletrandoPublicRoutes = new Hono<SoletrandoEnv>()
       attempt: {
         id,
         position,
+        correctWord: expected,
         heard: recognizedLetters,
         elapsedMs: Math.round(elapsedMs),
         ...score,

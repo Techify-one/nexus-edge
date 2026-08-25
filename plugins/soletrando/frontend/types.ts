@@ -109,6 +109,7 @@ export type EvaluatedAttempt = {
   status: "evaluated";
   attempt: {
     correct: boolean;
+    correctWord: string;
     heard: string;
     accuracyScore: number;
     speedScore: number;

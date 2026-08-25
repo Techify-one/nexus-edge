@@ -88,6 +88,8 @@ export const soletrandoFrontendMessages = {
     "soletrando.practice.speaking": "Falando a palavra…",
     "soletrando.practice.send": "Enviar resposta",
     "soletrando.practice.analyzing": "Transcrevendo e analisando…",
+    "soletrando.practice.transcriptionTimeout":
+      "A análise demorou mais que o esperado. Sua palavra continua aqui: grave novamente.",
     "soletrando.practice.currentScore": "Placar atual: {{score}}",
     "soletrando.practice.retryTitle": "Não consegui ouvir direito",
     "soletrando.practice.correctTitle": "Parabéns! Muito bem!",
@@ -97,6 +99,8 @@ export const soletrandoFrontendMessages = {
     "soletrando.practice.wrongDescription":
       "Você errou esta palavra. Tudo bem: capriche na próxima!",
     "soletrando.practice.understood": "Eu entendi",
+    "soletrando.practice.correctWord": "A palavra certa",
+    "soletrando.practice.yourSpelling": "Você soletrou",
     "soletrando.practice.accuracy": "Assertividade",
     "soletrando.practice.speed": "Velocidade",
     "soletrando.practice.points": "Pontos",
@@ -215,6 +219,8 @@ export const soletrandoFrontendMessages = {
     "soletrando.practice.speaking": "Speaking the word…",
     "soletrando.practice.send": "Send answer",
     "soletrando.practice.analyzing": "Transcribing and checking…",
+    "soletrando.practice.transcriptionTimeout":
+      "The check took longer than expected. Your word is still here: record it again.",
     "soletrando.practice.currentScore": "Current score: {{score}}",
     "soletrando.practice.retryTitle": "I could not hear clearly",
     "soletrando.practice.correctTitle": "Congratulations! Great job!",
@@ -224,6 +230,8 @@ export const soletrandoFrontendMessages = {
     "soletrando.practice.wrongDescription":
       "This word was incorrect. That is okay: do your best on the next one!",
     "soletrando.practice.understood": "I understood",
+    "soletrando.practice.correctWord": "The correct word",
+    "soletrando.practice.yourSpelling": "You spelled",
     "soletrando.practice.accuracy": "Accuracy",
     "soletrando.practice.speed": "Speed",
     "soletrando.practice.points": "Points",
