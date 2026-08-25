@@ -8,8 +8,8 @@ never silently switch between D1 and PostgreSQL.
 
 The production source of truth is `.github/workflows/ci.yml`. Production uses
 the `main` branch, D1, `workers/core/wrangler.production.jsonc`, the Worker
-`modular-workers-core`, and the canonical origin
-`https://hub.francisconeto.net.br`.
+`modular-workers-core`, the isolated database `nexus-edge-hub-db`, and the
+canonical origin `https://hub.francisconeto.net.br`.
 
 For every ordinary production deployment, including an implementation request
 that asks for deployment immediately afterward:
@@ -21,9 +21,9 @@ that asks for deployment immediately afterward:
 5. Confirm that the workflow's production smoke tests pass.
 
 The workflow installs locked dependencies, runs the full validation suite,
-applies remote D1 migrations, configures the Installer secrets from GitHub
-environment secrets, invokes `pnpm deploy:core`, and smoke-tests the Core
-origin.
+provisions the remote D1 database and its `app_settings` row, configures the
+Installer secrets from GitHub environment secrets, invokes `pnpm deploy:core`,
+and smoke-tests the Core origin.
 
 Do not run `pnpm deploy:core`, `pnpm deploy:direct`, or `wrangler deploy`
 locally for an ordinary production release. Those commands are retained as

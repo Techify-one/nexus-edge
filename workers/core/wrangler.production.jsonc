@@ -19,12 +19,12 @@
   },
   "vars": {
     "APP_VERSION": "1.0.0",
-    "APP_INSTALLATION_ID": "install_4c37c497557b62da6f2e29f23a9cb847",
+    "APP_INSTALLATION_ID": "install_41d0f93d4e5c41b0be14f175aed651bf",
     "DATABASE_PROVIDER": "d1",
     "BETTER_AUTH_URL": "https://hub.francisconeto.net.br",
     "TRUSTED_ORIGINS": "https://hub.francisconeto.net.br",
     "CORE_WORKER_NAME": "modular-workers-core",
-    "D1_DATABASE_ID": "475c01e1-ea6e-4f1a-8e27-2f025a092e62",
+    "D1_DATABASE_ID": "4f21aded-d6db-4aa6-8c46-15ba7e6b7e0c",
     "WEBHOOK_ALLOWED_DOMAINS": "",
     "API_RATE_LIMIT_MAX": "120",
     "API_RATE_LIMIT_WINDOW_SECONDS": "60",
@@ -33,8 +33,8 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "modular-workers-app-db",
-      "database_id": "475c01e1-ea6e-4f1a-8e27-2f025a092e62",
+      "database_name": "nexus-edge-hub-db",
+      "database_id": "4f21aded-d6db-4aa6-8c46-15ba7e6b7e0c",
       "migrations_dir": "migrations/d1",
     },
   ],

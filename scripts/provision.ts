@@ -11,7 +11,9 @@ const installationId =
   `install_${randomUUID().replaceAll("-", "")}`;
 
 if (provider === "d1") {
-  const config = "workers/core/wrangler.jsonc";
+  const config =
+    process.env.CORE_WRANGLER_CONFIG ?? "workers/core/wrangler.jsonc";
+  const databaseName = process.env.CORE_D1_DATABASE_NAME ?? "nexus-edge-db";
   execFileSync(
     "pnpm",
     [
@@ -20,7 +22,7 @@ if (provider === "d1") {
       "d1",
       "migrations",
       "apply",
-      "nexus-edge-db",
+      databaseName,
       "--remote",
       "--config",
       config,
@@ -35,7 +37,7 @@ if (provider === "d1") {
       "wrangler",
       "d1",
       "execute",
-      "nexus-edge-db",
+      databaseName,
       "--remote",
       "--config",
       config,
