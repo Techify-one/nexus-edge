@@ -7,6 +7,15 @@ const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
 const shippedPlugins = ["crm", "meta_ads", "soletrando"];
 
 describe("plugin colocation", () => {
+  it("includes colocated plugin screens in Tailwind class detection", () => {
+    const styles = readFileSync(
+      resolve(repositoryRoot, "frontend/src/styles/globals.css"),
+      "utf8",
+    );
+
+    expect(styles).toContain('@source "../../../plugins";');
+  });
+
   it.each(shippedPlugins)("keeps every %s concern in one directory", (id) => {
     const root = resolve(repositoryRoot, "plugins", id);
     const manifest = JSON.parse(

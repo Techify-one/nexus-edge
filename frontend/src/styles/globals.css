@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Plugin screens are compiled into the Core SPA but live outside frontend/. */
+@source "../../../plugins";
+
 :root {
   --background: #edf2f8;
   --foreground: #0f172a;
