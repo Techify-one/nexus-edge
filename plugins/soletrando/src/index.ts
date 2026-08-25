@@ -11,6 +11,7 @@ import {
 import {
   collapseRecognition,
   collapsedRecognitionMatches,
+  normalizeRecognitionForExpected,
   parseSpelling,
   scoreAttempt,
 } from "./spelling.js";
@@ -81,7 +82,7 @@ const isPublicContext = (value: unknown): value is PluginPublicContext => {
 };
 
 app.get("/health", (c) =>
-  c.json({ ok: true, plugin: "soletrando", version: "1.1.2" }),
+  c.json({ ok: true, plugin: "soletrando", version: "1.1.3" }),
 );
 
 app.use("/*", async (c, next) => {
@@ -446,9 +447,13 @@ export const soletrandoPublicRoutes = new Hono<SoletrandoEnv>()
     );
     const parsed = parseSpelling(transcript);
     const collapsedMatch = collapsedRecognitionMatches(transcript, expected);
-    const recognizedLetters =
+    const rawRecognizedLetters =
       parsed.letters ||
       (collapsedMatch ? expected : collapseRecognition(transcript));
+    const recognizedLetters = normalizeRecognitionForExpected(
+      rawRecognizedLetters,
+      expected,
+    );
     if (!recognizedLetters)
       return c.json(
         {

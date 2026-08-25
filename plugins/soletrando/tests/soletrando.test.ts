@@ -9,6 +9,7 @@ import {
 import {
   collapseRecognition,
   collapsedRecognitionMatches,
+  normalizeRecognitionForExpected,
   parseSpelling,
   scoreAttempt,
 } from "../src/spelling.js";
@@ -87,6 +88,7 @@ describe("Soletrando plugin", () => {
     expect(parseSpelling("gê i erre a esse esse ó ele").letters).toBe(
       "GIRASSOL",
     );
+    expect(parseSpelling("agá ó er ia").letters).toBe("HORA");
     expect(parseSpelling("bola")).toMatchObject({
       letters: "",
       ambiguous: true,
@@ -94,6 +96,15 @@ describe("Soletrando plugin", () => {
     expect(collapsedRecognitionMatches("b o l a", "BOLA")).toBe(true);
     expect(collapseRecognition("boa")).toBe("BOA");
     expect(collapsedRecognitionMatches("boa", "BOLA")).toBe(false);
+  });
+
+  it("corrects only known letter-name transcription artifacts", () => {
+    expect(normalizeRecognitionForExpected("H O E R I A", "HORA")).toBe("HORA");
+    expect(normalizeRecognitionForExpected("H O E R A", "HORA")).toBe("HORA");
+    expect(normalizeRecognitionForExpected("H O E R I E", "HORA")).toBe(
+      "HOERIE",
+    );
+    expect(normalizeRecognitionForExpected("H O R I A", "CASA")).toBe("HORIA");
   });
 
   it("scores accuracy and speed without using AI for the decision", () => {
@@ -181,6 +192,9 @@ describe("Soletrando plugin", () => {
     expect(transcription).toContain("TRANSCRIPTION_TIMEOUT_MS = 25_000");
     expect(transcription).toContain(
       '{ signal, tags: ["soletrando", "transcription"] }',
+    );
+    expect(transcription).toContain(
+      "Nunca acrescente E antes de R nem I antes de A",
     );
     expect(route).toContain('event: "transcription_failed"');
     expect(route).toContain('event: "transcription_completed"');

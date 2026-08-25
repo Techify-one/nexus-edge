@@ -14,6 +14,7 @@ const LETTER_NAMES: Record<string, string> = {
   aga: "H",
   h: "H",
   i: "I",
+  ia: "A",
   jota: "J",
   j: "J",
   ca: "K",
@@ -31,6 +32,7 @@ const LETTER_NAMES: Record<string, string> = {
   que: "Q",
   q: "Q",
   erre: "R",
+  er: "R",
   r: "R",
   esse: "S",
   s: "S",
@@ -122,6 +124,41 @@ export const collapsedRecognitionMatches = (
   const collapsed = collapseRecognition(transcript);
   return collapsed.length > 0 && collapsed === expected.toUpperCase();
 };
+
+const LETTER_RECOGNITION_ARTIFACTS: Partial<Record<string, readonly string[]>> =
+  {
+    A: ["IA"],
+    R: ["ER"],
+  };
+
+export function normalizeRecognitionForExpected(
+  recognized: string,
+  expected: string,
+): string {
+  const actual = collapseRecognition(recognized);
+  const target = collapseRecognition(expected);
+  if (!actual || !target || actual === target) return actual;
+
+  const memo = new Map<string, boolean>();
+  const matches = (targetIndex: number, actualIndex: number): boolean => {
+    if (targetIndex === target.length) return actualIndex === actual.length;
+    const key = `${targetIndex}:${actualIndex}`;
+    const cached = memo.get(key);
+    if (cached !== undefined) return cached;
+
+    const letter = target[targetIndex]!;
+    const variants = [letter, ...(LETTER_RECOGNITION_ARTIFACTS[letter] ?? [])];
+    const result = variants.some(
+      (variant) =>
+        actual.startsWith(variant, actualIndex) &&
+        matches(targetIndex + 1, actualIndex + variant.length),
+    );
+    memo.set(key, result);
+    return result;
+  };
+
+  return matches(0, 0) ? target : actual;
+}
 
 export function levenshteinDistance(left: string, right: string): number {
   const rows = left.length + 1;

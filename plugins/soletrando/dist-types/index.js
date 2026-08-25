@@ -3,7 +3,7 @@ import { createDatabase } from "@app/database";
 import { z } from "zod";
 import { SoletrandoRepository } from "./repository.js";
 import { isPerfectPhase, summarizeSessionProgress, } from "./session-progress.js";
-import { collapseRecognition, collapsedRecognitionMatches, parseSpelling, scoreAttempt, } from "./spelling.js";
+import { collapseRecognition, collapsedRecognitionMatches, normalizeRecognitionForExpected, parseSpelling, scoreAttempt, } from "./spelling.js";
 import { transcribeSpelling, TranscriptionUnavailableError, } from "./transcription.js";
 import { getPhase, getWord, TOTAL_PHASES } from "./words.js";
 import { SOLETRANDO_ICON_SVG, SOLETRANDO_SERVICE_WORKER, soletrandoManifest, } from "./pwa.js";
@@ -50,7 +50,7 @@ const isPublicContext = (value) => {
     const context = value;
     return Boolean(context.requestId && context.pluginId === "soletrando");
 };
-app.get("/health", (c) => c.json({ ok: true, plugin: "soletrando", version: "1.1.2" }));
+app.get("/health", (c) => c.json({ ok: true, plugin: "soletrando", version: "1.1.3" }));
 app.use("/*", async (c, next) => {
     if (c.req.path === "/health")
         return next();
@@ -297,8 +297,9 @@ export const soletrandoPublicRoutes = new Hono()
     }));
     const parsed = parseSpelling(transcript);
     const collapsedMatch = collapsedRecognitionMatches(transcript, expected);
-    const recognizedLetters = parsed.letters ||
+    const rawRecognizedLetters = parsed.letters ||
         (collapsedMatch ? expected : collapseRecognition(transcript));
+    const recognizedLetters = normalizeRecognitionForExpected(rawRecognizedLetters, expected);
     if (!recognizedLetters)
         return c.json({
             status: "retry",

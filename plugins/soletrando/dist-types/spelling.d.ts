@@ -6,6 +6,7 @@ export type ParsedSpelling = {
 export declare function parseSpelling(transcript: string): ParsedSpelling;
 export declare const collapseRecognition: (transcript: string) => string;
 export declare const collapsedRecognitionMatches: (transcript: string, expected: string) => boolean;
+export declare function normalizeRecognitionForExpected(recognized: string, expected: string): string;
 export declare function levenshteinDistance(left: string, right: string): number;
 export type AttemptScore = {
     correct: boolean;

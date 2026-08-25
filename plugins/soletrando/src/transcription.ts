@@ -26,7 +26,7 @@ export async function transcribeSpelling(
       condition_on_previous_text: false,
       no_speech_threshold: 0.55,
       initial_prompt:
-        "Áudio curto de uma criança brasileira soletrando. Transcreva cada nome de letra como uma letra maiúscula separada por hífen. Não forme palavras e não corrija o que foi falado. Formato: A - M - T.",
+        'Áudio curto de uma criança brasileira soletrando. Transcreva cada nome de letra como uma única letra maiúscula separada por hífen. Não forme palavras e não corrija o que foi falado. Exemplo: "agá, ó, erre, a" deve ser H - O - R - A. Para "erre", escreva somente R; para "a", escreva somente A. Nunca acrescente E antes de R nem I antes de A. Formato: A - M - T.',
     },
     { signal, tags: ["soletrando", "transcription"] },
   );

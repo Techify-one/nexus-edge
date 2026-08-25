@@ -14,6 +14,7 @@ const LETTER_NAMES = {
     aga: "H",
     h: "H",
     i: "I",
+    ia: "A",
     jota: "J",
     j: "J",
     ca: "K",
@@ -31,6 +32,7 @@ const LETTER_NAMES = {
     que: "Q",
     q: "Q",
     erre: "R",
+    er: "R",
     r: "R",
     esse: "S",
     s: "S",
@@ -106,6 +108,32 @@ export const collapsedRecognitionMatches = (transcript, expected) => {
     const collapsed = collapseRecognition(transcript);
     return collapsed.length > 0 && collapsed === expected.toUpperCase();
 };
+const LETTER_RECOGNITION_ARTIFACTS = {
+    A: ["IA"],
+    R: ["ER"],
+};
+export function normalizeRecognitionForExpected(recognized, expected) {
+    const actual = collapseRecognition(recognized);
+    const target = collapseRecognition(expected);
+    if (!actual || !target || actual === target)
+        return actual;
+    const memo = new Map();
+    const matches = (targetIndex, actualIndex) => {
+        if (targetIndex === target.length)
+            return actualIndex === actual.length;
+        const key = `${targetIndex}:${actualIndex}`;
+        const cached = memo.get(key);
+        if (cached !== undefined)
+            return cached;
+        const letter = target[targetIndex];
+        const variants = [letter, ...(LETTER_RECOGNITION_ARTIFACTS[letter] ?? [])];
+        const result = variants.some((variant) => actual.startsWith(variant, actualIndex) &&
+            matches(targetIndex + 1, actualIndex + variant.length));
+        memo.set(key, result);
+        return result;
+    };
+    return matches(0, 0) ? target : actual;
+}
 export function levenshteinDistance(left, right) {
     const rows = left.length + 1;
     const columns = right.length + 1;
