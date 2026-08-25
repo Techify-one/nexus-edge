@@ -226,14 +226,17 @@ describe("Soletrando plugin", () => {
     expect(messages).toContain("acerte as dez palavras seguidas");
   });
 
-  it("gives the listen action a recognizable child-friendly color", () => {
+  it("gives the listen action a high-contrast child-friendly color", () => {
     const practice = readFileSync(
       "plugins/soletrando/frontend/PracticePage.tsx",
       "utf8",
     );
 
     expect(practice).toContain(
-      "border-indigo-200 bg-indigo-50 text-base text-indigo-700 hover:bg-indigo-100",
+      '<Volume2 className="h-5 w-5" />\n                {speaking',
+    );
+    expect(practice).toContain(
+      'className="min-h-16 w-full text-base"\n                disabled={speaking}',
     );
   });
 });

@@ -62,6 +62,20 @@ export declare const soletrandoAdminRoutes: import("hono/hono-base").HonoBase<So
     "/children/:childId": {
         $get: {
             output: {
+                error: {
+                    code: string;
+                    message: string;
+                };
+            };
+            outputFormat: "json";
+            status: 400 | 401 | 403 | 404 | 409 | 413 | 422 | 500 | 503;
+            input: {
+                param: {
+                    childId: string;
+                };
+            };
+        } | {
+            output: {
                 child: {
                     id: string;
                     name: string;
@@ -109,37 +123,12 @@ export declare const soletrandoAdminRoutes: import("hono/hono-base").HonoBase<So
                     childId: string;
                 };
             };
-        } | {
-            output: {
-                error: {
-                    code: string;
-                    message: string;
-                };
-            };
-            outputFormat: "json";
-            status: 400 | 401 | 403 | 404 | 409 | 413 | 422 | 500 | 503;
-            input: {
-                param: {
-                    childId: string;
-                };
-            };
         };
     };
 } & {
     "/children/:childId": {
         $patch: {
             output: {
-                [x: string]: import("hono/utils/types").JSONValue;
-            };
-            outputFormat: "json";
-            status: import("hono/utils/http-status").ContentfulStatusCode;
-            input: {
-                param: {
-                    childId: string;
-                };
-            };
-        } | {
-            output: {
                 error: {
                     code: string;
                     message: string;
@@ -147,6 +136,17 @@ export declare const soletrandoAdminRoutes: import("hono/hono-base").HonoBase<So
             };
             outputFormat: "json";
             status: 400 | 401 | 403 | 404 | 409 | 413 | 422 | 500 | 503;
+            input: {
+                param: {
+                    childId: string;
+                };
+            };
+        } | {
+            output: {
+                [x: string]: import("hono/utils/types").JSONValue;
+            };
+            outputFormat: "json";
+            status: import("hono/utils/http-status").ContentfulStatusCode;
             input: {
                 param: {
                     childId: string;
@@ -158,18 +158,6 @@ export declare const soletrandoAdminRoutes: import("hono/hono-base").HonoBase<So
     "/children/:childId/rotate-link": {
         $post: {
             output: {
-                token: string;
-                linkPath: string;
-            };
-            outputFormat: "json";
-            status: import("hono/utils/http-status").ContentfulStatusCode;
-            input: {
-                param: {
-                    childId: string;
-                };
-            };
-        } | {
-            output: {
                 error: {
                     code: string;
                     message: string;
@@ -177,6 +165,18 @@ export declare const soletrandoAdminRoutes: import("hono/hono-base").HonoBase<So
             };
             outputFormat: "json";
             status: 400 | 401 | 403 | 404 | 409 | 413 | 422 | 500 | 503;
+            input: {
+                param: {
+                    childId: string;
+                };
+            };
+        } | {
+            output: {
+                token: string;
+                linkPath: string;
+            };
+            outputFormat: "json";
+            status: import("hono/utils/http-status").ContentfulStatusCode;
             input: {
                 param: {
                     childId: string;
@@ -224,7 +224,7 @@ export declare const soletrandoPublicRoutes: import("hono/hono-base").HonoBase<S
 } & {
     "/pwa/sw.js": {
         $get: {
-            output: "const CACHE_PREFIX = \"soletrando-shell-\";\nconst CACHE = CACHE_PREFIX + \"v1.1.1\";\nself.addEventListener(\"install\", () => self.skipWaiting());\nself.addEventListener(\"activate\", (event) => {\n  event.waitUntil(\n    caches.keys().then((keys) =>\n      Promise.all(\n        keys\n          .filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE)\n          .map((key) => caches.delete(key)),\n      ),\n    ),\n  );\n  self.clients.claim();\n});\nself.addEventListener(\"fetch\", (event) => {\n  const url = new URL(event.request.url);\n  if (\n    event.request.method !== \"GET\" ||\n    url.origin !== self.location.origin ||\n    (!url.pathname.startsWith(\"/soletrando/\") &&\n      !url.pathname.startsWith(\"/assets/\"))\n  ) return;\n  event.respondWith(\n    fetch(event.request)\n      .then((response) => {\n        if (response.ok)\n          event.waitUntil(\n            caches.open(CACHE).then((cache) =>\n              cache.put(event.request, response.clone()),\n            ),\n          );\n        return response;\n      })\n      .catch(() => caches.match(event.request)),\n  );\n});\n";
+            output: "const CACHE_PREFIX = \"soletrando-shell-\";\nconst CACHE = CACHE_PREFIX + \"v1.1.2\";\nself.addEventListener(\"install\", () => self.skipWaiting());\nself.addEventListener(\"activate\", (event) => {\n  event.waitUntil(\n    caches.keys().then((keys) =>\n      Promise.all(\n        keys\n          .filter((key) => key.startsWith(CACHE_PREFIX) && key !== CACHE)\n          .map((key) => caches.delete(key)),\n      ),\n    ),\n  );\n  self.clients.claim();\n});\nself.addEventListener(\"fetch\", (event) => {\n  const url = new URL(event.request.url);\n  if (\n    event.request.method !== \"GET\" ||\n    url.origin !== self.location.origin ||\n    (!url.pathname.startsWith(\"/soletrando/\") &&\n      !url.pathname.startsWith(\"/assets/\"))\n  ) return;\n  event.respondWith(\n    fetch(event.request)\n      .then((response) => {\n        if (response.ok)\n          event.waitUntil(\n            caches.open(CACHE).then((cache) =>\n              cache.put(event.request, response.clone()),\n            ),\n          );\n        return response;\n      })\n      .catch(() => caches.match(event.request)),\n  );\n});\n";
             outputFormat: "body";
             status: import("hono/utils/http-status").ContentfulStatusCode;
             input: {};
@@ -242,6 +242,20 @@ export declare const soletrandoPublicRoutes: import("hono/hono-base").HonoBase<S
 } & {
     "/play/:token": {
         $get: {
+            output: {
+                error: {
+                    code: string;
+                    message: string;
+                };
+            };
+            outputFormat: "json";
+            status: 400 | 401 | 403 | 404 | 409 | 413 | 422 | 500 | 503;
+            input: {
+                param: {
+                    token: string;
+                };
+            };
+        } | {
             output: {
                 child: {
                     id: string;
@@ -282,7 +296,11 @@ export declare const soletrandoPublicRoutes: import("hono/hono-base").HonoBase<S
                     token: string;
                 };
             };
-        } | {
+        };
+    };
+} & {
+    "/play/:token/sessions": {
+        $post: {
             output: {
                 error: {
                     code: string;
@@ -291,30 +309,6 @@ export declare const soletrandoPublicRoutes: import("hono/hono-base").HonoBase<S
             };
             outputFormat: "json";
             status: 400 | 401 | 403 | 404 | 409 | 413 | 422 | 500 | 503;
-            input: {
-                param: {
-                    token: string;
-                };
-            };
-        };
-    };
-} & {
-    "/play/:token/sessions": {
-        $post: {
-            output: {
-                session: {
-                    id: string;
-                    phase: number;
-                    startedAt: string | number;
-                };
-                phase: {
-                    id: number;
-                    title: string;
-                    words: readonly string[];
-                };
-            };
-            outputFormat: "json";
-            status: 201;
             input: {
                 param: {
                     token: string;
@@ -347,6 +341,30 @@ export declare const soletrandoPublicRoutes: import("hono/hono-base").HonoBase<S
             };
         } | {
             output: {
+                session: {
+                    id: string;
+                    phase: number;
+                    startedAt: string | number;
+                };
+                phase: {
+                    id: number;
+                    title: string;
+                    words: readonly string[];
+                };
+            };
+            outputFormat: "json";
+            status: 201;
+            input: {
+                param: {
+                    token: string;
+                };
+            };
+        };
+    };
+} & {
+    "/play/:token/attempts": {
+        $post: {
+            output: {
                 error: {
                     code: string;
                     message: string;
@@ -359,11 +377,7 @@ export declare const soletrandoPublicRoutes: import("hono/hono-base").HonoBase<S
                     token: string;
                 };
             };
-        };
-    };
-} & {
-    "/play/:token/attempts": {
-        $post: {
+        } | {
             output: {
                 status: "retry";
                 reason: string;
@@ -409,7 +423,11 @@ export declare const soletrandoPublicRoutes: import("hono/hono-base").HonoBase<S
                     token: string;
                 };
             };
-        } | {
+        };
+    };
+} & {
+    "/play/:token/sessions/:sessionId/finish": {
+        $post: {
             output: {
                 error: {
                     code: string;
@@ -421,13 +439,11 @@ export declare const soletrandoPublicRoutes: import("hono/hono-base").HonoBase<S
             input: {
                 param: {
                     token: string;
+                } & {
+                    sessionId: string;
                 };
             };
-        };
-    };
-} & {
-    "/play/:token/sessions/:sessionId/finish": {
-        $post: {
+        } | {
             output: {
                 summary: {
                     phase: number;
@@ -440,22 +456,6 @@ export declare const soletrandoPublicRoutes: import("hono/hono-base").HonoBase<S
             };
             outputFormat: "json";
             status: import("hono/utils/http-status").ContentfulStatusCode;
-            input: {
-                param: {
-                    token: string;
-                } & {
-                    sessionId: string;
-                };
-            };
-        } | {
-            output: {
-                error: {
-                    code: string;
-                    message: string;
-                };
-            };
-            outputFormat: "json";
-            status: 400 | 401 | 403 | 404 | 409 | 413 | 422 | 500 | 503;
             input: {
                 param: {
                     token: string;

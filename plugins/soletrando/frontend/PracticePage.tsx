@@ -536,8 +536,7 @@ export default function PracticePage() {
           ) : (
             <div className="grid shrink-0 gap-3 sm:grid-cols-2">
               <Button
-                className="min-h-16 w-full border-indigo-200 bg-indigo-50 text-base text-indigo-700 hover:bg-indigo-100 dark:border-indigo-700 dark:text-indigo-200"
-                variant="secondary"
+                className="min-h-16 w-full text-base"
                 disabled={speaking}
                 onClick={() => speakWord()}
               >
