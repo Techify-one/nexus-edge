@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { pluginManifestSchema } from "../../../workers/core/src/installer/manifest.js";
+import { SOLETRANDO_SERVICE_WORKER, soletrandoManifest } from "../src/pwa.js";
 import { summarizeSessionProgress } from "../src/session-progress.js";
 import {
   collapsedRecognitionMatches,
@@ -138,5 +139,19 @@ describe("Soletrando plugin", () => {
     expect(practice.indexOf("startRecorder(stream);", onEnd)).toBeGreaterThan(
       onEnd,
     );
+  });
+
+  it("keeps the installable child app scoped away from administration", () => {
+    const token = "A".repeat(43);
+    expect(soletrandoManifest(`/soletrando/c/${token}`)).toMatchObject({
+      start_url: `/soletrando/c/${token}`,
+      scope: "/soletrando/",
+      display: "standalone",
+    });
+    expect(soletrandoManifest("/app/soletrando").start_url).toBe(
+      "/soletrando/",
+    );
+    expect(SOLETRANDO_SERVICE_WORKER).not.toContain("/api/");
+    expect(SOLETRANDO_SERVICE_WORKER).toContain("/soletrando/");
   });
 });

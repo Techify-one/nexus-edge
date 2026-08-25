@@ -19,6 +19,8 @@ de requisições e envia apenas um contexto interno. Workers AI transcreve o
 - respostas ambíguas pedem nova gravação sem criar tentativa ou descontar
   pontos;
 - sessões ativas retomam na primeira posição ainda não respondida;
+- a área infantil mantém manifesto e Service Worker instaláveis, restritos ao
+  escopo `/soletrando/`;
 - D1 e PostgreSQL possuem migrações equivalentes;
 - o Worker não possui URL pública nem Preview URL.
 

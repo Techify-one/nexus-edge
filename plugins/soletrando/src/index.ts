@@ -15,6 +15,11 @@ import {
   TranscriptionUnavailableError,
 } from "./transcription.js";
 import { getPhase, getWord, TOTAL_PHASES } from "./words.js";
+import {
+  SOLETRANDO_ICON_SVG,
+  SOLETRANDO_SERVICE_WORKER,
+  soletrandoManifest,
+} from "./pwa.js";
 
 const app = new Hono<SoletrandoEnv>();
 const childInput = z.object({ name: z.string().trim().min(2).max(50) });
@@ -58,7 +63,7 @@ const isPublicContext = (value: unknown): value is PluginPublicContext => {
 };
 
 app.get("/health", (c) =>
-  c.json({ ok: true, plugin: "soletrando", version: "1.0.0" }),
+  c.json({ ok: true, plugin: "soletrando", version: "1.0.1" }),
 );
 
 app.use("/*", async (c, next) => {
@@ -229,6 +234,24 @@ export const soletrandoAdminRoutes = new Hono<SoletrandoEnv>()
   });
 
 export const soletrandoPublicRoutes = new Hono<SoletrandoEnv>()
+  .get("/pwa/manifest.webmanifest", (c) => {
+    requirePublicContext(c);
+    c.header("Content-Type", "application/manifest+json; charset=utf-8");
+    return c.body(
+      JSON.stringify(soletrandoManifest(c.req.query("start") ?? null)),
+    );
+  })
+  .get("/pwa/sw.js", (c) => {
+    requirePublicContext(c);
+    c.header("Content-Type", "application/javascript; charset=utf-8");
+    c.header("Service-Worker-Allowed", "/soletrando/");
+    return c.body(SOLETRANDO_SERVICE_WORKER);
+  })
+  .get("/pwa/icon.svg", (c) => {
+    requirePublicContext(c);
+    c.header("Content-Type", "image/svg+xml; charset=utf-8");
+    return c.body(SOLETRANDO_ICON_SVG);
+  })
   .get("/play/:token", async (c) => {
     requirePublicContext(c);
     const token = c.req.param("token");

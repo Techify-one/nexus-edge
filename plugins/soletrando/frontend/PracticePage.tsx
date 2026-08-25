@@ -109,6 +109,22 @@ export default function PracticePage() {
   }, [loadProfile]);
 
   useEffect(() => {
+    const manifest = document.createElement("link");
+    manifest.rel = "manifest";
+    manifest.href = `/api/v1/public/p/soletrando/pwa/manifest.webmanifest?start=${encodeURIComponent(window.location.pathname)}`;
+    window.document.head.appendChild(manifest);
+    if ("serviceWorker" in navigator)
+      void navigator.serviceWorker
+        .register("/api/v1/public/p/soletrando/pwa/sw.js", {
+          scope: "/soletrando/",
+        })
+        .catch(() => undefined);
+    return () => {
+      manifest.parentNode?.removeChild(manifest);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!recording) return;
     const interval = window.setInterval(
       () => setElapsed(performance.now() - recordingStartedAtRef.current),
