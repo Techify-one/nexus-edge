@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   canonicalJson,
   installerReleaseSchema,
+  isWorkerModuleContentType,
   splitSqlStatements,
   verifyReleaseSignature,
+  workerModuleContentType,
   type InstallerRelease,
 } from "@app/installer-release-schema";
 
@@ -65,6 +67,18 @@ describe("installer release contract", () => {
         "-- comment\nCREATE TABLE x(v TEXT); INSERT INTO x VALUES ('a;b');",
       ),
     ).toEqual(["CREATE TABLE x(v TEXT)", "INSERT INTO x VALUES ('a;b')"]);
+  });
+
+  it("includes only Cloudflare-supported Worker module content types", () => {
+    expect(workerModuleContentType("index.js")).toBe(
+      "application/javascript+module",
+    );
+    expect(workerModuleContentType("module.wasm")).toBe("application/wasm");
+    expect(workerModuleContentType("wrangler.json")).toBeUndefined();
+    expect(isWorkerModuleContentType("application/javascript+module")).toBe(
+      true,
+    );
+    expect(isWorkerModuleContentType("application/json")).toBe(false);
   });
 
   it("verifies an Ed25519 signature over the canonical manifest hash", async () => {

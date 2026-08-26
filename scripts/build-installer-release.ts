@@ -22,6 +22,7 @@ import {
   migrationArtifactSchema,
   splitSqlStatements,
   stableReleasePointerSchema,
+  workerModuleContentType,
   type InstallerRelease,
   type ReleaseAsset,
   type ReleaseObject,
@@ -98,6 +99,11 @@ async function addObjects(
   const descriptors: Array<ReleaseObject | ReleaseAsset> = [];
   for (const source of await files(root)) {
     if (source.endsWith(".map") || source.endsWith(".assetsignore")) continue;
+    const contentType =
+      category === "modules"
+        ? workerModuleContentType(source)
+        : mimeType(source);
+    if (!contentType) continue;
     const path = relative(root, source).replaceAll("\\", "/");
     const content = await readFile(source);
     const digest = sha256(content);
@@ -108,7 +114,7 @@ async function addObjects(
     const base = {
       path,
       objectKey,
-      mimeType: mimeType(source),
+      mimeType: contentType,
       size: (await stat(source)).size,
       sha256: digest,
     };
