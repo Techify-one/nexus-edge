@@ -48,6 +48,7 @@ const release = installerReleaseSchema.parse({
       statementCount: 1,
     },
   ],
+  databaseSchemaVersion: 1,
   requiredBindings: ["ASSETS", "DB", "WEBHOOK_QUEUE"],
   cron: ["* * * * *"],
   healthChecks: ["/health", "/api/v1/setup/status"],
@@ -55,6 +56,15 @@ const release = installerReleaseSchema.parse({
 }) satisfies InstallerRelease;
 
 describe("installer release contract", () => {
+  it("keeps legacy signed manifests unchanged when schema version is absent", () => {
+    const { databaseSchemaVersion: _databaseSchemaVersion, ...legacy } =
+      release;
+    const parsed = installerReleaseSchema.parse(legacy);
+
+    expect(parsed.databaseSchemaVersion).toBeUndefined();
+    expect(canonicalJson(parsed)).toBe(canonicalJson(legacy));
+  });
+
   it("canonicalizes object keys recursively", () => {
     expect(canonicalJson({ z: 1, a: { d: 2, b: 3 } })).toBe(
       '{"a":{"b":3,"d":2},"z":1}',

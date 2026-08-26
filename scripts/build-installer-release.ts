@@ -27,6 +27,7 @@ import {
   type ReleaseAsset,
   type ReleaseObject,
 } from "@app/installer-release-schema";
+import { SCHEMA_VERSION } from "../packages/db-schema/src/common/index.js";
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
 const packageJson = JSON.parse(
@@ -188,6 +189,7 @@ const release = installerReleaseSchema.parse({
   modules,
   assets,
   d1Migrations,
+  databaseSchemaVersion: SCHEMA_VERSION,
   requiredBindings: ["ASSETS", "DB", "WEBHOOK_QUEUE"],
   cron: ["* * * * *"],
   healthChecks: ["/health", "/api/v1/setup/status"],
