@@ -376,6 +376,30 @@ const ptBR = {
   "plugins.gzipTooLarge": "O worker compactado excede 3 MiB.",
   "plugins.installFailed":
     "A instalação falhou. Abra e copie o relatório de suporte abaixo.",
+  "plugins.runtimeCredentialTitle": "Autorize a publicação do primeiro plugin",
+  "plugins.runtimeCredentialBody":
+    "Esta configuração é feita uma única vez. Crie um token dedicado na conta Cloudflare selecionada durante a instalação.",
+  "plugins.runtimeCredentialOpen": "Abrir tokens desta conta",
+  "plugins.runtimeCredentialStepCreate":
+    "Na Cloudflare, clique em Create Token e escolha criar um Custom Token.",
+  "plugins.runtimeCredentialStepPermission": "Adicione somente esta permissão:",
+  "plugins.runtimeCredentialStepAccount":
+    "Em Account Resources, inclua somente a conta:",
+  "plugins.runtimeCredentialStepPaste":
+    "Conclua a criação, copie o token exibido e cole-o abaixo.",
+  "plugins.runtimeCredentialWarning":
+    "A Cloudflare mostra o token apenas uma vez. Não o envie por mensagem nem o salve em documentos.",
+  "plugins.runtimeCredentialLabel": "API Token dedicado",
+  "plugins.runtimeCredentialHelp":
+    "O token será validado e gravado diretamente como secret deste Core Worker. Ele não será salvo no banco.",
+  "plugins.runtimeCredentialContinue": "Salvar token e instalar",
+  "plugins.runtimeCredentialSaved":
+    "Credencial de plugins configurada. Iniciando instalação…",
+  "plugins.runtimeCredentialActivationPending":
+    "A Cloudflare salvou o secret, mas a nova versão do Worker ainda está ativando. Aguarde alguns segundos e tente instalar novamente.",
+  "plugins.runtimeCredentialLoadFailed":
+    "Não foi possível verificar a credencial de plugins.",
+  "plugins.runtimeCredentialRetry": "Verificar novamente",
   "plugins.supportReport": "Relatório de suporte da instalação",
   "plugins.supportReportHelp":
     "Copie este diagnóstico seguro e envie ao desenvolvedor. Logs brutos, credenciais e segredos não são incluídos.",
@@ -416,6 +440,16 @@ const ptBR = {
     "O arquivo selecionado não é exatamente o pacote usado nesta instalação.",
   "errors.PLUGIN_PACKAGE_CONTAINS_RUNTIME_VALUE":
     "O pacote contém uma configuração ou credencial específica desta instalação e não pode ser instalado.",
+  "errors.PLUGIN_RUNTIME_CREDENTIAL_REQUIRED":
+    "Configure o token limitado da Cloudflare antes de instalar o plugin.",
+  "errors.PLUGIN_RUNTIME_CREDENTIAL_INVALID":
+    "O token é inválido, pertence a outra conta ou não possui Workers Scripts Edit.",
+  "errors.PLUGIN_RUNTIME_CREDENTIAL_TOO_BROAD":
+    "Use um token dedicado com somente Workers Scripts Edit nesta conta.",
+  "errors.PLUGIN_RUNTIME_CREDENTIAL_TARGET_MISSING":
+    "A conta Cloudflare desta instalação não está configurada no Core.",
+  "errors.PLUGIN_RUNTIME_CREDENTIAL_SAVE_FAILED":
+    "A Cloudflare não conseguiu gravar o token como secret do Core Worker.",
   "errors.EMAIL_ALREADY_EXISTS": "Este e-mail já pertence a outro usuário.",
   "errors.PASSWORD_ACCOUNT_UNAVAILABLE":
     "Este usuário não possui uma conta com senha.",
@@ -789,6 +823,30 @@ const en: Record<TranslationKey, string> = {
   "plugins.gzipTooLarge": "The compressed Worker exceeds 3 MiB.",
   "plugins.installFailed":
     "Installation failed. Open and copy the support report below.",
+  "plugins.runtimeCredentialTitle": "Authorize the first plugin deployment",
+  "plugins.runtimeCredentialBody":
+    "This is a one-time setup. Create a dedicated token in the Cloudflare account selected during installation.",
+  "plugins.runtimeCredentialOpen": "Open this account's tokens",
+  "plugins.runtimeCredentialStepCreate":
+    "In Cloudflare, select Create Token and choose to create a Custom Token.",
+  "plugins.runtimeCredentialStepPermission": "Add only this permission:",
+  "plugins.runtimeCredentialStepAccount":
+    "Under Account Resources, include only this account:",
+  "plugins.runtimeCredentialStepPaste":
+    "Finish creating it, copy the displayed token, and paste it below.",
+  "plugins.runtimeCredentialWarning":
+    "Cloudflare displays the token only once. Do not send it in a message or save it in a document.",
+  "plugins.runtimeCredentialLabel": "Dedicated API Token",
+  "plugins.runtimeCredentialHelp":
+    "The token is validated and written directly as a secret on this Core Worker. It is never stored in the database.",
+  "plugins.runtimeCredentialContinue": "Save token and install",
+  "plugins.runtimeCredentialSaved":
+    "Plugin credential configured. Starting installation…",
+  "plugins.runtimeCredentialActivationPending":
+    "Cloudflare saved the secret, but the new Worker version is still activating. Wait a few seconds and try installing again.",
+  "plugins.runtimeCredentialLoadFailed":
+    "The plugin credential status could not be checked.",
+  "plugins.runtimeCredentialRetry": "Check again",
   "plugins.supportReport": "Installation support report",
   "plugins.supportReportHelp":
     "Copy this safe diagnostic and send it to the developer. Raw logs, credentials, and secrets are not included.",
@@ -828,6 +886,16 @@ const en: Record<TranslationKey, string> = {
     "The selected file is not exactly the package used for this installation.",
   "errors.PLUGIN_PACKAGE_CONTAINS_RUNTIME_VALUE":
     "The package contains configuration or credentials specific to this installation and cannot be installed.",
+  "errors.PLUGIN_RUNTIME_CREDENTIAL_REQUIRED":
+    "Configure the limited Cloudflare token before installing the plugin.",
+  "errors.PLUGIN_RUNTIME_CREDENTIAL_INVALID":
+    "The token is invalid, belongs to another account, or lacks Workers Scripts Edit.",
+  "errors.PLUGIN_RUNTIME_CREDENTIAL_TOO_BROAD":
+    "Use a dedicated token with only Workers Scripts Edit on this account.",
+  "errors.PLUGIN_RUNTIME_CREDENTIAL_TARGET_MISSING":
+    "This installation's Cloudflare account is not configured on the Core.",
+  "errors.PLUGIN_RUNTIME_CREDENTIAL_SAVE_FAILED":
+    "Cloudflare could not save the token as a secret on the Core Worker.",
   "errors.EMAIL_ALREADY_EXISTS": "This email already belongs to another user.",
   "errors.PASSWORD_ACCOUNT_UNAVAILABLE":
     "This user does not have a password account.",

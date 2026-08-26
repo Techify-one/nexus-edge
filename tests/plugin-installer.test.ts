@@ -123,6 +123,8 @@ describe("CRM plugin installer", () => {
       },
       {
         APP_VERSION: "1.0.0",
+        CF_API_TOKEN: "configured-plugin-runtime-token",
+        CF_ACCOUNT_ID: "a".repeat(32),
         DATABASE_PROVIDER: "d1",
         PLUGIN_COMPATIBILITY_FLAGS: "nodejs_compat",
       } as CoreEnv,
@@ -135,6 +137,27 @@ describe("CRM plugin installer", () => {
     expect(executedSql).toContainEqual(
       expect.stringContaining("state = 'failed'"),
     );
+  });
+
+  it("requires the deferred credential before creating the first plugin operation", async () => {
+    const response = await installerApp().request(
+      "/plugin-operations",
+      {
+        method: "POST",
+        headers: { "Idempotency-Key": "plugin-credential-required" },
+        body: crmPackageBody(),
+      },
+      {
+        APP_VERSION: "1.0.0",
+        DATABASE_PROVIDER: "d1",
+        PLUGIN_COMPATIBILITY_FLAGS: "nodejs_compat",
+      } as CoreEnv,
+    );
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      code: "PLUGIN_RUNTIME_CREDENTIAL_REQUIRED",
+    });
   });
 
   it("rejects a package containing a Nexus runtime credential", async () => {
@@ -393,6 +416,8 @@ describe("CRM plugin installer", () => {
       },
       {
         APP_VERSION: "1.0.0",
+        CF_API_TOKEN: "configured-plugin-runtime-token",
+        CF_ACCOUNT_ID: "a".repeat(32),
         DATABASE_PROVIDER: "d1",
         PLUGIN_COMPATIBILITY_FLAGS: "nodejs_compat",
       } as CoreEnv,
@@ -638,6 +663,95 @@ describe("Cloudflare plugin bindings", () => {
         compatibilityFlags: ["nodejs_compat"],
       },
     );
+  });
+
+  it("validates and stores the first-plugin token without returning it", async () => {
+    const accountId = "a".repeat(32);
+    const token = `test-${"x".repeat(48)}`;
+    const requests: Array<{ url: string; method: string; body?: string }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        requests.push({
+          url,
+          method: init?.method ?? "GET",
+          ...(typeof init?.body === "string" ? { body: init.body } : {}),
+        });
+        expect(new Headers(init?.headers).get("Authorization")).toBe(
+          `Bearer ${token}`,
+        );
+        if (url.endsWith(`/accounts/${accountId}/tokens/verify`))
+          return Response.json({
+            success: true,
+            result: { id: "c".repeat(32), status: "active" },
+          });
+        if (url.endsWith("/accounts?per_page=50"))
+          return Response.json(
+            {
+              success: false,
+              result: null,
+              errors: [{ code: 10000, message: "Authentication error" }],
+            },
+            { status: 403 },
+          );
+        if (url.endsWith(`/accounts/${accountId}/workers/scripts`))
+          return Response.json({
+            success: true,
+            result: [{ id: "nexus-customer-core" }],
+          });
+        if (url.includes("/d1/database") || url.includes("/queues"))
+          return Response.json(
+            {
+              success: false,
+              result: null,
+              errors: [{ code: 10000, message: "Authentication error" }],
+            },
+            { status: 403 },
+          );
+        if (url.endsWith("/secrets"))
+          return Response.json({ success: true, result: {} });
+        throw new Error(`Unexpected URL: ${url}`);
+      }),
+    );
+
+    const response = await installerApp({ executedSql: [] }).request(
+      "/plugin-runtime-credential",
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      },
+      {
+        CF_ACCOUNT_ID: accountId,
+        CORE_WORKER_NAME: "nexus-customer-core",
+      } as CoreEnv,
+    );
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload).toEqual({ configured: true, accountId });
+    expect(JSON.stringify(payload)).not.toContain(token);
+    expect(JSON.parse(requests.at(-1)?.body ?? "{}")).toEqual({
+      name: "CF_API_TOKEN",
+      text: token,
+      type: "secret_text",
+    });
+  });
+
+  it("reports the selected account without exposing a credential value", async () => {
+    const accountId = "b".repeat(32);
+    const response = await installerApp().request(
+      "/plugin-runtime-credential",
+      undefined,
+      {
+        CF_ACCOUNT_ID: accountId,
+        CORE_WORKER_NAME: "nexus-customer-core",
+      } as CoreEnv,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ configured: false, accountId });
   });
 
   it("patches Worker bindings as multipart JSON", async () => {

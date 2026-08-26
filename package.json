@@ -8,12 +8,14 @@
     "node": ">=24"
   },
   "scripts": {
-    "build": "pnpm build:frontend && pnpm build:plugins && pnpm --filter @app/plugin-template build",
+    "build": "pnpm build:frontend && pnpm build:installer && pnpm build:plugins && pnpm --filter @app/plugin-template build",
     "build:frontend": "pnpm --filter @app/frontend build",
+    "build:installer": "pnpm --filter @app/installer-frontend build && pnpm --filter @app/installer-worker build",
     "build:plugins": "pnpm --filter @app/plugin-crm build && node --import tsx scripts/package-plugin.ts crm && pnpm --filter @app/plugin-meta-ads build && node --import tsx scripts/package-plugin.ts meta_ads && pnpm --filter @app/plugin-soletrando build && node --import tsx scripts/package-plugin.ts soletrando",
     "verify:artifacts": "node --import tsx scripts/verify-artifacts.ts",
-    "typecheck": "tsc -b --pretty false",
-    "test": "vitest run",
+    "typecheck": "tsc -b --pretty false && tsc -p installer/worker/tests/tsconfig.json --noEmit --pretty false",
+    "test": "vitest run && pnpm test:installer",
+    "test:installer": "pnpm --dir installer/worker exec vitest run --config vitest.config.ts",
     "test:watch": "vitest",
     "test:matrix": "node --import tsx scripts/test-database-matrix.ts",
     "lint": "tsc -b --pretty false",
@@ -27,7 +29,12 @@
     "preflight": "node --import tsx scripts/preflight.ts",
     "verify:bundle": "node --import tsx scripts/verify-bundles.ts",
     "openapi:check": "node --import tsx scripts/check-openapi.ts",
-    "cf-typegen": "wrangler types --config workers/core/wrangler.jsonc workers/core/worker-configuration.d.ts"
+    "cf-typegen": "wrangler types --config workers/core/wrangler.jsonc workers/core/worker-configuration.d.ts",
+    "installer:cf-typegen": "pnpm --filter @app/installer-worker cf-typegen",
+    "installer:release:build": "node --import tsx scripts/build-installer-release.ts",
+    "installer:release:publish": "node --import tsx scripts/publish-installer-release.ts",
+    "installer:release:publish-objects": "INSTALLER_RELEASE_PUBLISH_MODE=objects node --import tsx scripts/publish-installer-release.ts",
+    "installer:release:promote": "INSTALLER_RELEASE_PUBLISH_MODE=promote node --import tsx scripts/publish-installer-release.ts"
   },
   "dependencies": {
     "@better-auth/api-key": "1.7.1",
@@ -59,9 +66,10 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
+    "@app/installer-release-schema": "workspace:*",
     "@cloudflare/vite-plugin": "1.53.1",
-    "@cloudflare/vitest-pool-workers": "0.22.0",
-    "@cloudflare/workers-types": "5.20260821.1",
+    "@cloudflare/vitest-plugin": "1.1.0",
+    "@cloudflare/workers-types": "5.20260826.1",
     "@tailwindcss/vite": "4.3.3",
     "@testing-library/jest-dom": "7.0.1",
     "@testing-library/react": "16.3.2",

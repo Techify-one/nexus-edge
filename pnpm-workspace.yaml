@@ -2,6 +2,7 @@ packages:
   - packages/*
   - plugins/*
   - workers/*
+  - installer/*
   - frontend
 
 allowBuilds:
@@ -11,6 +12,10 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - eslint@10.9.0
   - react-hook-form@7.86.0
+  - "@cloudflare/workers-types@5.20260826.1"
+  - "@cloudflare/vitest-plugin@1.1.0"
+  - miniflare@5.20260825.0-alpha
+  - wrangler@4.126.0
 
 onlyBuiltDependencies:
   - esbuild

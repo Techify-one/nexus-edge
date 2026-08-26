@@ -1,0 +1,129 @@
+name: Publish installer release
+
+on:
+  push:
+    tags:
+      - "installer-v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Semantic release version
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: installer-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment: installer-release-build
+    env:
+      INSTALLER_RELEASE_PRIVATE_KEY_PKCS8_BASE64: ${{ secrets.INSTALLER_RELEASE_PRIVATE_KEY_PKCS8_BASE64 }}
+      INSTALLER_RELEASE_PUBLIC_KEY_SPKI_BASE64: ${{ vars.INSTALLER_RELEASE_PUBLIC_KEY_SPKI_BASE64 }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with: { version: 11.19.0 }
+      - uses: actions/setup-node@v7
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: Resolve release version
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            release_version="${{ inputs.version }}"
+          else
+            release_version="${GITHUB_REF_NAME#installer-v}"
+          fi
+          if [[ ! "$release_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid semantic version" >&2
+            exit 1
+          fi
+          echo "INSTALLER_RELEASE_VERSION=$release_version" >> "$GITHUB_ENV"
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm test:matrix
+      - run: pnpm openapi:check
+      - run: pnpm build
+      - run: pnpm verify:artifacts
+      - run: pnpm verify:bundle
+      - run: pnpm installer:release:build
+      - uses: actions/upload-artifact@v7
+        with:
+          name: installer-release-${{ env.INSTALLER_RELEASE_VERSION }}
+          path: installer/release-build
+          if-no-files-found: error
+          retention-days: 7
+
+  publish-immutable:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: installer-release-publish
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with: { version: 11.19.0 }
+      - uses: actions/setup-node@v7
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: installer-release-*
+          path: installer/release-build
+          merge-multiple: true
+      - name: Upload immutable objects to staging
+        env:
+          INSTALLER_RELEASE_BUCKET: ${{ vars.INSTALLER_STAGING_RELEASE_BUCKET }}
+        run: pnpm installer:release:publish-objects
+      - name: Promote staging for canary
+        env:
+          INSTALLER_RELEASE_BUCKET: ${{ vars.INSTALLER_STAGING_RELEASE_BUCKET }}
+        run: pnpm installer:release:promote
+      - name: Upload immutable objects to production
+        env:
+          INSTALLER_RELEASE_BUCKET: ${{ vars.INSTALLER_PRODUCTION_RELEASE_BUCKET }}
+        run: pnpm installer:release:publish-objects
+
+  canary-gate:
+    needs: publish-immutable
+    runs-on: ubuntu-latest
+    environment: installer-canary-approval
+    steps:
+      - name: Verify staging installer is reachable
+        env:
+          INSTALLER_STAGING_URL: ${{ vars.INSTALLER_STAGING_URL }}
+        run: |
+          curl --fail --silent --show-error "$INSTALLER_STAGING_URL/health" >/dev/null
+          curl --fail --silent --show-error "$INSTALLER_STAGING_URL/api/releases/stable" >/dev/null
+      - name: Record protected canary approval
+        run: echo "Canary evidence reviewed by protected-environment approver."
+
+  promote-production:
+    needs: canary-gate
+    runs-on: ubuntu-latest
+    environment: installer-release-production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      INSTALLER_RELEASE_BUCKET: ${{ vars.INSTALLER_PRODUCTION_RELEASE_BUCKET }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with: { version: 11.19.0 }
+      - uses: actions/setup-node@v7
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: installer-release-*
+          path: installer/release-build
+          merge-multiple: true
+      - run: pnpm installer:release:promote

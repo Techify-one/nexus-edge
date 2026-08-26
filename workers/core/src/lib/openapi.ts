@@ -495,6 +495,49 @@ export const OPENAPI_DOCUMENT = {
     "/api/v1/plugins": {
       get: { responses: { "200": { description: "Plugin registry records" } } },
     },
+    "/api/v1/plugin-runtime-credential": {
+      get: {
+        responses: {
+          "200": {
+            description:
+              "Secret-free Cloudflare plugin credential status and selected account ID",
+          },
+          "503": { description: "Cloudflare account target is unavailable" },
+        },
+      },
+      put: {
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["token"],
+                properties: {
+                  token: {
+                    type: "string",
+                    minLength: 40,
+                    maxLength: 200,
+                    writeOnly: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description:
+              "Credential validated and stored directly as a Core Worker secret",
+          },
+          "422": {
+            description:
+              "Credential is invalid, belongs to another account, or is broader than Workers Scripts Edit",
+          },
+          "503": { description: "Cloudflare could not store the secret" },
+        },
+      },
+    },
     "/api/v1/plugins/{pluginId}": {
       delete: {
         parameters: [{ name: "pluginId", in: "path", required: true }],

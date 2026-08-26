@@ -7,9 +7,12 @@ import type { HonoEnv } from "../env.js";
 import {
   deletePluginSecret,
   deletePluginWorker,
+  configurePluginRuntimeCredential,
   hardenPluginWorker,
   mergeCoreServiceBinding,
+  PluginRuntimeCredentialError,
   pluginSecretConfigured,
+  pluginRuntimeCredentialStatus,
   putPluginSecret,
   removeCoreServiceBinding,
   uploadPluginWorker,
@@ -369,6 +372,86 @@ const requirePluginOperationPermission = (
 export const installerRoutes = new Hono<HonoEnv>();
 
 installerRoutes.get(
+  "/plugin-runtime-credential",
+  requirePermission("core.plugin.read"),
+  (c) => {
+    try {
+      return c.json(pluginRuntimeCredentialStatus(c.env), 200, noStore);
+    } catch (error) {
+      if (
+        error instanceof PluginRuntimeCredentialError &&
+        error.code === "target_missing"
+      )
+        throw new AppError(
+          503,
+          "PLUGIN_RUNTIME_CREDENTIAL_TARGET_MISSING",
+          "The Cloudflare account target is not configured.",
+        );
+      throw error;
+    }
+  },
+);
+
+installerRoutes.put(
+  "/plugin-runtime-credential",
+  requirePermission("core.plugin.create"),
+  async (c) => {
+    const body = (await c.req.json().catch(() => null)) as {
+      token?: unknown;
+    } | null;
+    const token = typeof body?.token === "string" ? body.token.trim() : "";
+    if (token.length < 40 || token.length > 200)
+      throw new AppError(
+        422,
+        "PLUGIN_RUNTIME_CREDENTIAL_INVALID",
+        "Enter a valid Cloudflare API Token.",
+      );
+    try {
+      await configurePluginRuntimeCredential(c.env, token);
+    } catch (error) {
+      if (error instanceof PluginRuntimeCredentialError) {
+        if (error.code === "too_broad")
+          throw new AppError(
+            422,
+            "PLUGIN_RUNTIME_CREDENTIAL_TOO_BROAD",
+            "Use a token limited to Workers Scripts Edit on this account.",
+          );
+        if (error.code === "invalid")
+          throw new AppError(
+            422,
+            "PLUGIN_RUNTIME_CREDENTIAL_INVALID",
+            "The token is invalid, belongs to another account, or lacks Workers Scripts Edit.",
+          );
+        if (error.code === "target_missing")
+          throw new AppError(
+            503,
+            "PLUGIN_RUNTIME_CREDENTIAL_TARGET_MISSING",
+            "The Cloudflare account target is not configured.",
+          );
+        throw new AppError(
+          503,
+          "PLUGIN_RUNTIME_CREDENTIAL_SAVE_FAILED",
+          "Cloudflare could not save the plugin credential.",
+        );
+      }
+      throw error;
+    }
+    await audit(
+      c,
+      "core.plugin.runtime_credential_configured",
+      "core.plugin",
+      "cloudflare",
+      {},
+    );
+    return c.json(
+      { ...pluginRuntimeCredentialStatus(c.env), configured: true },
+      200,
+      noStore,
+    );
+  },
+);
+
+installerRoutes.get(
   "/plugins",
   requirePermission("core.plugin.read"),
   async (c) =>
@@ -522,6 +605,12 @@ installerRoutes.post("/plugin-operations", async (c) => {
     );
   const operationType = installed ? "update" : "install";
   requirePluginOperationPermission(c, operationType);
+  if (!c.env.CF_API_TOKEN || !c.env.CF_ACCOUNT_ID)
+    throw new AppError(
+      409,
+      "PLUGIN_RUNTIME_CREDENTIAL_REQUIRED",
+      "Configure the limited Cloudflare credential before installing a plugin.",
+    );
   const idem = await idempotencyLookup(
     c,
     "plugin_operations.start",

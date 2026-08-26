@@ -1,5 +1,6 @@
 node_modules/
 dist/
+dist-types/
 .wrangler/
 .dev.vars
 .env
@@ -13,3 +14,4 @@ test-results/
 *.local
 *.tsbuildinfo
 nexus-edge-source.zip
+installer/release-build/

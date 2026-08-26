@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Copy,
   Download,
+  ExternalLink,
   PackagePlus,
   Pencil,
   Search,
@@ -27,6 +28,7 @@ import {
   apiFile,
   idempotencyKey,
 } from "../../lib/api/core-client.js";
+import { cloudflareAccountTokensUrl } from "../../lib/cloudflare-token.js";
 import { translate, useI18n, type TranslationKey } from "../../i18n/index.js";
 import { can } from "../../lib/ability.js";
 import {
@@ -56,6 +58,10 @@ type Plugin = {
 type Operation = {
   operationId: string;
   state: string;
+};
+type PluginRuntimeCredential = {
+  configured: boolean;
+  accountId: string;
 };
 type PluginParts = {
   manifest: Manifest;
@@ -172,9 +178,18 @@ export default function PluginsPage() {
   const [parts, setParts] = useState<PluginParts | null>(null);
   const [operation, setOperation] = useState<Operation | null>(null);
   const [supportReport, setSupportReport] = useState<string | null>(null);
+  const [runtimeToken, setRuntimeToken] = useState("");
+  const [runtimeCredentialBusy, setRuntimeCredentialBusy] = useState(false);
   const plugins = useQuery({
     queryKey: ["plugins"],
     queryFn: () => api<{ items: Plugin[] }>("/api/v1/plugins"),
+  });
+  const runtimeCredential = useQuery({
+    queryKey: ["plugin-runtime-credential"],
+    queryFn: () =>
+      api<PluginRuntimeCredential>("/api/v1/plugin-runtime-credential"),
+    enabled: Boolean(parts),
+    staleTime: 30_000,
   });
   const rows = useMemo(
     () =>
@@ -204,6 +219,7 @@ export default function PluginsPage() {
       setParts(selectedParts);
       setOperation(null);
       setSupportReport(null);
+      setRuntimeToken("");
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : t("plugins.invalidPackage"),
@@ -308,6 +324,47 @@ export default function PluginsPage() {
       toast.error(error.message);
     },
   });
+  const configureRuntimeCredential = async (
+    packageParts: PluginParts,
+  ): Promise<void> => {
+    if (runtimeCredentialBusy) return;
+    const token = runtimeToken.trim();
+    setRuntimeToken("");
+    setRuntimeCredentialBusy(true);
+    try {
+      await api<PluginRuntimeCredential>("/api/v1/plugin-runtime-credential", {
+        method: "PUT",
+        body: JSON.stringify({ token }),
+      });
+      for (let attempt = 0; attempt < 12; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        try {
+          const status = await api<PluginRuntimeCredential>(
+            "/api/v1/plugin-runtime-credential",
+          );
+          if (status.configured) {
+            client.setQueryData(["plugin-runtime-credential"], status);
+            toast.success(t("plugins.runtimeCredentialSaved"));
+            install.mutate(packageParts);
+            return;
+          }
+        } catch {
+          // A secret update publishes a new Worker version. Retry while the
+          // new version becomes active, without ever retaining the token.
+        }
+      }
+      throw new Error(t("plugins.runtimeCredentialActivationPending"));
+    } catch (error) {
+      void client.invalidateQueries({
+        queryKey: ["plugin-runtime-credential"],
+      });
+      toast.error(
+        error instanceof Error ? error.message : t("errors.fallback"),
+      );
+    } finally {
+      setRuntimeCredentialBusy(false);
+    }
+  };
   const remove = useMutation({
     mutationFn: (plugin: Plugin) =>
       api(`/api/v1/plugins/${plugin.id}`, { method: "DELETE" }),
@@ -558,10 +615,11 @@ export default function PluginsPage() {
       <Modal
         open={Boolean(parts)}
         onOpenChange={(open) => {
-          if (!open && !install.isPending) {
+          if (!open && !install.isPending && !runtimeCredentialBusy) {
             setParts(null);
             setOperation(null);
             setSupportReport(null);
+            setRuntimeToken("");
           }
         }}
         title={t("plugins.installTitle")}
@@ -574,7 +632,9 @@ export default function PluginsPage() {
             className="space-y-4"
             onSubmit={(event) => {
               event.preventDefault();
-              install.mutate(parts);
+              if (runtimeCredential.data?.configured) install.mutate(parts);
+              else if (runtimeCredential.data)
+                void configureRuntimeCredential(parts);
             }}
           >
             <div className="grid gap-3 rounded-xl border bg-slate-50 p-4 text-sm sm:grid-cols-2">
@@ -609,6 +669,78 @@ export default function PluginsPage() {
                 <p>{parts.manifest.permissions.length}</p>
               </div>
             </div>
+            {runtimeCredential.isPending && <Skeleton className="h-36" />}
+            {runtimeCredential.isError && (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
+                <p>{t("plugins.runtimeCredentialLoadFailed")}</p>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="mt-3"
+                  onClick={() => void runtimeCredential.refetch()}
+                >
+                  {t("plugins.runtimeCredentialRetry")}
+                </Button>
+              </div>
+            )}
+            {runtimeCredential.data && !runtimeCredential.data.configured && (
+              <section className="space-y-4 rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-sm">
+                <div>
+                  <h3 className="font-semibold text-slate-950">
+                    {t("plugins.runtimeCredentialTitle")}
+                  </h3>
+                  <p className="mt-1 text-slate-700">
+                    {t("plugins.runtimeCredentialBody")}
+                  </p>
+                </div>
+                <a
+                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white hover:bg-indigo-700"
+                  href={cloudflareAccountTokensUrl(
+                    runtimeCredential.data.accountId,
+                  )}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                >
+                  {t("plugins.runtimeCredentialOpen")}
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+                <ol className="list-decimal space-y-2 pl-5 text-slate-800">
+                  <li>{t("plugins.runtimeCredentialStepCreate")}</li>
+                  <li>
+                    {t("plugins.runtimeCredentialStepPermission")}{" "}
+                    <strong>Account → Workers Scripts → Edit</strong>
+                  </li>
+                  <li>
+                    {t("plugins.runtimeCredentialStepAccount")}{" "}
+                    <code className="break-all">
+                      {runtimeCredential.data.accountId}
+                    </code>
+                  </li>
+                  <li>{t("plugins.runtimeCredentialStepPaste")}</li>
+                </ol>
+                <p className="border-l-4 border-amber-400 bg-amber-50 px-3 py-2 text-amber-900">
+                  {t("plugins.runtimeCredentialWarning")}
+                </p>
+                <div className="space-y-2">
+                  <Label htmlFor="plugin-runtime-token">
+                    {t("plugins.runtimeCredentialLabel")}
+                  </Label>
+                  <Input
+                    id="plugin-runtime-token"
+                    type="password"
+                    autoComplete="off"
+                    minLength={40}
+                    maxLength={200}
+                    value={runtimeToken}
+                    onChange={(event) => setRuntimeToken(event.target.value)}
+                    required
+                  />
+                  <p className="text-xs text-slate-600">
+                    {t("plugins.runtimeCredentialHelp")}
+                  </p>
+                </div>
+              </section>
+            )}
             {operation && (
               <div className="rounded-xl border p-4" aria-live="polite">
                 <p className="text-sm font-semibold">
@@ -665,23 +797,34 @@ export default function PluginsPage() {
               <Button
                 type="button"
                 variant="secondary"
-                disabled={install.isPending}
+                disabled={install.isPending || runtimeCredentialBusy}
                 onClick={() => {
                   setParts(null);
                   setOperation(null);
                   setSupportReport(null);
+                  setRuntimeToken("");
                 }}
               >
                 {t("common.cancel")}
               </Button>
-              <Button busy={install.isPending}>
+              <Button
+                busy={install.isPending || runtimeCredentialBusy}
+                disabled={
+                  runtimeCredential.isPending ||
+                  runtimeCredential.isError ||
+                  runtimeCredentialBusy
+                }
+              >
                 <UploadCloud className="h-4 w-4" />
-                {rows.some(
-                  (row) =>
-                    row.id === parts.manifest.id && row.status === "installed",
-                )
-                  ? t("plugins.update")
-                  : t("plugins.install")}
+                {runtimeCredential.data?.configured
+                  ? rows.some(
+                      (row) =>
+                        row.id === parts.manifest.id &&
+                        row.status === "installed",
+                    )
+                    ? t("plugins.update")
+                    : t("plugins.install")
+                  : t("plugins.runtimeCredentialContinue")}
               </Button>
             </div>
           </form>

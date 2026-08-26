@@ -34,6 +34,7 @@ Development uses the Core `wrangler.jsonc` through Cloudflare's official Vite pl
 
 ```text
 frontend/          shared React SPA shell and Core pages
+installer/         browser-based signed Cloudflare installer
 packages/          shared contracts, schemas, and database port
 plugins/           complete plugin packages: Worker, UI, migrations, and ZIP
   crm/             complete CRM plugin
@@ -52,6 +53,13 @@ commands, invariants, and verification criteria without depending on a specific
 vendor.
 
 Follow [docs/INTERNATIONALIZATION.md](./docs/INTERNATIONALIZATION.md) to add languages.
+
+The browser installer has a separate
+[architecture](./docs/INSTALLER-ARCHITECTURE.md),
+[operations runbook](./docs/INSTALLER-OPERATIONS.md), and
+[privacy policy](./docs/INSTALLER-PRIVACY.md). It installs the prebuilt D1
+release in a customer's Cloudflare account without requiring local developer
+tools.
 
 Follow [docs/DATA-TABLE-STANDARD.md](./docs/DATA-TABLE-STANDARD.md) whenever
 creating a table or changing an existing record-list table. The repository rules
