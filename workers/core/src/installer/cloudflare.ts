@@ -1,4 +1,10 @@
 import type { CoreEnv } from "../env.js";
+import {
+  isWorkerModuleContentType,
+  type InstallerRelease,
+  type ReleaseAsset,
+} from "@app/installer-release-schema";
+import type { VerifiedCoreArchive } from "../updates/release.js";
 
 type CloudflareEnvelope<T> = {
   success: boolean;
@@ -6,6 +12,13 @@ type CloudflareEnvelope<T> = {
   errors?: Array<{ code?: number; message?: string }>;
 };
 export type Binding = Record<string, unknown> & { name: string; type: string };
+
+type AssetUploadSession = { buckets: string[][]; jwt: string };
+type WorkerSettings = {
+  bindings?: Binding[];
+  compatibility_date?: string;
+  compatibility_flags?: string[];
+};
 
 const apiOrigin = "https://api.cloudflare.com";
 const apiPrefix = "/client/v4";
@@ -85,6 +98,13 @@ async function cloudflareRequest<T>(
 
 const accountPath = (accountId: string): string =>
   `/accounts/${encodeURIComponent(accountId)}`;
+
+function base64(bytes: Uint8Array<ArrayBuffer>): string {
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 32_768)
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 32_768));
+  return btoa(binary);
+}
 
 async function cf<T>(
   env: CoreEnv,
@@ -269,6 +289,150 @@ export async function uploadPluginWorker(
     method: "PUT",
     body,
   });
+}
+
+async function uploadCoreAssets(
+  env: CoreEnv,
+  release: InstallerRelease,
+  archive: VerifiedCoreArchive,
+): Promise<string> {
+  const workerName = encodeURIComponent(env.CORE_WORKER_NAME);
+  const manifest = Object.fromEntries(
+    release.assets.map((asset) => [
+      `/${asset.path}`,
+      { hash: asset.uploadHash, size: asset.size },
+    ]),
+  );
+  const session = await cf<AssetUploadSession>(
+    env,
+    `/workers/scripts/${workerName}/assets-upload-session`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ manifest }),
+    },
+  );
+  if (!session.jwt || !Array.isArray(session.buckets))
+    throw new Error("CORE_UPDATE_ASSET_SESSION_INVALID");
+  const byHash = new Map<string, ReleaseAsset>(
+    release.assets.map((asset) => [asset.uploadHash, asset]),
+  );
+  let completionJwt = session.jwt;
+  for (const bucket of session.buckets) {
+    const form = new FormData();
+    for (const hash of bucket) {
+      const descriptor = byHash.get(hash);
+      if (!descriptor)
+        throw new Error("CORE_UPDATE_ASSET_SESSION_UNKNOWN_HASH");
+      form.append(
+        hash,
+        new File([base64(archive.object(descriptor))], hash, {
+          type: descriptor.mimeType,
+        }),
+        hash,
+      );
+    }
+    const uploaded = await cloudflareRequest<{ jwt?: string }>(
+      session.jwt,
+      `${accountPath(env.CF_ACCOUNT_ID!)}/workers/assets/upload?base64=true`,
+      { method: "POST", body: form },
+    );
+    if (uploaded.jwt) completionJwt = uploaded.jwt;
+  }
+  return completionJwt;
+}
+
+export async function deployCoreUpdate(
+  env: CoreEnv,
+  release: InstallerRelease,
+  archive: VerifiedCoreArchive,
+): Promise<void> {
+  if (!env.CF_API_TOKEN || !env.CF_ACCOUNT_ID || !env.CORE_WORKER_NAME)
+    throw new Error("CORE_UPDATE_CREDENTIAL_MISSING");
+  const workerName = encodeURIComponent(env.CORE_WORKER_NAME);
+  const current = await cf<WorkerSettings>(
+    env,
+    `/workers/scripts/${workerName}/settings`,
+    { method: "GET" },
+  );
+  const currentBindings = current.bindings ?? [];
+  const requiredBindings = new Set(["ASSETS", "DB", "WEBHOOK_QUEUE"]);
+  for (const required of requiredBindings)
+    if (!currentBindings.some((binding) => binding.name === required))
+      throw new Error(`CORE_UPDATE_REQUIRED_BINDING_MISSING_${required}`);
+
+  const assetJwt = await uploadCoreAssets(env, release, archive);
+  const bindings: Binding[] = currentBindings
+    .filter(
+      (binding) => binding.name !== "ASSETS" && binding.name !== "APP_VERSION",
+    )
+    .map((binding) => ({ type: "inherit", name: binding.name }));
+  bindings.push(
+    { type: "assets", name: "ASSETS" },
+    { type: "plain_text", name: "APP_VERSION", text: release.appVersion },
+  );
+  const body = new FormData();
+  body.set(
+    "metadata",
+    new Blob(
+      [
+        JSON.stringify({
+          main_module: release.entrypoint,
+          compatibility_date: release.compatibilityDate,
+          compatibility_flags: release.compatibilityFlags,
+          annotations: {
+            "workers/message": `Update Nexus Edge ${release.appVersion}`,
+          },
+          assets: {
+            jwt: assetJwt,
+            config: {
+              not_found_handling: "single-page-application",
+              run_worker_first: ["/api/*", "/health"],
+            },
+          },
+          bindings,
+        }),
+      ],
+      { type: "application/json" },
+    ),
+    "metadata.json",
+  );
+  const deployableModules = release.modules.filter((descriptor) =>
+    isWorkerModuleContentType(descriptor.mimeType),
+  );
+  if (!deployableModules.some(({ path }) => path === release.entrypoint))
+    throw new Error("CORE_UPDATE_ENTRYPOINT_INVALID");
+  for (const descriptor of deployableModules)
+    body.set(
+      descriptor.path,
+      new Blob([archive.object(descriptor)], { type: descriptor.mimeType }),
+      descriptor.path,
+    );
+  await cf(env, `/workers/scripts/${workerName}?bindings_inherit=strict`, {
+    method: "PUT",
+    body,
+  });
+}
+
+export async function verifyCoreUpdateBindings(env: CoreEnv): Promise<void> {
+  const settings = await cf<WorkerSettings>(
+    env,
+    `/workers/scripts/${encodeURIComponent(env.CORE_WORKER_NAME)}/settings`,
+    { method: "GET" },
+  );
+  const names = new Set(
+    (settings.bindings ?? []).map((binding) => binding.name),
+  );
+  for (const required of [
+    "ASSETS",
+    "DB",
+    "WEBHOOK_QUEUE",
+    "APP_VERSION",
+    "BETTER_AUTH_SECRET",
+    "WEBHOOK_ENCRYPTION_KEY",
+  ])
+    if (!names.has(required))
+      throw new Error(`CORE_UPDATE_BINDING_VERIFICATION_FAILED_${required}`);
 }
 
 export async function hardenPluginWorker(

@@ -82,6 +82,7 @@ const ptBR = {
   "nav.webhooks": "Webhooks",
   "nav.plugins": "Plugins",
   "nav.audit": "Auditoria",
+  "nav.settings": "Configurações gerais",
   "nav.main": "Navegação principal",
   "nav.closeMenu": "Fechar menu",
   "nav.openMenu": "Abrir menu",
@@ -242,6 +243,8 @@ const ptBR = {
   "permissions.core.webhook.test": "Enviar webhooks de teste",
   "permissions.core.webhook.redeliver": "Reenviar webhooks com falha",
   "permissions.core.audit.read": "Visualizar histórico de auditoria",
+  "permissions.core.settings.read": "Visualizar configurações gerais",
+  "permissions.core.settings.update": "Atualizar o Nexus Edge",
   "permissions.crm.lead.read": "Visualizar leads",
   "permissions.crm.lead.create": "Criar leads",
   "permissions.crm.lead.update": "Editar leads",
@@ -267,6 +270,7 @@ const ptBR = {
   "permissionGroups.core.plugin": "Plugins",
   "permissionGroups.core.webhook": "Webhooks",
   "permissionGroups.core.audit": "Auditoria",
+  "permissionGroups.core.settings": "Configurações gerais",
   "permissionGroups.crm.lead": "CRM — Leads",
   "permissionGroups.meta_ads.account": "Meta Ads — Contas",
   "permissionGroups.meta_ads.campaign": "Meta Ads — Campanhas",
@@ -275,6 +279,55 @@ const ptBR = {
   "permissionGroups.meta_ads.insight": "Meta Ads — Métricas",
   "permissionGroups.soletrando.child": "Soletrando — Crianças",
   "permissionGroups.additional": "Outras permissões do módulo",
+
+  "settings.title": "Configurações gerais",
+  "settings.description":
+    "Informações da instalação e atualizações do Nexus Edge.",
+  "settings.installationTitle": "Instalação",
+  "settings.installationDescription":
+    "Versão e ambiente atualmente em execução.",
+  "settings.provider": "Banco de dados",
+  "settings.channel": "Canal",
+  "settings.signature": "Assinatura",
+  "settings.required": "Obrigatória",
+  "settings.updatesTitle": "Atualizações",
+  "settings.updatesDescription":
+    "Busca releases beta assinadas diretamente no GitHub oficial.",
+  "settings.updateNow": "Atualizar agora",
+  "settings.continueUpdate": "Continuar atualização",
+  "settings.confirmUpdatePassword":
+    "Confirme sua senha para atualizar o Nexus Edge:",
+  "settings.releaseDetails": "Ver release",
+  "settings.noRelease": "Nenhuma release beta mais recente foi publicada.",
+  "settings.sourceUnavailable":
+    "Não foi possível consultar ou validar as releases do GitHub agora.",
+  "settings.d1Only":
+    "O atualizador beta automático está disponível somente para instalações com D1.",
+  "settings.credentialRequired":
+    "Cadastre primeiro a credencial limitada do Cloudflare.",
+  "settings.openPlugins": "Abrir Plugins",
+  "settings.backupNotice":
+    "Antes de migrar, o Nexus registra o instante de restauração do D1 Time Travel. A atualização nunca aceita arquivos sem assinatura válida.",
+  "settings.keepPageOpen":
+    "Mantenha esta página aberta até a verificação terminar.",
+  "settings.updateStageMigrating": "Aplicando migrações assinadas",
+  "settings.updateStageDeploying": "Publicando Worker e interface",
+  "settings.updateStageVerifying": "Verificando a nova versão",
+  "settings.updateStageInstalled": "Atualização concluída",
+  "settings.updateStageFailed": "Atualização interrompida",
+  "settings.updateFailed":
+    "A atualização foi interrompida com segurança. Tente novamente após verificar o diagnóstico.",
+  "settings.updateInstalled": "Nexus Edge atualizado com sucesso.",
+  "errors.CORE_UPDATE_STAGE_FAILED":
+    "A etapa de atualização falhou e foi interrompida com segurança.",
+  "errors.CORE_UPDATE_SOURCE_UNAVAILABLE":
+    "Não foi possível validar as releases no GitHub.",
+  "errors.CORE_UPDATE_CREDENTIAL_REQUIRED":
+    "Cadastre a credencial limitada do Cloudflare na tela de Plugins.",
+  "errors.CORE_UPDATE_NOT_AVAILABLE":
+    "Esta instalação já está na versão mais recente.",
+  "errors.CORE_UPDATE_PROVIDER_UNSUPPORTED":
+    "O atualizador beta aceita somente instalações D1.",
 
   "apiKeys.description": "Credenciais pessoais para scripts e agentes.",
   "apiKeys.search": "Buscar chave",
@@ -554,6 +607,7 @@ const en: Record<TranslationKey, string> = {
   "nav.webhooks": "Webhooks",
   "nav.plugins": "Plugins",
   "nav.audit": "Audit",
+  "nav.settings": "General settings",
   "nav.main": "Main navigation",
   "nav.closeMenu": "Close menu",
   "nav.openMenu": "Open menu",
@@ -707,6 +761,8 @@ const en: Record<TranslationKey, string> = {
   "permissions.core.webhook.test": "Send test webhooks",
   "permissions.core.webhook.redeliver": "Resend failed webhooks",
   "permissions.core.audit.read": "View audit history",
+  "permissions.core.settings.read": "View general settings",
+  "permissions.core.settings.update": "Update Nexus Edge",
   "permissions.crm.lead.read": "View leads",
   "permissions.crm.lead.create": "Create leads",
   "permissions.crm.lead.update": "Edit leads",
@@ -732,6 +788,7 @@ const en: Record<TranslationKey, string> = {
   "permissionGroups.core.plugin": "Plugins",
   "permissionGroups.core.webhook": "Webhooks",
   "permissionGroups.core.audit": "Audit",
+  "permissionGroups.core.settings": "General settings",
   "permissionGroups.crm.lead": "CRM — Leads",
   "permissionGroups.meta_ads.account": "Meta Ads — Accounts",
   "permissionGroups.meta_ads.campaign": "Meta Ads — Campaigns",
@@ -740,6 +797,51 @@ const en: Record<TranslationKey, string> = {
   "permissionGroups.meta_ads.insight": "Meta Ads — Metrics",
   "permissionGroups.soletrando.child": "Spelling Practice — Children",
   "permissionGroups.additional": "Other module permissions",
+  "settings.title": "General settings",
+  "settings.description": "Installation information and Nexus Edge updates.",
+  "settings.installationTitle": "Installation",
+  "settings.installationDescription":
+    "Version and environment currently running.",
+  "settings.provider": "Database",
+  "settings.channel": "Channel",
+  "settings.signature": "Signature",
+  "settings.required": "Required",
+  "settings.updatesTitle": "Updates",
+  "settings.updatesDescription":
+    "Checks signed beta releases directly from the official GitHub repository.",
+  "settings.updateNow": "Update now",
+  "settings.continueUpdate": "Continue update",
+  "settings.confirmUpdatePassword":
+    "Confirm your password to update Nexus Edge:",
+  "settings.releaseDetails": "View release",
+  "settings.noRelease": "No newer beta release has been published.",
+  "settings.sourceUnavailable":
+    "GitHub releases could not be checked or validated right now.",
+  "settings.d1Only":
+    "The beta automatic updater is available only for D1 installations.",
+  "settings.credentialRequired":
+    "Configure the limited Cloudflare credential first.",
+  "settings.openPlugins": "Open Plugins",
+  "settings.backupNotice":
+    "Before migrations, Nexus records a D1 Time Travel restore point. The updater never accepts files without a valid signature.",
+  "settings.keepPageOpen": "Keep this page open until verification finishes.",
+  "settings.updateStageMigrating": "Applying signed migrations",
+  "settings.updateStageDeploying": "Publishing Worker and interface",
+  "settings.updateStageVerifying": "Verifying the new version",
+  "settings.updateStageInstalled": "Update complete",
+  "settings.updateStageFailed": "Update stopped",
+  "settings.updateFailed":
+    "The update stopped safely. Try again after checking the diagnostic.",
+  "settings.updateInstalled": "Nexus Edge updated successfully.",
+  "errors.CORE_UPDATE_STAGE_FAILED":
+    "The update stage failed and stopped safely.",
+  "errors.CORE_UPDATE_SOURCE_UNAVAILABLE":
+    "GitHub releases could not be validated.",
+  "errors.CORE_UPDATE_CREDENTIAL_REQUIRED":
+    "Configure the limited Cloudflare credential on the Plugins page.",
+  "errors.CORE_UPDATE_NOT_AVAILABLE": "This installation is already current.",
+  "errors.CORE_UPDATE_PROVIDER_UNSUPPORTED":
+    "The beta updater supports D1 installations only.",
   "apiKeys.description": "Personal credentials for scripts and agents.",
   "apiKeys.search": "Search keys",
   "apiKeys.unnamed": "Unnamed",

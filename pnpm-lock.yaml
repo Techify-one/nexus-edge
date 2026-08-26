@@ -387,6 +387,9 @@ importers:
       '@app/db-schema':
         specifier: workspace:*
         version: link:../../packages/db-schema
+      '@app/installer-release-schema':
+        specifier: workspace:*
+        version: link:../../packages/installer-release-schema
       '@app/webhook-contract':
         specifier: workspace:*
         version: link:../../packages/webhook-contract
@@ -405,6 +408,9 @@ importers:
       better-auth:
         specifier: 1.7.1
         version: 1.7.1(@cloudflare/workers-types@5.20260826.1)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@cloudflare/workers-types@5.20260826.1)(@types/pg@8.23.1)(kysely@0.29.5)(pg@8.23.0))(pg@8.23.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(vitest@4.1.11)
+      fflate:
+        specifier: 0.8.3
+        version: 0.8.3
       hono:
         specifier: 4.13.3
         version: 4.13.3

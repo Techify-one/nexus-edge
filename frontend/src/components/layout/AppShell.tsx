@@ -7,6 +7,7 @@ import {
   Menu,
   Package,
   ScrollText,
+  Settings,
   Users,
   UserRoundCog,
   Webhook,
@@ -54,6 +55,12 @@ const items = [
     label: "nav.audit",
     icon: ScrollText,
     permission: "core.audit.read",
+  },
+  {
+    to: "/app/settings/general",
+    label: "nav.settings",
+    icon: Settings,
+    permission: "core.settings.read",
   },
 ] satisfies Array<{
   to: string;

@@ -366,6 +366,24 @@ export const installerLock = pgTable("installer_lock", {
   expiresAt: instant("expires_at"),
 });
 
+export const coreUpdateOperations = pgTable(
+  "core_update_operations",
+  {
+    operationId: text("operation_id").primaryKey(),
+    releaseId: text("release_id").notNull(),
+    targetVersion: text("target_version").notNull(),
+    manifestSha256: text("manifest_sha256").notNull(),
+    state: text("state").notNull(),
+    restoreTimestamp: instant("restore_timestamp"),
+    lastError: text("last_error"),
+    createdByUserId: text("created_by_user_id").notNull(),
+    createdAt: instant("created_at").notNull(),
+    updatedAt: instant("updated_at").notNull(),
+    completedAt: instant("completed_at"),
+  },
+  (t) => [index("core_update_operations_state_idx").on(t.state, t.updatedAt)],
+);
+
 export const coreEvents = pgTable(
   "core_events",
   {

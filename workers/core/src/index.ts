@@ -12,6 +12,7 @@ import { managementRoutes } from "./routes/management.js";
 import { publicRoutes } from "./routes/public.js";
 import { reauthRoutes } from "./routes/reauth.js";
 import { webhookRoutes } from "./routes/webhooks.js";
+import { settingsRoutes } from "./routes/settings.js";
 import { dbTime } from "./lib/values.js";
 import { deliverWebhook, fanoutEvent } from "./webhooks/consumer.js";
 
@@ -59,6 +60,7 @@ coreV1Routes.route("/", managementRoutes);
 coreV1Routes.route("/auth", reauthRoutes);
 coreV1Routes.route("/webhooks", webhookRoutes);
 coreV1Routes.route("/", installerRoutes);
+coreV1Routes.route("/", settingsRoutes);
 coreV1Routes.route("/p", gatewayRoutes);
 coreV1Routes.get("/openapi.json", (c) => c.json(OPENAPI_DOCUMENT));
 app.route("/api/v1", coreV1Routes);

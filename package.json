@@ -1,6 +1,6 @@
 {
   "name": "nexus-edge",
-  "version": "1.0.0",
+  "version": "1.1.0-beta.1",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.19.0",
@@ -34,7 +34,8 @@
     "installer:release:build": "pnpm build:frontend && node --import tsx scripts/build-installer-release.ts",
     "installer:release:publish": "node --import tsx scripts/publish-installer-release.ts",
     "installer:release:publish-objects": "INSTALLER_RELEASE_PUBLISH_MODE=objects node --import tsx scripts/publish-installer-release.ts",
-    "installer:release:promote": "INSTALLER_RELEASE_PUBLISH_MODE=promote node --import tsx scripts/publish-installer-release.ts"
+    "installer:release:promote": "INSTALLER_RELEASE_PUBLISH_MODE=promote node --import tsx scripts/publish-installer-release.ts",
+    "core:update:release:build": "pnpm build:frontend && node --import tsx scripts/build-installer-release.ts && node --import tsx scripts/package-core-update-release.ts"
   },
   "dependencies": {
     "@better-auth/api-key": "1.7.1",

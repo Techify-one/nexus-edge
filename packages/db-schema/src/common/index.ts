@@ -23,6 +23,8 @@ export const CORE_PERMISSIONS = [
   "core.webhook.test",
   "core.webhook.redeliver",
   "core.audit.read",
+  "core.settings.read",
+  "core.settings.update",
 ] as const;
 
 export type BootstrapState = "open" | "claimed" | "complete";

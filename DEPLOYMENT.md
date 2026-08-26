@@ -25,6 +25,10 @@ provisions the remote D1 database and its `app_settings` row, configures the
 Installer secrets from GitHub environment secrets, invokes `pnpm deploy:core`,
 and smoke-tests the Core origin.
 
+Signed, one-click customer updates use a separate beta prerelease workflow.
+Follow [docs/CORE-UPDATES.md](./docs/CORE-UPDATES.md); never create or replace
+its three GitHub release assets manually.
+
 Do not run `pnpm deploy:core`, `pnpm deploy:direct`, or `wrangler deploy`
 locally for an ordinary production release. Those commands are retained as
 deployment implementation or exceptional recovery tools. Use them only when

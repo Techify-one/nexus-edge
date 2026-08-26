@@ -4,6 +4,7 @@ import type { RequestPrincipal } from "@app/core-contract";
 
 export type CoreEnv = {
   APP_VERSION: string;
+  CORE_UPDATE_PUBLIC_KEY: string;
   APP_INSTALLATION_ID: string;
   DATABASE_PROVIDER: "d1" | "postgres";
   DB?: D1Database;

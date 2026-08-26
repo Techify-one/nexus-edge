@@ -223,6 +223,8 @@ describe("contracts", () => {
       "core.webhook.test",
       "core.webhook.redeliver",
       "core.audit.read",
+      "core.settings.read",
+      "core.settings.update",
     ]);
   });
   it("exposes plugin permissions only while the plugin is installed", () => {

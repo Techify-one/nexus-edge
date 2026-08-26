@@ -23,6 +23,9 @@ const dlqName = process.env.WEBHOOK_DLQ_NAME ?? "nexus-edge-webhooks-dlq";
 const apiRoot = `https://api.cloudflare.com/client/v4/accounts/${accountId}`;
 const assetsRoot = resolve("frontend/dist/client");
 const modulesRoot = resolve("frontend/dist/nexus_edge_core");
+const appVersion = JSON.parse(readFileSync("package.json", "utf8")).version;
+const coreUpdatePublicKey =
+  "MCowBQYDK2VwAyEAxuOKnkDa5oHc4zGhCxV6GIUU6LhZ7bStR3CgoS9adGo=";
 
 if (!existsSync(join(assetsRoot, "index.html")))
   throw new Error("Run pnpm build:frontend before a direct deployment.");
@@ -189,7 +192,12 @@ const metadata = {
     { type: "assets", name: "ASSETS" },
     { type: "d1", name: "DB", database_id: d1Id },
     { type: "queue", name: "WEBHOOK_QUEUE", queue_name: queueName },
-    { type: "plain_text", name: "APP_VERSION", text: "1.0.0" },
+    { type: "plain_text", name: "APP_VERSION", text: appVersion },
+    {
+      type: "plain_text",
+      name: "CORE_UPDATE_PUBLIC_KEY",
+      text: coreUpdatePublicKey,
+    },
     {
       type: "plain_text",
       name: "APP_INSTALLATION_ID",

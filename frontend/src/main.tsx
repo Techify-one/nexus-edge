@@ -33,6 +33,9 @@ const ApiKeysPage = lazy(() => import("./features/api-keys/ApiKeysPage.js"));
 const WebhooksPage = lazy(() => import("./features/webhooks/WebhooksPage.js"));
 const PluginsPage = lazy(() => import("./features/plugins/PluginsPage.js"));
 const AuditPage = lazy(() => import("./features/audit/AuditPage.js"));
+const GeneralSettingsPage = lazy(
+  () => import("./features/settings/GeneralSettingsPage.js"),
+);
 
 registerChunkRecovery();
 initializeTheme();
@@ -99,6 +102,7 @@ const router = createBrowserRouter([
       { path: "settings/webhooks", element: lazyElement(WebhooksPage) },
       { path: "plugins", element: lazyElement(PluginsPage) },
       { path: "audit", element: lazyElement(AuditPage) },
+      { path: "settings/general", element: lazyElement(GeneralSettingsPage) },
       { path: "crm", element: lazyElement(pluginUiRegistry["crm.home"]) },
       {
         path: "crm/leads",

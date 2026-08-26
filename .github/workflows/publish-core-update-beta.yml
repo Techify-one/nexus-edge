@@ -1,0 +1,68 @@
+name: Publish Core update beta
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact prerelease version from package.json (for example 1.1.0-beta.1)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: core-update-release
+    concurrency:
+      group: core-update-beta-release
+      cancel-in-progress: false
+    env:
+      CORE_UPDATE_PRIVATE_KEY_PKCS8_BASE64: ${{ secrets.CORE_UPDATE_PRIVATE_KEY_PKCS8_BASE64 }}
+      CORE_UPDATE_PUBLIC_KEY_SPKI_BASE64: ${{ vars.CORE_UPDATE_PUBLIC_KEY_SPKI_BASE64 }}
+      INSTALLER_RELEASE_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with: { ref: main }
+      - uses: pnpm/action-setup@v6
+        with: { version: 11.19.0 }
+      - uses: actions/setup-node@v7
+        with: { node-version: 24, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: Validate beta version
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFile } from "node:fs/promises";
+          const input = process.env.INSTALLER_RELEASE_VERSION;
+          const pkg = JSON.parse(await readFile("package.json", "utf8"));
+          if (
+            input !== input?.trim() ||
+            !/^\d+\.\d+\.\d+-[0-9A-Za-z.-]+$/.test(input ?? "")
+          ) {
+            throw new Error("version must be a semantic prerelease");
+          }
+          if (pkg.version !== input) {
+            throw new Error(`package.json is ${pkg.version}, not ${input}`);
+          }
+          NODE
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm test:matrix
+      - run: pnpm openapi:check
+      - run: pnpm build
+      - run: pnpm verify:artifacts
+      - run: pnpm verify:bundle
+      - run: pnpm core:update:release:build
+      - name: Publish signed GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "nexus-v${INSTALLER_RELEASE_VERSION}" \
+            artifacts/core-update/nexus-edge-release.json \
+            artifacts/core-update/nexus-edge-release.sig \
+            artifacts/core-update/nexus-edge-update.zip \
+            --target "${GITHUB_SHA}" \
+            --title "Nexus Edge ${INSTALLER_RELEASE_VERSION}" \
+            --generate-notes \
+            --prerelease

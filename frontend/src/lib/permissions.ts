@@ -36,6 +36,7 @@ export const groupPermissions = <Permission extends { key: string }>(
       "core.plugin",
       "core.webhook",
       "core.audit",
+      "core.settings",
     ].map((section, index) => [section, index]),
   );
   const sections = new Map<

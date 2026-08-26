@@ -616,5 +616,44 @@ export const OPENAPI_DOCUMENT = {
     "/api/v1/audit": {
       get: { responses: { "200": { description: "Audit trail" } } },
     },
+    "/api/v1/settings/general": {
+      get: {
+        responses: {
+          "200": {
+            description:
+              "General settings and verified GitHub beta update status",
+          },
+        },
+      },
+    },
+    "/api/v1/settings/core-update-operations": {
+      post: {
+        parameters: [{ name: "X-Reauth-Token", in: "header", required: true }],
+        responses: {
+          "201": { description: "Signed Core update operation started" },
+          "409": {
+            description:
+              "Update unavailable, unsupported, unconfigured, or busy",
+          },
+        },
+      },
+    },
+    "/api/v1/settings/core-update-operations/{operationId}": {
+      get: {
+        parameters: [{ name: "operationId", in: "path", required: true }],
+        responses: { "200": { description: "Core update operation status" } },
+      },
+    },
+    "/api/v1/settings/core-update-operations/{operationId}/advance": {
+      post: {
+        parameters: [
+          { name: "operationId", in: "path", required: true },
+          { name: "X-Reauth-Token", in: "header", required: true },
+        ],
+        responses: {
+          "200": { description: "One signed Core update stage completed" },
+        },
+      },
+    },
   },
 } as const;

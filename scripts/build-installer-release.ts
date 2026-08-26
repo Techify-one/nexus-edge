@@ -43,7 +43,9 @@ const releasePrefix = `releases/${version}`;
 const versionRoot = join(outputRoot, releasePrefix);
 const coreBundleRoot = join(repositoryRoot, "frontend/dist/nexus_edge_core");
 
-const privateKeyBase64 = process.env.INSTALLER_RELEASE_PRIVATE_KEY_PKCS8_BASE64;
+const privateKeyBase64 =
+  process.env.INSTALLER_RELEASE_PRIVATE_KEY_PKCS8_BASE64 ??
+  process.env.CORE_UPDATE_PRIVATE_KEY_PKCS8_BASE64;
 if (!privateKeyBase64)
   throw new Error("INSTALLER_RELEASE_PRIVATE_KEY_PKCS8_BASE64 is required");
 
@@ -203,7 +205,9 @@ const publicKeySpkiBase64 = publicKey
     type: "spki",
   })
   .toString("base64");
-const expectedPublicKey = process.env.INSTALLER_RELEASE_PUBLIC_KEY_SPKI_BASE64;
+const expectedPublicKey =
+  process.env.INSTALLER_RELEASE_PUBLIC_KEY_SPKI_BASE64 ??
+  process.env.CORE_UPDATE_PUBLIC_KEY_SPKI_BASE64;
 if (expectedPublicKey && expectedPublicKey !== publicKeySpkiBase64)
   throw new Error(
     "Release signing key does not match the configured public key",

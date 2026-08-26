@@ -15,6 +15,8 @@ Nexus Edge is a lightweight, modular runtime for distributed applications. This 
 - responsive SPA. New and migrated CRUD tables use per-user column order, visibility, sorting, live independent resizing, and a fixed actions/settings column;
 - Portuguese and English UI with typed catalogs, browser detection, persisted preference, and locale-aware date formatting;
 - equivalent migrations, tests, CI, OpenAPI, and safe deployment scripts.
+- signed beta updates discovered from GitHub and installed from General
+  settings with one click on D1 installations.
 
 ## Local development
 
@@ -53,6 +55,9 @@ commands, invariants, and verification criteria without depending on a specific
 vendor.
 
 Follow [docs/INTERNATIONALIZATION.md](./docs/INTERNATIONALIZATION.md) to add languages.
+
+Follow [docs/CORE-UPDATES.md](./docs/CORE-UPDATES.md) to publish signed beta
+releases for the in-app updater.
 
 The browser installer has a separate
 [architecture](./docs/INSTALLER-ARCHITECTURE.md),

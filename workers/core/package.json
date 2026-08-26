@@ -1,6 +1,6 @@
 {
   "name": "@app/core-worker",
-  "version": "1.0.0",
+  "version": "1.1.0-beta.1",
   "private": true,
   "type": "module",
   "exports": {
@@ -16,6 +16,7 @@
     "@app/core-contract": "workspace:*",
     "@app/database": "workspace:*",
     "@app/db-schema": "workspace:*",
+    "@app/installer-release-schema": "workspace:*",
     "@app/webhook-contract": "workspace:*",
     "@better-auth/api-key": "1.7.1",
     "@casl/ability": "7.0.1",
@@ -23,6 +24,7 @@
     "@scalar/hono-api-reference": "0.11.16",
     "better-auth": "1.7.1",
     "hono": "4.13.3",
+    "fflate": "0.8.3",
     "semver": "7.8.5",
     "zod": "4.4.3"
   }

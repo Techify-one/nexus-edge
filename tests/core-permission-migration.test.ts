@@ -102,4 +102,37 @@ describe("Core permission migration", () => {
         .get()?.count,
     ).toBe(0);
   });
+
+  it("grants general settings and Core updates only to administrator groups", () => {
+    database = new DatabaseSync(":memory:");
+    database.exec(
+      readFileSync("workers/core/migrations/d1/0001_init.sql", "utf8"),
+    );
+    database.exec(`
+      INSERT INTO groups(id,name,is_admin,created_at,updated_at) VALUES
+        ('grp_admin','Admin',1,1,1),
+        ('grp_custom','Custom',0,1,1);
+    `);
+    const migration = readFileSync(
+      "workers/core/migrations/d1/0007_core_updates.sql",
+      "utf8",
+    );
+    database.exec(migration);
+    database.exec(migration);
+
+    expect(
+      database
+        .prepare(
+          `SELECT g.id, p.key FROM group_permissions gp
+           JOIN groups g ON g.id = gp.group_id
+           JOIN permissions p ON p.id = gp.permission_id
+           WHERE p.key LIKE 'core.settings.%'
+           ORDER BY p.key`,
+        )
+        .all(),
+    ).toEqual([
+      { id: "grp_admin", key: "core.settings.read" },
+      { id: "grp_admin", key: "core.settings.update" },
+    ]);
+  });
 });

@@ -15,3 +15,4 @@ test-results/
 *.tsbuildinfo
 nexus-edge-source.zip
 installer/release-build/
+artifacts/core-update/
