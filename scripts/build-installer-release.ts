@@ -41,6 +41,7 @@ const outputRoot = resolve(
 );
 const releasePrefix = `releases/${version}`;
 const versionRoot = join(outputRoot, releasePrefix);
+const coreBundleRoot = join(repositoryRoot, "frontend/dist/nexus_edge_core");
 
 const privateKeyBase64 = process.env.INSTALLER_RELEASE_PRIVATE_KEY_PKCS8_BASE64;
 if (!privateKeyBase64)
@@ -121,7 +122,7 @@ await rm(outputRoot, { recursive: true, force: true });
 await mkdir(versionRoot, { recursive: true });
 
 const modules = (await addObjects(
-  join(repositoryRoot, "frontend/dist/app_core"),
+  coreBundleRoot,
   "modules",
 )) as ReleaseObject[];
 const assets = (await addObjects(

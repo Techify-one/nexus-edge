@@ -1,4 +1,6 @@
 import { generateKeyPairSync, sign } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   canonicalJson,
@@ -57,6 +59,18 @@ const release = installerReleaseSchema.parse({
 }) satisfies InstallerRelease;
 
 describe("installer release contract", () => {
+  it("packages the current Vite Core environment, never the obsolete bundle", () => {
+    const repositoryRoot = resolve(import.meta.dirname, "..");
+    for (const path of [
+      "scripts/build-installer-release.ts",
+      "scripts/direct-deploy.mjs",
+    ]) {
+      const source = readFileSync(resolve(repositoryRoot, path), "utf8");
+      expect(source).toContain("frontend/dist/nexus_edge_core");
+      expect(source).not.toContain("frontend/dist/app_core");
+    }
+  });
+
   it("keeps legacy signed manifests unchanged when schema version is absent", () => {
     const { databaseSchemaVersion: _databaseSchemaVersion, ...legacy } =
       release;

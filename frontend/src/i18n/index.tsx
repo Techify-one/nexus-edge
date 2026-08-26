@@ -378,22 +378,34 @@ const ptBR = {
     "A instalação falhou. Abra e copie o relatório de suporte abaixo.",
   "plugins.runtimeCredentialTitle": "Autorize a publicação do primeiro plugin",
   "plugins.runtimeCredentialBody":
-    "Esta configuração é feita uma única vez. Crie um token dedicado na conta Cloudflare selecionada durante a instalação.",
-  "plugins.runtimeCredentialOpen": "Abrir tokens desta conta",
+    "Isso é necessário apenas uma vez para o Nexus publicar e atualizar os Workers dos seus plugins.",
+  "plugins.runtimeCredentialCreate": "Criar token na Cloudflare",
+  "plugins.runtimeCredentialOpenList": "Abrir lista de tokens desta conta",
+  "plugins.runtimeCredentialStepOpen":
+    "Clique no botão acima. A Cloudflare abrirá a conta correta com o nome e a permissão do token preenchidos.",
+  "plugins.runtimeCredentialStepReview":
+    "Confira se existe somente esta permissão:",
+  "plugins.runtimeCredentialStepCreateToken":
+    "Clique em Continuar para o resumo e depois em Criar token.",
   "plugins.runtimeCredentialStepCreate":
     "Na Cloudflare, clique em Create Token e escolha criar um Custom Token.",
   "plugins.runtimeCredentialStepPermission": "Adicione somente esta permissão:",
   "plugins.runtimeCredentialStepAccount":
     "Em Account Resources, inclua somente a conta:",
   "plugins.runtimeCredentialStepPaste":
-    "Conclua a criação, copie o token exibido e cole-o abaixo.",
+    "Copie o token que aparecer e cole-o no campo abaixo.",
+  "plugins.runtimeCredentialTargetAccount": "Conta selecionada:",
   "plugins.runtimeCredentialWarning":
     "A Cloudflare mostra o token apenas uma vez. Não o envie por mensagem nem o salve em documentos.",
   "plugins.runtimeCredentialLabel": "API Token dedicado",
+  "plugins.runtimeCredentialPlaceholder": "Cole aqui o token da Cloudflare",
   "plugins.runtimeCredentialHelp":
     "O token será validado e gravado diretamente como secret deste Core Worker. Ele não será salvo no banco.",
-  "plugins.runtimeCredentialContinue": "Salvar token e instalar",
-  "plugins.runtimeCredentialSaved":
+  "plugins.runtimeCredentialLater": "Fazer depois",
+  "plugins.runtimeCredentialSave": "Validar e salvar token",
+  "plugins.runtimeCredentialContinue": "Validar token e instalar",
+  "plugins.runtimeCredentialSaved": "Credencial de plugins configurada.",
+  "plugins.runtimeCredentialSavedAndInstalling":
     "Credencial de plugins configurada. Iniciando instalação…",
   "plugins.runtimeCredentialActivationPending":
     "A Cloudflare salvou o secret, mas a nova versão do Worker ainda está ativando. Aguarde alguns segundos e tente instalar novamente.",
@@ -825,22 +837,34 @@ const en: Record<TranslationKey, string> = {
     "Installation failed. Open and copy the support report below.",
   "plugins.runtimeCredentialTitle": "Authorize the first plugin deployment",
   "plugins.runtimeCredentialBody":
-    "This is a one-time setup. Create a dedicated token in the Cloudflare account selected during installation.",
-  "plugins.runtimeCredentialOpen": "Open this account's tokens",
+    "This is required only once so Nexus can publish and update your plugin Workers.",
+  "plugins.runtimeCredentialCreate": "Create token in Cloudflare",
+  "plugins.runtimeCredentialOpenList": "Open this account's token list",
+  "plugins.runtimeCredentialStepOpen":
+    "Select the button above. Cloudflare will open the correct account with the token name and permission prefilled.",
+  "plugins.runtimeCredentialStepReview":
+    "Confirm that it has only this permission:",
+  "plugins.runtimeCredentialStepCreateToken":
+    "Select Continue to summary and then Create Token.",
   "plugins.runtimeCredentialStepCreate":
     "In Cloudflare, select Create Token and choose to create a Custom Token.",
   "plugins.runtimeCredentialStepPermission": "Add only this permission:",
   "plugins.runtimeCredentialStepAccount":
     "Under Account Resources, include only this account:",
   "plugins.runtimeCredentialStepPaste":
-    "Finish creating it, copy the displayed token, and paste it below.",
+    "Copy the token that appears and paste it in the field below.",
+  "plugins.runtimeCredentialTargetAccount": "Selected account:",
   "plugins.runtimeCredentialWarning":
     "Cloudflare displays the token only once. Do not send it in a message or save it in a document.",
   "plugins.runtimeCredentialLabel": "Dedicated API Token",
+  "plugins.runtimeCredentialPlaceholder": "Paste the Cloudflare token here",
   "plugins.runtimeCredentialHelp":
     "The token is validated and written directly as a secret on this Core Worker. It is never stored in the database.",
-  "plugins.runtimeCredentialContinue": "Save token and install",
-  "plugins.runtimeCredentialSaved":
+  "plugins.runtimeCredentialLater": "Do this later",
+  "plugins.runtimeCredentialSave": "Validate and save token",
+  "plugins.runtimeCredentialContinue": "Validate token and install",
+  "plugins.runtimeCredentialSaved": "Plugin credential configured.",
+  "plugins.runtimeCredentialSavedAndInstalling":
     "Plugin credential configured. Starting installation…",
   "plugins.runtimeCredentialActivationPending":
     "Cloudflare saved the secret, but the new Worker version is still activating. Wait a few seconds and try installing again.",

@@ -10,7 +10,7 @@ import {
   Trash2,
   UploadCloud,
 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ConfigurableDataTable } from "../../components/ui/configurable-data-table.js";
 import { Modal } from "../../components/ui/modal.js";
@@ -28,7 +28,10 @@ import {
   apiFile,
   idempotencyKey,
 } from "../../lib/api/core-client.js";
-import { cloudflareAccountTokensUrl } from "../../lib/cloudflare-token.js";
+import {
+  cloudflareAccountTokensUrl,
+  cloudflarePluginTokenTemplateUrl,
+} from "../../lib/cloudflare-token.js";
 import { translate, useI18n, type TranslationKey } from "../../i18n/index.js";
 import { can } from "../../lib/ability.js";
 import {
@@ -73,6 +76,77 @@ type PluginParts = {
   gzipBytes: number;
   file: File;
 };
+
+function RuntimeCredentialGuide({
+  accountId,
+  inputId,
+  token,
+  onTokenChange,
+}: {
+  accountId: string;
+  inputId: string;
+  token: string;
+  onTokenChange: (token: string) => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <section className="space-y-4 rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-sm">
+      <a
+        className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white hover:bg-indigo-700 sm:w-auto"
+        href={cloudflarePluginTokenTemplateUrl(accountId)}
+        target="_blank"
+        rel="noreferrer noopener"
+      >
+        {t("plugins.runtimeCredentialCreate")}
+        <ExternalLink className="h-4 w-4" />
+      </a>
+      <ol className="list-decimal space-y-3 pl-5 text-slate-800">
+        <li>{t("plugins.runtimeCredentialStepOpen")}</li>
+        <li>
+          {t("plugins.runtimeCredentialStepReview")}{" "}
+          <strong>Account → Workers Scripts → Edit</strong>
+        </li>
+        <li>{t("plugins.runtimeCredentialStepCreateToken")}</li>
+        <li>{t("plugins.runtimeCredentialStepPaste")}</li>
+      </ol>
+      <div className="rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs text-slate-600">
+        <span className="font-semibold text-slate-800">
+          {t("plugins.runtimeCredentialTargetAccount")}
+        </span>{" "}
+        <code className="break-all">{accountId}</code>
+      </div>
+      <p className="border-l-4 border-amber-400 bg-amber-50 px-3 py-2 text-amber-900">
+        {t("plugins.runtimeCredentialWarning")}
+      </p>
+      <div className="space-y-2">
+        <Label htmlFor={inputId}>{t("plugins.runtimeCredentialLabel")}</Label>
+        <Input
+          id={inputId}
+          type="password"
+          autoComplete="off"
+          minLength={40}
+          maxLength={200}
+          value={token}
+          onChange={(event) => onTokenChange(event.target.value)}
+          placeholder={t("plugins.runtimeCredentialPlaceholder")}
+          required
+        />
+        <p className="text-xs text-slate-600">
+          {t("plugins.runtimeCredentialHelp")}
+        </p>
+        <a
+          className="inline-flex items-center gap-1 text-xs font-medium text-indigo-700 underline underline-offset-2"
+          href={cloudflareAccountTokensUrl(accountId)}
+          target="_blank"
+          rel="noreferrer noopener"
+        >
+          {t("plugins.runtimeCredentialOpenList")}
+          <ExternalLink className="h-3.5 w-3.5" />
+        </a>
+      </div>
+    </section>
+  );
+}
 
 const states = [
   "validating",
@@ -180,6 +254,9 @@ export default function PluginsPage() {
   const [supportReport, setSupportReport] = useState<string | null>(null);
   const [runtimeToken, setRuntimeToken] = useState("");
   const [runtimeCredentialBusy, setRuntimeCredentialBusy] = useState(false);
+  const [runtimeCredentialSetupOpen, setRuntimeCredentialSetupOpen] =
+    useState(false);
+  const runtimeCredentialPrompted = useRef(false);
   const plugins = useQuery({
     queryKey: ["plugins"],
     queryFn: () => api<{ items: Plugin[] }>("/api/v1/plugins"),
@@ -188,9 +265,23 @@ export default function PluginsPage() {
     queryKey: ["plugin-runtime-credential"],
     queryFn: () =>
       api<PluginRuntimeCredential>("/api/v1/plugin-runtime-credential"),
-    enabled: Boolean(parts),
+    enabled: canCreate || canUpdate,
     staleTime: 30_000,
   });
+  useEffect(() => {
+    if (runtimeCredential.data?.configured) {
+      setRuntimeCredentialSetupOpen(false);
+      return;
+    }
+    if (
+      canCreate &&
+      runtimeCredential.data &&
+      !runtimeCredentialPrompted.current
+    ) {
+      runtimeCredentialPrompted.current = true;
+      setRuntimeCredentialSetupOpen(true);
+    }
+  }, [canCreate, runtimeCredential.data]);
   const rows = useMemo(
     () =>
       (plugins.data?.items ?? []).filter((plugin) =>
@@ -325,7 +416,7 @@ export default function PluginsPage() {
     },
   });
   const configureRuntimeCredential = async (
-    packageParts: PluginParts,
+    packageParts?: PluginParts,
   ): Promise<void> => {
     if (runtimeCredentialBusy) return;
     const token = runtimeToken.trim();
@@ -344,8 +435,15 @@ export default function PluginsPage() {
           );
           if (status.configured) {
             client.setQueryData(["plugin-runtime-credential"], status);
-            toast.success(t("plugins.runtimeCredentialSaved"));
-            install.mutate(packageParts);
+            setRuntimeCredentialSetupOpen(false);
+            toast.success(
+              t(
+                packageParts
+                  ? "plugins.runtimeCredentialSavedAndInstalling"
+                  : "plugins.runtimeCredentialSaved",
+              ),
+            );
+            if (packageParts) install.mutate(packageParts);
             return;
           }
         } catch {
@@ -466,6 +564,60 @@ export default function PluginsPage() {
         className="hidden"
         onChange={(event) => void choose(event.target.files?.[0])}
       />
+      <Modal
+        open={
+          runtimeCredentialSetupOpen &&
+          Boolean(runtimeCredential.data && !runtimeCredential.data.configured)
+        }
+        onOpenChange={(open) => {
+          if (!runtimeCredentialBusy) {
+            setRuntimeCredentialSetupOpen(open);
+            if (!open) setRuntimeToken("");
+          }
+        }}
+        title={t("plugins.runtimeCredentialTitle")}
+        description={t("plugins.runtimeCredentialBody")}
+        contentClassName="sm:max-w-2xl"
+      >
+        {runtimeCredential.data && !runtimeCredential.data.configured && (
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void configureRuntimeCredential();
+            }}
+          >
+            <RuntimeCredentialGuide
+              accountId={runtimeCredential.data.accountId}
+              inputId="plugin-runtime-token-setup"
+              token={runtimeToken}
+              onTokenChange={setRuntimeToken}
+            />
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={runtimeCredentialBusy}
+                onClick={() => {
+                  setRuntimeCredentialSetupOpen(false);
+                  setRuntimeToken("");
+                }}
+              >
+                {t("plugins.runtimeCredentialLater")}
+              </Button>
+              <Button
+                busy={runtimeCredentialBusy}
+                disabled={
+                  runtimeCredentialBusy || runtimeToken.trim().length < 40
+                }
+              >
+                <UploadCloud className="h-4 w-4" />
+                {t("plugins.runtimeCredentialSave")}
+              </Button>
+            </div>
+          </form>
+        )}
+      </Modal>
       <input
         ref={archiveInputRef}
         type="file"
@@ -684,62 +836,12 @@ export default function PluginsPage() {
               </div>
             )}
             {runtimeCredential.data && !runtimeCredential.data.configured && (
-              <section className="space-y-4 rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-sm">
-                <div>
-                  <h3 className="font-semibold text-slate-950">
-                    {t("plugins.runtimeCredentialTitle")}
-                  </h3>
-                  <p className="mt-1 text-slate-700">
-                    {t("plugins.runtimeCredentialBody")}
-                  </p>
-                </div>
-                <a
-                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white hover:bg-indigo-700"
-                  href={cloudflareAccountTokensUrl(
-                    runtimeCredential.data.accountId,
-                  )}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                >
-                  {t("plugins.runtimeCredentialOpen")}
-                  <ExternalLink className="h-4 w-4" />
-                </a>
-                <ol className="list-decimal space-y-2 pl-5 text-slate-800">
-                  <li>{t("plugins.runtimeCredentialStepCreate")}</li>
-                  <li>
-                    {t("plugins.runtimeCredentialStepPermission")}{" "}
-                    <strong>Account → Workers Scripts → Edit</strong>
-                  </li>
-                  <li>
-                    {t("plugins.runtimeCredentialStepAccount")}{" "}
-                    <code className="break-all">
-                      {runtimeCredential.data.accountId}
-                    </code>
-                  </li>
-                  <li>{t("plugins.runtimeCredentialStepPaste")}</li>
-                </ol>
-                <p className="border-l-4 border-amber-400 bg-amber-50 px-3 py-2 text-amber-900">
-                  {t("plugins.runtimeCredentialWarning")}
-                </p>
-                <div className="space-y-2">
-                  <Label htmlFor="plugin-runtime-token">
-                    {t("plugins.runtimeCredentialLabel")}
-                  </Label>
-                  <Input
-                    id="plugin-runtime-token"
-                    type="password"
-                    autoComplete="off"
-                    minLength={40}
-                    maxLength={200}
-                    value={runtimeToken}
-                    onChange={(event) => setRuntimeToken(event.target.value)}
-                    required
-                  />
-                  <p className="text-xs text-slate-600">
-                    {t("plugins.runtimeCredentialHelp")}
-                  </p>
-                </div>
-              </section>
+              <RuntimeCredentialGuide
+                accountId={runtimeCredential.data.accountId}
+                inputId="plugin-runtime-token-install"
+                token={runtimeToken}
+                onTokenChange={setRuntimeToken}
+              />
             )}
             {operation && (
               <div className="rounded-xl border p-4" aria-live="polite">

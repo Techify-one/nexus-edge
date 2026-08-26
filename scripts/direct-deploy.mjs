@@ -22,7 +22,7 @@ const queueName = process.env.WEBHOOK_QUEUE_NAME ?? "nexus-edge-webhooks";
 const dlqName = process.env.WEBHOOK_DLQ_NAME ?? "nexus-edge-webhooks-dlq";
 const apiRoot = `https://api.cloudflare.com/client/v4/accounts/${accountId}`;
 const assetsRoot = resolve("frontend/dist/client");
-const modulesRoot = resolve("frontend/dist/app_core");
+const modulesRoot = resolve("frontend/dist/nexus_edge_core");
 
 if (!existsSync(join(assetsRoot, "index.html")))
   throw new Error("Run pnpm build:frontend before a direct deployment.");
