@@ -5,6 +5,7 @@ import {
   installerReleaseSchema,
   isWorkerModuleContentType,
   splitSqlStatements,
+  staticAssetContentType,
   verifyReleaseSignature,
   workerModuleContentType,
   type InstallerRelease,
@@ -89,6 +90,14 @@ describe("installer release contract", () => {
       true,
     );
     expect(isWorkerModuleContentType("application/json")).toBe(false);
+  });
+
+  it("keeps Worker module MIME separate from browser asset MIME", () => {
+    expect(workerModuleContentType("index.js")).toBe(
+      "application/javascript+module",
+    );
+    expect(staticAssetContentType("assets/index.js")).toBe("text/javascript");
+    expect(staticAssetContentType("assets/chunk.mjs")).toBe("text/javascript");
   });
 
   it("verifies an Ed25519 signature over the canonical manifest hash", async () => {

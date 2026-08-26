@@ -21,6 +21,7 @@ import {
   installerReleaseSchema,
   migrationArtifactSchema,
   splitSqlStatements,
+  staticAssetContentType,
   stableReleasePointerSchema,
   workerModuleContentType,
   type InstallerRelease,
@@ -63,23 +64,6 @@ const createdAt = sourceDate.toISOString();
 const sha256 = (value: Uint8Array | string): string =>
   createHash("sha256").update(value).digest("hex");
 
-const mimeType = (path: string): string =>
-  ({
-    ".css": "text/css; charset=utf-8",
-    ".html": "text/html; charset=utf-8",
-    ".ico": "image/x-icon",
-    ".jpeg": "image/jpeg",
-    ".jpg": "image/jpeg",
-    ".js": "application/javascript+module",
-    ".json": "application/json",
-    ".png": "image/png",
-    ".svg": "image/svg+xml",
-    ".txt": "text/plain; charset=utf-8",
-    ".webp": "image/webp",
-    ".woff": "font/woff",
-    ".woff2": "font/woff2",
-  })[extname(path).toLowerCase()] ?? "application/octet-stream";
-
 async function files(root: string): Promise<string[]> {
   const output: string[] = [];
   const visit = async (directory: string): Promise<void> => {
@@ -103,7 +87,7 @@ async function addObjects(
     const contentType =
       category === "modules"
         ? workerModuleContentType(source)
-        : mimeType(source);
+        : staticAssetContentType(source);
     if (!contentType) continue;
     const path = relative(root, source).replaceAll("\\", "/");
     const content = await readFile(source);
@@ -124,7 +108,7 @@ async function addObjects(
         ? {
             ...base,
             uploadHash: sha256(
-              `${content.toString("base64")}${extname(source).slice(1)}`,
+              `${content.toString("base64")}${extname(source).slice(1)}${contentType}`,
             ).slice(0, 32),
           }
         : base,
