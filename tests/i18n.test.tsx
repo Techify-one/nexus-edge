@@ -11,6 +11,12 @@ import { permissionLabel } from "../frontend/src/lib/permissions.js";
 afterEach(cleanup);
 
 describe("internationalization and passwords", () => {
+  it("returns an unknown runtime key instead of crashing the application", () => {
+    expect(translate("users.status.undefined" as never)).toBe(
+      "users.status.undefined",
+    );
+  });
+
   it("switches to English, persists the locale, and reveals the password", () => {
     render(
       <I18nProvider>

@@ -17,6 +17,7 @@ import {
   Textarea,
 } from "../../components/ui/index.js";
 import {
+  ApiError,
   api,
   idempotencyKey,
   recentReauthHeaders,
@@ -43,6 +44,12 @@ type User = {
   schedule?: WeekSchedule | null;
   groups: Group[];
   createdAt: string | number;
+};
+type UserRecord = Omit<User, "groups" | "sectors" | "status" | "tags"> & {
+  groups?: Group[] | null;
+  sectors?: string[] | null;
+  status?: User["status"] | null;
+  tags?: string[] | null;
 };
 type WeekSchedule = {
   dailyHours: string[];
@@ -74,6 +81,21 @@ const defaultDailyHours = [
   "00:00",
 ];
 const defaultEntryTimes = ["", "", "", "", "", "", ""];
+
+const normalizeUser = (user: UserRecord): User => ({
+  ...user,
+  groups: Array.isArray(user.groups) ? user.groups : [],
+  sectors: Array.isArray(user.sectors) ? user.sectors : [],
+  status:
+    user.status === "active" ||
+    user.status === "inactive" ||
+    user.status === "pending"
+      ? user.status
+      : Boolean(user.active)
+        ? "active"
+        : "inactive",
+  tags: Array.isArray(user.tags) ? user.tags : [],
+});
 
 const weeklyTotal = (hours: string[]) => {
   const minutes = hours.reduce((total, value) => {
@@ -272,10 +294,12 @@ export default function UsersPage() {
   const editable = selected === "new" ? canCreate : canUpdate;
   const users = useQuery({
     queryKey: ["users", search],
-    queryFn: () =>
-      api<{ items: User[] }>(
+    queryFn: async () => {
+      const response = await api<{ items: UserRecord[] }>(
         `/api/v1/users?limit=100&search=${encodeURIComponent(search)}`,
-      ),
+      );
+      return { ...response, items: response.items.map(normalizeUser) };
+    },
   });
   const groups = useQuery({
     queryKey: ["groups"],
@@ -284,10 +308,18 @@ export default function UsersPage() {
   });
   const profileOptions = useQuery({
     queryKey: ["user-profile-options"],
-    queryFn: () =>
-      api<{ tags: ProfileOption[]; sectors: ProfileOption[] }>(
-        "/api/v1/users/profile-options",
-      ),
+    queryFn: async () => {
+      try {
+        return await api<{
+          tags: ProfileOption[];
+          sectors: ProfileOption[];
+        }>("/api/v1/users/profile-options");
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 404)
+          return { tags: [], sectors: [] };
+        throw error;
+      }
+    },
   });
   const invitations = useQuery({
     queryKey: ["invitations"],

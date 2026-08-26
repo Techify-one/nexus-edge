@@ -54,7 +54,7 @@ import {
   type TouchEvent,
 } from "react";
 import { toast } from "sonner";
-import { api } from "../../lib/api/core-client.js";
+import { ApiError, api } from "../../lib/api/core-client.js";
 import { useI18n } from "../../i18n/index.js";
 import { EmptyState, Skeleton } from "./index.js";
 
@@ -96,6 +96,8 @@ type PreferenceResponse = {
   config: TablePreferenceConfig | null;
   updatedAt: string | number | null;
 };
+
+type PreferenceLoad = PreferenceResponse & { supported: boolean };
 
 const clamp = (value: number, minimum: number, maximum: number): number =>
   Math.min(maximum, Math.max(minimum, Math.round(value)));
@@ -313,10 +315,25 @@ export function ConfigurableDataTable<T extends { id: string }>({
 
   const preference = useQuery({
     queryKey: ["table-preference", tableId],
-    queryFn: () =>
-      api<PreferenceResponse>(
-        `/api/v1/me/table-preferences/${encodeURIComponent(tableId)}`,
-      ),
+    queryFn: async (): Promise<PreferenceLoad> => {
+      try {
+        return {
+          ...(await api<PreferenceResponse>(
+            `/api/v1/me/table-preferences/${encodeURIComponent(tableId)}`,
+          )),
+          supported: true,
+        };
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 404)
+          return {
+            tableId,
+            config: null,
+            updatedAt: null,
+            supported: false,
+          };
+        throw error;
+      }
+    },
   });
   const { isPending: isSaving, mutate: savePreference } = useMutation({
     mutationFn: (config: TablePreferenceConfig) =>
@@ -371,7 +388,7 @@ export function ConfigurableDataTable<T extends { id: string }>({
   latestConfig.current = currentConfig;
 
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || preference.data?.supported === false) return;
     if (skipNextSave.current) {
       skipNextSave.current = false;
       return;
@@ -379,10 +396,15 @@ export function ConfigurableDataTable<T extends { id: string }>({
     shouldFlush.current = true;
     const timer = window.setTimeout(() => savePreference(currentConfig), 300);
     return () => window.clearTimeout(timer);
-  }, [currentConfig, hydrated, savePreference]);
+  }, [currentConfig, hydrated, preference.data?.supported, savePreference]);
 
   const flushPreference = useCallback(() => {
-    if (!hydrated || !shouldFlush.current) return;
+    if (
+      !hydrated ||
+      preference.data?.supported === false ||
+      !shouldFlush.current
+    )
+      return;
     void fetch(`/api/v1/me/table-preferences/${encodeURIComponent(tableId)}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -390,7 +412,7 @@ export function ConfigurableDataTable<T extends { id: string }>({
       body: JSON.stringify(latestConfig.current),
       keepalive: true,
     });
-  }, [hydrated, tableId]);
+  }, [hydrated, preference.data?.supported, tableId]);
 
   useEffect(() => {
     window.addEventListener("pagehide", flushPreference);
@@ -574,7 +596,20 @@ export function ConfigurableDataTable<T extends { id: string }>({
                               type="button"
                               className="mt-1 w-full rounded-lg border px-3 py-2 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                               disabled={resetPreference.isPending}
-                              onClick={() => resetPreference.mutate()}
+                              onClick={() => {
+                                if (preference.data?.supported === false) {
+                                  skipNextSave.current = true;
+                                  shouldFlush.current = false;
+                                  setColumnOrder(defaults.columnOrder);
+                                  setColumnVisibility(
+                                    defaults.columnVisibility,
+                                  );
+                                  setColumnSizing(defaults.columnSizing);
+                                  setSorting(defaults.sorting);
+                                  return;
+                                }
+                                resetPreference.mutate();
+                              }}
                             >
                               {t("table.reset")}
                             </button>

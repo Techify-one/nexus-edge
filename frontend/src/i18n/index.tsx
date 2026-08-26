@@ -973,7 +973,14 @@ const interpolate = (
 export const translate = (
   key: TranslationKey,
   values?: Record<string, string | number>,
-): string => interpolate(resources[activeLocale][key] ?? ptBR[key], values);
+): string => {
+  const localized = resources[activeLocale] as Record<
+    string,
+    string | undefined
+  >;
+  const fallback = ptBR as Record<string, string | undefined>;
+  return interpolate(localized[key] ?? fallback[key] ?? String(key), values);
+};
 
 export const hasTranslation = (key: string): key is TranslationKey =>
   Object.prototype.hasOwnProperty.call(ptBR, key);

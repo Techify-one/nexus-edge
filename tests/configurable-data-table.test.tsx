@@ -20,6 +20,56 @@ afterEach(() => {
 });
 
 describe("configurable data table", () => {
+  it("keeps working without persistence when an older Core returns 404", async () => {
+    const requests: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        requests.push(init?.method ?? "GET");
+        return Response.json(
+          { error: { code: "NOT_FOUND", message: "Not found" } },
+          { status: 404 },
+        );
+      }),
+    );
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <I18nProvider>
+          <ConfigurableDataTable
+            tableId="core.users"
+            rows={[{ id: "1", name: "Alice", email: "alice@example.com" }]}
+            onOpen={() => undefined}
+            columns={[
+              {
+                key: "name",
+                label: "Name",
+                size: 200,
+                minSize: 80,
+                maxSize: 800,
+                render: (row) => row.name,
+                sortValue: (row) => row.name,
+              },
+            ]}
+          />
+        </I18nProvider>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("Alice")).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole("button", { name: /(ordenar|sort) name/i }),
+    );
+    await new Promise((resolve) => window.setTimeout(resolve, 400));
+    expect(requests).toEqual(["GET"]);
+  });
+
   it("resizes one column continuously and stops at the mouse release position", async () => {
     vi.stubGlobal(
       "fetch",
