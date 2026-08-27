@@ -9,6 +9,7 @@ import {
   splitSqlStatements,
   staticAssetContentType,
   verifyReleaseSignature,
+  verifyReleaseSignatureWithKeys,
   workerModuleContentType,
   type InstallerRelease,
 } from "@app/installer-release-schema";
@@ -135,6 +136,28 @@ describe("installer release contract", () => {
         signature,
         spki,
       ),
+    ).resolves.toBe(false);
+  });
+
+  it("accepts either configured key during an installer signing-key rotation", async () => {
+    const previous = generateKeyPairSync("ed25519");
+    const next = generateKeyPairSync("ed25519");
+    const digest = await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(canonicalJson(release)),
+    );
+    const signature = sign(null, Buffer.from(digest), next.privateKey).toString(
+      "base64",
+    );
+    const keys = [previous.publicKey, next.publicKey].map((key) =>
+      key.export({ type: "spki", format: "der" }).toString("base64"),
+    );
+
+    await expect(
+      verifyReleaseSignatureWithKeys(release, signature, keys),
+    ).resolves.toBe(true);
+    await expect(
+      verifyReleaseSignatureWithKeys(release, signature, [keys[0]!]),
     ).resolves.toBe(false);
   });
 });
