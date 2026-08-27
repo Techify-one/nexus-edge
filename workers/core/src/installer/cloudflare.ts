@@ -184,12 +184,15 @@ export async function configurePluginRuntimeCredential(
         throw error;
       }
     };
-    const [d1Denied, queuesDenied] = await Promise.all([
-      isDenied(`${accountPath(accountId)}/d1/database?per_page=1`),
-      isDenied(`${accountPath(accountId)}/queues?per_page=1`),
-    ]);
-    if (!d1Denied || !queuesDenied)
-      throw new PluginRuntimeCredentialError("too_broad");
+    // Cloudflare currently lets an account-owned Workers Scripts Write token
+    // list Queue metadata even when its sole policy is Workers Scripts Write.
+    // Queue listing therefore cannot distinguish the guided least-privilege
+    // token from a broader token. D1 remains an independent, non-mutating
+    // negative permission probe.
+    const d1Denied = await isDenied(
+      `${accountPath(accountId)}/d1/database?per_page=1`,
+    );
+    if (!d1Denied) throw new PluginRuntimeCredentialError("too_broad");
 
     await cloudflareRequest<unknown>(
       token,

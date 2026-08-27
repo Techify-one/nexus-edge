@@ -700,7 +700,7 @@ describe("Cloudflare plugin bindings", () => {
             success: true,
             result: [{ id: "nexus-customer-core" }],
           });
-        if (url.includes("/d1/database") || url.includes("/queues"))
+        if (url.includes("/d1/database"))
           return Response.json(
             {
               success: false,
@@ -709,6 +709,11 @@ describe("Cloudflare plugin bindings", () => {
             },
             { status: 403 },
           );
+        if (url.includes("/queues"))
+          return Response.json({
+            success: true,
+            result: [{ queue_id: "queue-id", queue_name: "queue-name" }],
+          });
         if (url.endsWith("/secrets"))
           return Response.json({ success: true, result: {} });
         throw new Error(`Unexpected URL: ${url}`);
@@ -736,6 +741,53 @@ describe("Cloudflare plugin bindings", () => {
       name: "CF_API_TOKEN",
       text: token,
       type: "secret_text",
+    });
+  });
+
+  it("rejects a plugin token that can access D1", async () => {
+    const accountId = "a".repeat(32);
+    const token = `test-${"x".repeat(48)}`;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith(`/accounts/${accountId}/tokens/verify`))
+          return Response.json({
+            success: true,
+            result: { id: "c".repeat(32), status: "active" },
+          });
+        if (url.endsWith("/accounts?per_page=50"))
+          return Response.json({
+            success: true,
+            result: [{ id: accountId }],
+          });
+        if (url.endsWith(`/accounts/${accountId}/workers/scripts`))
+          return Response.json({
+            success: true,
+            result: [{ id: "nexus-customer-core" }],
+          });
+        if (url.includes("/d1/database"))
+          return Response.json({ success: true, result: [] });
+        throw new Error(`Unexpected URL: ${url}`);
+      }),
+    );
+
+    const response = await installerApp({ executedSql: [] }).request(
+      "/plugin-runtime-credential",
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      },
+      {
+        CF_ACCOUNT_ID: accountId,
+        CORE_WORKER_NAME: "nexus-customer-core",
+      } as CoreEnv,
+    );
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({
+      code: "PLUGIN_RUNTIME_CREDENTIAL_TOO_BROAD",
     });
   });
 
