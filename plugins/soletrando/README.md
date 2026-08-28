@@ -10,7 +10,9 @@ de requisições e envia apenas um contexto interno. O administrador escolhe no
 painel entre Whisper Large V3 Turbo e Deepgram Nova-3; Workers AI transcreve o
 áudio em memória e o código determinístico avalia a sequência de letras. O
 áudio nunca é persistido. Para o Nova-3, o Worker solicita `pt-BR` e opt-out do
-programa de melhoria do modelo.
+programa de melhoria do modelo. A área infantil captura WAV PCM mono de 16 kHz:
+o Whisper recebe o arquivo completo e o Nova-3 usa o transporte WebSocket de
+tempo real da Cloudflare, evitando a falha conhecida do binding em modo batch.
 
 ## Contratos preservados
 

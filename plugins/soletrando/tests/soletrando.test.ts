@@ -20,6 +20,11 @@ import {
   TRANSCRIPTION_MODELS,
 } from "../src/transcription-models.js";
 import { transcribeSpelling } from "../src/transcription.js";
+import {
+  encodeMonoPcm16Wav,
+  extractMonoPcm16Wav,
+  SOLETRANDO_PCM_SAMPLE_RATE,
+} from "../src/wav.js";
 import { PHASES } from "../src/words.js";
 
 describe("Soletrando plugin", () => {
@@ -29,7 +34,7 @@ describe("Soletrando plugin", () => {
     );
     expect(manifest.id).toBe("soletrando");
     expect(manifest.runtimeBindings).toEqual(["ai"]);
-    expect(manifest.version).toBe("1.2.1");
+    expect(manifest.version).toBe("1.2.2");
     expect(manifest.permissions).toEqual(
       expect.arrayContaining([
         "soletrando.settings.read",
@@ -141,31 +146,79 @@ describe("Soletrando plugin", () => {
     );
   });
 
-  it("streams browser audio to Nova-3 using its container MIME type", async () => {
-    let receivedInput: Ai_Cf_Deepgram_Nova_3_Input | undefined;
+  it("records mono PCM WAV at the Nova-3 realtime sample rate", async () => {
+    const wav = encodeMonoPcm16Wav(
+      [new Float32Array(48_000).fill(0.25)],
+      48_000,
+    );
+    const bytes = await wav.arrayBuffer();
+    const pcm = extractMonoPcm16Wav(bytes);
+
+    expect(wav.type).toBe("audio/wav");
+    expect(pcm.byteLength).toBe(SOLETRANDO_PCM_SAMPLE_RATE * 2);
+    expect(() => extractMonoPcm16Wav(new ArrayBuffer(44))).toThrow(
+      "Nova-3 requires PCM WAV audio.",
+    );
+  });
+
+  it("transcribes PCM through Nova-3's realtime WebSocket transport", async () => {
+    let receivedInput: Record<string, unknown> | undefined;
+    let receivedOptions: Record<string, unknown> | undefined;
+    let sentPcm = false;
+    class FakeWebSocket extends EventTarget {
+      accept() {}
+      close() {}
+      send(value: string | ArrayBuffer) {
+        if (value instanceof ArrayBuffer) {
+          sentPcm = value.byteLength > 0;
+          return;
+        }
+        if (JSON.parse(value).type === "Finalize")
+          this.dispatchEvent(
+            new MessageEvent("message", {
+              data: JSON.stringify({
+                type: "Results",
+                channel: { alternatives: [{ transcript: "bê ó ele a" }] },
+                is_final: true,
+                from_finalize: true,
+              }),
+            }),
+          );
+      }
+    }
+    const socket = new FakeWebSocket();
     const env = {
       AI: {
-        run: async (_model: string, input: Ai_Cf_Deepgram_Nova_3_Input) => {
+        run: async (
+          _model: string,
+          input: Record<string, unknown>,
+          options: Record<string, unknown>,
+        ) => {
           receivedInput = input;
-          return {
-            results: {
-              channels: [{ alternatives: [{ transcript: "bê ó ele a" }] }],
-            },
-          };
+          receivedOptions = options;
+          return { webSocket: socket };
         },
       } as unknown as Ai,
     };
-    const audio = new File([new Uint8Array([1, 2, 3])], "spelling.webm", {
-      type: "audio/webm;codecs=opus",
-    });
+    const wav = encodeMonoPcm16Wav(
+      [new Float32Array(16_000).fill(0.25)],
+      16_000,
+    );
+    const audio = new File([wav], "spelling.wav", { type: "audio/wav" });
 
     await expect(
       transcribeSpelling(audio, env as never, {
         model: "@cf/deepgram/nova-3",
       }),
     ).resolves.toBe("bê ó ele a");
-    expect(receivedInput?.audio.contentType).toBe("audio/webm");
-    expect(receivedInput?.audio.body).toBeInstanceOf(ReadableStream);
+    expect(receivedInput).toMatchObject({
+      encoding: "linear16",
+      sample_rate: "16000",
+      language: "pt-BR",
+      mip_opt_out: "true",
+    });
+    expect(receivedOptions).toEqual({ websocket: true });
+    expect(sentPcm).toBe(true);
   });
 
   it("scores accuracy and speed without using AI for the decision", () => {
@@ -237,8 +290,10 @@ describe("Soletrando plugin", () => {
       practice.indexOf("track.enabled = true", startSpelling),
     ).toBeGreaterThan(startSpelling);
     expect(
-      practice.indexOf("startRecorder(stream);", startSpelling),
+      practice.indexOf("await startRecorder(stream);", startSpelling),
     ).toBeGreaterThan(startSpelling);
+    expect(practice).toContain("encodeMonoPcm16Wav(");
+    expect(practice).toContain('"soletracao.wav"');
     expect(practice).toContain("disabled={!listened || speaking}");
     expect(practice).toContain("{recording || sending ? (");
     expect(practice).toContain("controller.abort(), 30_000");
@@ -257,7 +312,8 @@ describe("Soletrando plugin", () => {
     );
     expect(transcription).toContain("@cf/deepgram/nova-3");
     expect(transcription).toContain('language: "pt-BR"');
-    expect(transcription).toContain("mip_opt_out: true");
+    expect(transcription).toContain('mip_opt_out: "true"');
+    expect(transcription).toContain("websocket: true");
     expect(transcription).toContain(
       "Transcreva literalmente os nomes das letras",
     );

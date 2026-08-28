@@ -28,6 +28,7 @@ import type {
   PracticeProfile,
   PracticeSummary,
 } from "./types.js";
+import { encodeMonoPcm16Wav } from "../src/wav.js";
 
 type Mode =
   "dashboard" | "resume" | "preparing" | "playing" | "feedback" | "finished";
@@ -37,16 +38,6 @@ const elapsedLabel = (milliseconds: number): string => {
   return seconds < 60
     ? `${seconds}s`
     : `${Math.floor(seconds / 60)}min ${seconds % 60}s`;
-};
-
-const chooseMimeType = (): string => {
-  const candidates = [
-    "audio/webm;codecs=opus",
-    "audio/mp4",
-    "audio/webm",
-    "audio/ogg;codecs=opus",
-  ];
-  return candidates.find((type) => MediaRecorder.isTypeSupported(type)) ?? "";
 };
 
 export default function PracticePage() {
@@ -70,8 +61,12 @@ export default function PracticePage() {
   const [elapsed, setElapsed] = useState(0);
   const [runningScore, setRunningScore] = useState(0);
   const streamRef = useRef<MediaStream | null>(null);
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<BlobPart[]>([]);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const audioSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const audioProcessorRef = useRef<ScriptProcessorNode | null>(null);
+  const silenceGainRef = useRef<GainNode | null>(null);
+  const pcmChunksRef = useRef<Float32Array[]>([]);
+  const pcmSampleRateRef = useRef(0);
   const recordingStartedAtRef = useRef(0);
   const scoresRef = useRef<number[]>([]);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
@@ -105,6 +100,10 @@ export default function PracticePage() {
         utteranceRef.current.onerror = null;
       }
       window.speechSynthesis?.cancel();
+      audioProcessorRef.current?.disconnect();
+      audioSourceRef.current?.disconnect();
+      silenceGainRef.current?.disconnect();
+      void audioContextRef.current?.close();
       streamRef.current?.getTracks().forEach((track) => track.stop());
     };
   }, [loadProfile]);
@@ -134,21 +133,30 @@ export default function PracticePage() {
     return () => window.clearInterval(interval);
   }, [recording]);
 
-  const startRecorder = (stream: MediaStream) => {
-    chunksRef.current = [];
-    const mimeType = chooseMimeType();
-    const recorder = new MediaRecorder(
-      stream,
-      mimeType ? { mimeType, audioBitsPerSecond: 64_000 } : undefined,
-    );
-    recorder.ondataavailable = (event) => {
-      if (event.data.size > 0) chunksRef.current.push(event.data);
+  const startRecorder = async (stream: MediaStream) => {
+    const context = new AudioContext({ sampleRate: 16_000 });
+    if (context.state === "suspended") await context.resume();
+    const source = context.createMediaStreamSource(stream);
+    const processor = context.createScriptProcessor(4_096, 1, 1);
+    const silence = context.createGain();
+    silence.gain.value = 0;
+    pcmChunksRef.current = [];
+    pcmSampleRateRef.current = context.sampleRate;
+    processor.onaudioprocess = (event) => {
+      pcmChunksRef.current.push(
+        new Float32Array(event.inputBuffer.getChannelData(0)),
+      );
     };
-    recorderRef.current = recorder;
+    source.connect(processor);
+    processor.connect(silence);
+    silence.connect(context.destination);
+    audioContextRef.current = context;
+    audioSourceRef.current = source;
+    audioProcessorRef.current = processor;
+    silenceGainRef.current = silence;
     recordingStartedAtRef.current = performance.now();
     setElapsed(0);
     setRecording(true);
-    recorder.start(250);
   };
 
   const showPosition = (next: number, alreadyListened = false) => {
@@ -197,7 +205,7 @@ export default function PracticePage() {
   const startSpelling = async () => {
     if (!listened || recording || speaking || sending) return;
     setCaptureError("");
-    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+    if (!navigator.mediaDevices?.getUserMedia || !window.AudioContext) {
       setCaptureError(t("soletrando.practice.microphoneUnsupported"));
       return;
     }
@@ -220,7 +228,7 @@ export default function PracticePage() {
       if (!stream.getAudioTracks().some((track) => track.readyState === "live"))
         throw new Error("microphone stopped");
       stream.getAudioTracks().forEach((track) => (track.enabled = true));
-      startRecorder(stream);
+      await startRecorder(stream);
     } catch {
       setCaptureError(t("soletrando.practice.microphoneDenied"));
     }
@@ -257,26 +265,26 @@ export default function PracticePage() {
     }
   };
 
-  const stopRecorder = (): Promise<Blob> =>
-    new Promise((resolve, reject) => {
-      const recorder = recorderRef.current;
-      if (!recorder || recorder.state === "inactive") {
-        reject(new Error("recording unavailable"));
-        return;
-      }
-      recorder.onerror = () => reject(new Error("recording failed"));
-      recorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, {
-          type: recorder.mimeType || "audio/webm",
-        });
-        streamRef.current?.getAudioTracks().forEach((track) => {
-          track.enabled = false;
-        });
-        resolve(blob);
-      };
-      recorder.stop();
-      setRecording(false);
+  const stopRecorder = async (): Promise<Blob> => {
+    const context = audioContextRef.current;
+    const processor = audioProcessorRef.current;
+    if (!context || !processor || !pcmChunksRef.current.length)
+      throw new Error("recording unavailable");
+    processor.onaudioprocess = null;
+    processor.disconnect();
+    audioSourceRef.current?.disconnect();
+    silenceGainRef.current?.disconnect();
+    await context.close();
+    audioContextRef.current = null;
+    audioSourceRef.current = null;
+    audioProcessorRef.current = null;
+    silenceGainRef.current = null;
+    streamRef.current?.getAudioTracks().forEach((track) => {
+      track.enabled = false;
     });
+    setRecording(false);
+    return encodeMonoPcm16Wav(pcmChunksRef.current, pcmSampleRateRef.current);
+  };
 
   const sendAttempt = async () => {
     if (sending || !recording) return;
@@ -290,11 +298,7 @@ export default function PracticePage() {
       form.set("sessionId", sessionId);
       form.set("position", String(position));
       form.set("elapsedMs", String(Math.round(attemptElapsed)));
-      form.set(
-        "audio",
-        audio,
-        `soletracao.${audio.type.includes("mp4") ? "m4a" : "webm"}`,
-      );
+      form.set("audio", audio, "soletracao.wav");
       const data = await publicApi<AttemptFeedback>(`/play/${token}/attempts`, {
         method: "POST",
         body: form,
