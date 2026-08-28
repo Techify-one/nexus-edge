@@ -7,5 +7,7 @@ type TranscriptionOptions = {
     model?: TranscriptionModel;
     signal?: AbortSignal;
 };
+export declare const BRAZILIAN_PORTUGUESE_LETTER_NAMES: readonly ["a", "bê", "cê", "dê", "e", "efe", "gê", "agá", "i", "jota", "cá", "ele", "eme", "ene", "ó", "pê", "quê", "erre", "esse", "tê", "u", "vê", "dáblio", "xis", "ípsilon", "zê"];
+export declare const SPELLING_INITIAL_PROMPT: string;
 export declare function transcribeSpelling(audio: File, env: SoletrandoBindings, options?: TranscriptionOptions): Promise<string>;
 export {};

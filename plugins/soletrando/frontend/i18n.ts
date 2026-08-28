@@ -8,11 +8,11 @@ export const soletrandoFrontendMessages = {
       "Escolha o modelo usado nas próximas gravações. Esta configuração aparece somente no painel administrativo.",
     "soletrando.settings.model": "Modelo de transcrição",
     "soletrando.settings.whisper": "Whisper Large V3 Turbo",
-    "soletrando.settings.nova": "Deepgram Nova-3",
+    "soletrando.settings.nova": "Deepgram Nova-3 (experimental)",
     "soletrando.settings.whisperDescription":
-      "Opção padrão, com menor custo e prompt específico para nomes de letras em português.",
+      "Opção recomendada. Usa automaticamente o vocabulário completo de nomes de letras em português brasileiro e parâmetros ajustados para voz infantil.",
     "soletrando.settings.novaDescription":
-      "Alternativa otimizada para português brasileiro e áudio desafiador, com custo de processamento maior.",
+      "Opção experimental. O modelo não aceita o vocabulário de letras nesta integração e apresentou menor precisão em soletrações.",
     "soletrando.settings.save": "Aplicar modelo",
     "soletrando.settings.saved":
       "Modelo atualizado para as próximas gravações.",
@@ -158,11 +158,11 @@ export const soletrandoFrontendMessages = {
       "Choose the model used for future recordings. This setting is available only in the administrator panel.",
     "soletrando.settings.model": "Transcription model",
     "soletrando.settings.whisper": "Whisper Large V3 Turbo",
-    "soletrando.settings.nova": "Deepgram Nova-3",
+    "soletrando.settings.nova": "Deepgram Nova-3 (experimental)",
     "soletrando.settings.whisperDescription":
-      "Default option with lower cost and a prompt tailored to Portuguese letter names.",
+      "Recommended option. It automatically uses the complete Brazilian Portuguese letter-name vocabulary and parameters tuned for children's voices.",
     "soletrando.settings.novaDescription":
-      "Alternative optimized for Brazilian Portuguese and challenging audio, with higher processing cost.",
+      "Experimental option. This integration cannot provide the letter vocabulary to the model, and it produced lower spelling accuracy.",
     "soletrando.settings.save": "Apply model",
     "soletrando.settings.saved": "Model updated for future recordings.",
     "permissions.soletrando.settings.read": "View transcription settings",

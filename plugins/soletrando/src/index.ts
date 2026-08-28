@@ -80,7 +80,7 @@ const isPublicContext = (value: unknown): value is PluginPublicContext => {
 };
 
 app.get("/health", (c) =>
-  c.json({ ok: true, plugin: "soletrando", version: "1.2.2" }),
+  c.json({ ok: true, plugin: "soletrando", version: "1.2.3" }),
 );
 
 app.use("/*", async (c, next) => {

@@ -19,7 +19,11 @@ import {
   resolveTranscriptionModel,
   TRANSCRIPTION_MODELS,
 } from "../src/transcription-models.js";
-import { transcribeSpelling } from "../src/transcription.js";
+import {
+  BRAZILIAN_PORTUGUESE_LETTER_NAMES,
+  SPELLING_INITIAL_PROMPT,
+  transcribeSpelling,
+} from "../src/transcription.js";
 import {
   encodeMonoPcm16Wav,
   extractMonoPcm16Wav,
@@ -34,7 +38,7 @@ describe("Soletrando plugin", () => {
     );
     expect(manifest.id).toBe("soletrando");
     expect(manifest.runtimeBindings).toEqual(["ai"]);
-    expect(manifest.version).toBe("1.2.2");
+    expect(manifest.version).toBe("1.2.3");
     expect(manifest.permissions).toEqual(
       expect.arrayContaining([
         "soletrando.settings.read",
@@ -144,6 +148,50 @@ describe("Soletrando plugin", () => {
     expect(resolveTranscriptionModel("unsupported")).toBe(
       DEFAULT_TRANSCRIPTION_MODEL,
     );
+  });
+
+  it("biases Whisper toward all Brazilian Portuguese letter names", async () => {
+    let receivedModel = "";
+    let receivedInput: Record<string, unknown> | undefined;
+    let receivedOptions: Record<string, unknown> | undefined;
+    const env = {
+      AI: {
+        run: async (
+          model: string,
+          input: Record<string, unknown>,
+          options: Record<string, unknown>,
+        ) => {
+          receivedModel = model;
+          receivedInput = input;
+          receivedOptions = options;
+          return { text: "bê, ó, ele, a" };
+        },
+      } as unknown as Ai,
+    };
+    const audio = new File([new Uint8Array(512)], "spelling.wav", {
+      type: "audio/wav",
+    });
+
+    await expect(transcribeSpelling(audio, env as never)).resolves.toBe(
+      "bê, ó, ele, a",
+    );
+    expect(receivedModel).toBe("@cf/openai/whisper-large-v3-turbo");
+    expect(BRAZILIAN_PORTUGUESE_LETTER_NAMES).toHaveLength(26);
+    for (const letterName of BRAZILIAN_PORTUGUESE_LETTER_NAMES)
+      expect(SPELLING_INITIAL_PROMPT).toContain(letterName);
+    expect(receivedInput).toMatchObject({
+      task: "transcribe",
+      language: "pt",
+      vad_filter: false,
+      beam_size: 10,
+      condition_on_previous_text: false,
+      no_speech_threshold: 0.8,
+      log_prob_threshold: -1.5,
+      initial_prompt: SPELLING_INITIAL_PROMPT,
+    });
+    expect(receivedOptions).toMatchObject({
+      tags: ["soletrando", "transcription"],
+    });
   });
 
   it("records mono PCM WAV at the Nova-3 realtime sample rate", async () => {
@@ -314,9 +362,9 @@ describe("Soletrando plugin", () => {
     expect(transcription).toContain('language: "pt-BR"');
     expect(transcription).toContain('mip_opt_out: "true"');
     expect(transcription).toContain("websocket: true");
-    expect(transcription).toContain(
-      "Transcreva literalmente os nomes das letras",
-    );
+    expect(transcription).toContain("Transcreva literalmente cada nome");
+    expect(transcription).toContain("beam_size: 10");
+    expect(transcription).toContain("no_speech_threshold: 0.8");
     expect(route).toContain('event: "transcription_failed"');
     expect(route).toContain('event: "transcription_completed"');
     expect(route).toContain('return "AI_DAILY_LIMIT"');

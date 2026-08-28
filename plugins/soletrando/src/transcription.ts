@@ -15,8 +15,41 @@ type TranscriptionOptions = {
   signal?: AbortSignal;
 };
 
-const spellingPrompt =
-  "Soletração infantil em português brasileiro. Transcreva literalmente os nomes das letras, na ordem falada, separados por vírgulas. Não una as letras para formar uma palavra, não complete e não corrija a soletração. Vocabulário: a, bê, cê, dê, e, efe, gê, agá, i, jota, cá, ele, eme, ene, ó, pê, quê, erre, esse, tê, u, vê, dáblio, xis, ípsilon, zê.";
+export const BRAZILIAN_PORTUGUESE_LETTER_NAMES = [
+  "a",
+  "bê",
+  "cê",
+  "dê",
+  "e",
+  "efe",
+  "gê",
+  "agá",
+  "i",
+  "jota",
+  "cá",
+  "ele",
+  "eme",
+  "ene",
+  "ó",
+  "pê",
+  "quê",
+  "erre",
+  "esse",
+  "tê",
+  "u",
+  "vê",
+  "dáblio",
+  "xis",
+  "ípsilon",
+  "zê",
+] as const;
+
+export const SPELLING_INITIAL_PROMPT = [
+  "Gravação curta de uma criança soletrando em português brasileiro.",
+  "O áudio contém uma sequência de nomes de letras, inclusive possíveis repetições e erros.",
+  "Transcreva literalmente cada nome, na ordem falada, separado por vírgulas; não forme, complete nem corrija a palavra.",
+  `Vocabulário de nomes de letras: ${BRAZILIAN_PORTUGUESE_LETTER_NAMES.join(", ")}.`,
+].join(" ");
 
 type NovaSocketResponse = Response & { webSocket?: WebSocket };
 type NovaSocketMessage = {
@@ -145,10 +178,14 @@ export async function transcribeSpelling(
               audio: Buffer.from(audioBytes).toString("base64"),
               task: "transcribe",
               language: "pt",
-              vad_filter: true,
+              // Short, softly spoken letter names can otherwise be clipped as
+              // silence before Whisper receives them.
+              vad_filter: false,
+              beam_size: 10,
               condition_on_previous_text: false,
-              no_speech_threshold: 0.55,
-              initial_prompt: spellingPrompt,
+              no_speech_threshold: 0.8,
+              log_prob_threshold: -1.5,
+              initial_prompt: SPELLING_INITIAL_PROMPT,
             },
             { signal, tags: ["soletrando", "transcription"] },
           )
