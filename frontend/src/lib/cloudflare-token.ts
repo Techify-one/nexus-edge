@@ -7,6 +7,10 @@ export function cloudflareAccountTokensUrl(accountId: string): string {
   ).toString();
 }
 
+export function cloudflareUserTokensUrl(): string {
+  return "https://dash.cloudflare.com/profile/api-tokens";
+}
+
 export function cloudflarePluginTokenTemplateUrl(accountId: string): string {
   if (!/^[a-f0-9]{32}$/u.test(accountId))
     throw new Error("Invalid Cloudflare account identifier");

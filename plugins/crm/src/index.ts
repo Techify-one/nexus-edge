@@ -5,7 +5,7 @@ import {
   leadUpdateSchema,
   listQuerySchema,
 } from "@app/api-contracts";
-import type { PluginContext } from "@app/core-contract";
+import type { PluginContext, PluginInstallerContext } from "@app/core-contract";
 import type { CrmEnv } from "./env.js";
 import { LeadRepository } from "./repositories/leads.js";
 import { LeadService } from "./services/leads.js";
@@ -18,7 +18,8 @@ app.get("/health", (c) =>
 app.use("/*", async (c, next) => {
   if (c.req.path === "/health") return next();
   const encoded = c.req.header("X-Plugin-Context");
-  if (!encoded)
+  const installerEncoded = c.req.header("X-Plugin-Installer-Context");
+  if (Boolean(encoded) === Boolean(installerEncoded))
     return c.json(
       {
         error: {
@@ -28,12 +29,31 @@ app.use("/*", async (c, next) => {
       },
       401,
     );
-  let context: PluginContext;
   try {
-    const normalized = encoded.replaceAll("-", "+").replaceAll("_", "/");
-    context = JSON.parse(
+    const value = encoded ?? installerEncoded!;
+    const normalized = value.replaceAll("-", "+").replaceAll("_", "/");
+    const context = JSON.parse(
       atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=")),
-    ) as PluginContext;
+    ) as PluginContext | PluginInstallerContext;
+    if (encoded) {
+      if (
+        !("userId" in context) ||
+        !context.userId ||
+        !context.requestId ||
+        !Array.isArray(context.permissions)
+      )
+        throw new Error("invalid context");
+      c.set("pluginContext", context);
+    } else {
+      if (
+        !("operationId" in context) ||
+        context.pluginId !== "crm" ||
+        !context.operationId ||
+        !context.requestId
+      )
+        throw new Error("invalid installer context");
+      c.set("installerContext", context);
+    }
   } catch {
     return c.json(
       {
@@ -45,23 +65,8 @@ app.use("/*", async (c, next) => {
       401,
     );
   }
-  if (
-    !context.userId ||
-    !context.requestId ||
-    !Array.isArray(context.permissions)
-  )
-    return c.json(
-      {
-        error: {
-          code: "INVALID_PLUGIN_CONTEXT",
-          message: "Internal context is invalid",
-        },
-      },
-      401,
-    );
   const db = await createDatabase(c.env);
   c.set("db", db);
-  c.set("pluginContext", context);
   try {
     await next();
   } finally {
@@ -70,6 +75,17 @@ app.use("/*", async (c, next) => {
 });
 
 app.post("/__installer/smoke", async (c) => {
+  const installer = c.get("installerContext");
+  if (!installer)
+    return c.json(
+      {
+        error: {
+          code: "INSTALLER_CONTEXT_REQUIRED",
+          message: "Installer context required",
+        },
+      },
+      403,
+    );
   const db = c.get("db");
   const id = `lead_smoke_${crypto.randomUUID().replaceAll("-", "")}`;
   const now = db.provider === "d1" ? Date.now() : new Date();
@@ -79,7 +95,7 @@ app.post("/__installer/smoke", async (c) => {
       id,
       "Installer smoke",
       `${id}@invalid.example`,
-      c.get("pluginContext").userId,
+      installer.operationId,
       now,
       now,
     ],
@@ -95,7 +111,13 @@ app.post("/__installer/smoke", async (c) => {
 });
 
 const service = (c: Context<CrmEnv>) =>
-  new LeadService(new LeadRepository(c.get("db")), c.get("pluginContext"));
+  new LeadService(
+    new LeadRepository(c.get("db")),
+    c.get("pluginContext") ??
+      (() => {
+        throw new Error("FORBIDDEN:user-context");
+      })(),
+  );
 
 export const crmRoutes = new Hono<CrmEnv>()
   .get("/leads", async (c) => {

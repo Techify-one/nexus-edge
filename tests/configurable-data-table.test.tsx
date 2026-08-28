@@ -20,6 +20,65 @@ afterEach(() => {
 });
 
 describe("configurable data table", () => {
+  it("reports controlled sorting without reordering a server-sorted page", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          tableId: "plugin.meeting_recorder.recordings",
+          config: null,
+          updatedAt: null,
+        }),
+      ),
+    );
+    const onSortingChange = vi.fn();
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <I18nProvider>
+          <ConfigurableDataTable
+            tableId="plugin.meeting_recorder.recordings"
+            rows={[
+              { id: "1", name: "Bob", email: "bob@example.com" },
+              { id: "2", name: "Alice", email: "alice@example.com" },
+            ]}
+            sorting={[]}
+            onSortingChange={onSortingChange}
+            manualSorting
+            onOpen={() => undefined}
+            columns={[
+              {
+                key: "name",
+                label: "Name",
+                size: 200,
+                minSize: 80,
+                maxSize: 800,
+                render: (row) => row.name,
+                sortValue: (row) => row.name,
+              },
+            ]}
+          />
+        </I18nProvider>
+      </QueryClientProvider>,
+    );
+
+    await screen.findByRole("table");
+    fireEvent.click(
+      screen.getByRole("button", { name: /(ordenar|sort) name/i }),
+    );
+    expect(onSortingChange).toHaveBeenLastCalledWith([
+      { id: "name", desc: false },
+    ]);
+    const rows = screen.getAllByRole("row").slice(1);
+    expect(rows[0]?.textContent).toContain("Bob");
+    expect(rows[1]?.textContent).toContain("Alice");
+  });
+
   it("keeps working without persistence when an older Core returns 404", async () => {
     const requests: string[] = [];
     vi.stubGlobal(

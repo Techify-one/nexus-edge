@@ -40,8 +40,10 @@ export async function mapWithConcurrency(items, concurrency, task) {
 }
 const repository = (c) => new AccountRepository(c.get("db"));
 const requirePermission = (c, permission) => {
-    if (!c.get("pluginContext").permissions.includes(permission))
+    const context = c.get("pluginContext");
+    if (!context?.permissions.includes(permission))
         throw new MetaApiError("FORBIDDEN", "Permission denied.", 403);
+    return context;
 };
 const parseCsv = (value, max) => {
     const items = (value || "")
@@ -90,17 +92,34 @@ app.use("/*", async (c, next) => {
     if (c.req.path === "/health")
         return next();
     const encoded = c.req.header("X-Plugin-Context");
-    if (!encoded)
+    const installerEncoded = c.req.header("X-Plugin-Installer-Context");
+    if (Boolean(encoded) === Boolean(installerEncoded))
         return c.json({
             error: {
                 code: "MISSING_PLUGIN_CONTEXT",
                 message: "Internal context required",
             },
         }, 401);
-    let context;
     try {
-        const normalized = encoded.replaceAll("-", "+").replaceAll("_", "/");
-        context = JSON.parse(atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=")));
+        const value = encoded ?? installerEncoded;
+        const normalized = value.replaceAll("-", "+").replaceAll("_", "/");
+        const context = JSON.parse(atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=")));
+        if (encoded) {
+            if (!("userId" in context) ||
+                !context.userId ||
+                !context.requestId ||
+                !Array.isArray(context.permissions))
+                throw new Error("invalid context");
+            c.set("pluginContext", context);
+        }
+        else {
+            if (!("operationId" in context) ||
+                context.pluginId !== "meta_ads" ||
+                !context.operationId ||
+                !context.requestId)
+                throw new Error("invalid installer context");
+            c.set("installerContext", context);
+        }
     }
     catch {
         return c.json({
@@ -110,18 +129,8 @@ app.use("/*", async (c, next) => {
             },
         }, 401);
     }
-    if (!context.userId ||
-        !context.requestId ||
-        !Array.isArray(context.permissions))
-        return c.json({
-            error: {
-                code: "INVALID_PLUGIN_CONTEXT",
-                message: "Internal context is invalid",
-            },
-        }, 401);
     const db = await createDatabase(c.env);
     c.set("db", db);
-    c.set("pluginContext", context);
     try {
         await next();
     }
@@ -130,6 +139,14 @@ app.use("/*", async (c, next) => {
     }
 });
 app.post("/__installer/smoke", async (c) => {
+    const installer = c.get("installerContext");
+    if (!installer)
+        return c.json({
+            error: {
+                code: "INSTALLER_CONTEXT_REQUIRED",
+                message: "Installer context required",
+            },
+        }, 403);
     const db = c.get("db");
     const id = `maa_smoke_${crypto.randomUUID().replaceAll("-", "")}`;
     const now = db.provider === "d1" ? Date.now() : new Date();
@@ -139,7 +156,7 @@ app.post("/__installer/smoke", async (c) => {
         id,
         "Installer smoke",
         db.provider === "d1" ? 0 : false,
-        c.get("pluginContext").userId,
+        installer.operationId,
         now,
         now,
     ]);
@@ -159,7 +176,7 @@ export const metaAdsRoutes = new Hono()
     return c.json({ items: await discoverAccounts(c.env) });
 })
     .post("/accounts", async (c) => {
-    requirePermission(c, "meta_ads.account.create");
+    const context = requirePermission(c, "meta_ads.account.create");
     const parsed = accountInput.parse(await c.req.json());
     const input = {
         ...parsed,
@@ -168,11 +185,10 @@ export const metaAdsRoutes = new Hono()
     if (await repository(c).getByAdAccountId(input.adAccountId))
         throw new MetaApiError("AD_ACCOUNT_ALREADY_EXISTS", "This ad account is already registered.", 409);
     const meta = await inspectAccount(c.env, input.adAccountId);
-    const context = c.get("pluginContext");
     return c.json(await repository(c).create(input, meta, context.userId, context.requestId), 201);
 })
     .patch("/accounts/:accountId", async (c) => {
-    requirePermission(c, "meta_ads.account.update");
+    const context = requirePermission(c, "meta_ads.account.update");
     const parsed = accountUpdateInput.parse(await c.req.json());
     const input = {
         ...parsed,
@@ -182,15 +198,13 @@ export const metaAdsRoutes = new Hono()
     if (duplicate && duplicate.id !== c.req.param("accountId"))
         throw new MetaApiError("AD_ACCOUNT_ALREADY_EXISTS", "This ad account is already registered.", 409);
     const meta = await inspectAccount(c.env, input.adAccountId);
-    const context = c.get("pluginContext");
     const updated = await repository(c).update(c.req.param("accountId"), input, meta, context.userId, context.requestId);
     if (!updated)
         throw new MetaApiError("VERSION_CONFLICT", "The account changed or no longer exists.", 409);
     return c.json(updated);
 })
     .delete("/accounts/:accountId", async (c) => {
-    requirePermission(c, "meta_ads.account.delete");
-    const context = c.get("pluginContext");
+    const context = requirePermission(c, "meta_ads.account.delete");
     if (!(await repository(c).delete(c.req.param("accountId"), context.userId, context.requestId)))
         throw new MetaApiError("NOT_FOUND", "Ad account not found.", 404);
     return c.body(null, 204);
@@ -249,13 +263,12 @@ export const metaAdsRoutes = new Hono()
 })
     .post("/status", async (c) => {
     const input = statusInput.parse(await c.req.json());
-    requirePermission(c, `meta_ads.${input.objectType}.update`);
+    const context = requirePermission(c, `meta_ads.${input.objectType}.update`);
     const configured = await repository(c).enabledAccountIds();
     const objectAccountId = await getObjectAccountId(c.env, input.objectId);
     if (!configured.has(objectAccountId))
         throw new MetaApiError("AD_ACCOUNT_NOT_CONFIGURED", "This object does not belong to an enabled ad account.", 403);
     await setObjectStatus(c.env, input.objectId, input.status);
-    const context = c.get("pluginContext");
     await repository(c).auditStatusChange(input.objectId, input.objectType, input.status, context.userId, context.requestId);
     return c.json({ ok: true });
 });

@@ -41,6 +41,20 @@ export class PluginRuntimeCredentialError extends Error {
   }
 }
 
+export class R2ProvisioningError extends Error {
+  constructor(
+    readonly code:
+      | "invalid"
+      | "too_broad"
+      | "not_entitled"
+      | "bucket_missing"
+      | "bucket_conflict"
+      | "unavailable",
+  ) {
+    super(code);
+  }
+}
+
 async function readBoundedText(response: Response): Promise<string> {
   const declaredSize = Number(response.headers.get("Content-Length") ?? "0");
   if (declaredSize > maximumResponseBytes)
@@ -99,6 +113,35 @@ async function cloudflareRequest<T>(
 const accountPath = (accountId: string): string =>
   `/accounts/${encodeURIComponent(accountId)}`;
 
+async function verifyCloudflareToken(
+  token: string,
+  accountId: string,
+): Promise<void> {
+  let verification: { status?: string } | undefined;
+  try {
+    verification = await cloudflareRequest<{ status?: string }>(
+      token,
+      `${accountPath(accountId)}/tokens/verify`,
+    );
+  } catch (error) {
+    // Cloudflare exposes separate verification endpoints for account-owned and
+    // user-owned tokens. The guided least-privilege tokens created from the
+    // regular API Tokens screen are user-owned, while service principals use
+    // the account endpoint.
+    if (
+      !(error instanceof CloudflareApiError) ||
+      ![400, 401, 403].includes(error.status)
+    )
+      throw error;
+    verification = await cloudflareRequest<{ status?: string }>(
+      token,
+      "/user/tokens/verify",
+    );
+  }
+  if (verification.status !== "active")
+    throw new CloudflareApiError(401, ["TOKEN_INACTIVE"]);
+}
+
 function base64(bytes: Uint8Array<ArrayBuffer>): string {
   let binary = "";
   for (let offset = 0; offset < bytes.length; offset += 32_768)
@@ -140,12 +183,7 @@ export async function configurePluginRuntimeCredential(
   if (!env.CORE_WORKER_NAME)
     throw new PluginRuntimeCredentialError("target_missing");
   try {
-    const verification = await cloudflareRequest<{ status?: string }>(
-      token,
-      `${accountPath(accountId)}/tokens/verify`,
-    );
-    if (verification.status !== "active")
-      throw new PluginRuntimeCredentialError("invalid");
+    await verifyCloudflareToken(token, accountId);
 
     // Account-owned tokens do not need Account Settings access and may reject
     // the global account-list endpoint. User tokens remain supported, but if
@@ -218,6 +256,95 @@ export async function configurePluginRuntimeCredential(
   }
 }
 
+const cloudflarePermissionDenied = (error: unknown): boolean =>
+  error instanceof CloudflareApiError &&
+  (error.status === 401 || error.status === 403);
+
+/**
+ * Uses a short-lived R2-only credential supplied for one Installer request.
+ * The credential is never persisted by this function or returned to callers.
+ */
+export async function provisionR2Bucket(
+  token: string,
+  accountId: string,
+  bucketName: string,
+  mode: "create" | "attach",
+): Promise<{ name: string; created: boolean }> {
+  if (
+    !/^[a-f0-9]{32}$/u.test(accountId) ||
+    !/^[a-z0-9][a-z0-9-]{2,62}$/u.test(bucketName)
+  )
+    throw new R2ProvisioningError("invalid");
+  try {
+    await verifyCloudflareToken(token, accountId);
+
+    try {
+      const accounts = await cloudflareRequest<Array<{ id: string }>>(
+        token,
+        "/accounts?per_page=50",
+      );
+      if (accounts.length !== 1 || accounts[0]?.id !== accountId)
+        throw new R2ProvisioningError("invalid");
+    } catch (error) {
+      if (!cloudflarePermissionDenied(error)) throw error;
+    }
+
+    const denied = async (path: string): Promise<boolean> => {
+      try {
+        await cloudflareRequest<unknown>(token, path);
+        return false;
+      } catch (error) {
+        if (cloudflarePermissionDenied(error)) return true;
+        throw error;
+      }
+    };
+    const [workersDenied, d1Denied] = await Promise.all([
+      denied(`${accountPath(accountId)}/workers/scripts`),
+      denied(`${accountPath(accountId)}/d1/database?per_page=1`),
+    ]);
+    if (!workersDenied || !d1Denied) throw new R2ProvisioningError("too_broad");
+
+    const path = `${accountPath(accountId)}/r2/buckets/${encodeURIComponent(bucketName)}`;
+    let exists = false;
+    try {
+      const bucket = await cloudflareRequest<{ name?: string }>(token, path);
+      exists = bucket.name === bucketName;
+    } catch (error) {
+      if (!(error instanceof CloudflareApiError) || error.status !== 404)
+        throw error;
+    }
+    if (mode === "attach") {
+      if (!exists) throw new R2ProvisioningError("bucket_missing");
+      return { name: bucketName, created: false };
+    }
+    if (exists) return { name: bucketName, created: false };
+    const created = await cloudflareRequest<{ name?: string }>(
+      token,
+      `${accountPath(accountId)}/r2/buckets`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: bucketName, storageClass: "Standard" }),
+      },
+    );
+    if (created.name !== bucketName)
+      throw new R2ProvisioningError("unavailable");
+    return { name: bucketName, created: true };
+  } catch (error) {
+    if (error instanceof R2ProvisioningError) throw error;
+    if (
+      error instanceof CloudflareApiError &&
+      error.codes.some((code) => ["10042", "10043", "10062"].includes(code))
+    )
+      throw new R2ProvisioningError("not_entitled");
+    if (cloudflarePermissionDenied(error))
+      throw new R2ProvisioningError("invalid");
+    if (error instanceof CloudflareApiError && error.status === 409)
+      throw new R2ProvisioningError("bucket_conflict");
+    throw new R2ProvisioningError("unavailable");
+  }
+}
+
 export async function uploadPluginWorker(
   env: CoreEnv,
   workerName: string,
@@ -225,8 +352,9 @@ export async function uploadPluginWorker(
   manifest: {
     compatibilityDate: string;
     compatibilityFlags: string[];
-    runtimeBindings?: Array<"ai"> | undefined;
+    runtimeBindings?: Array<"ai" | "r2"> | undefined;
   },
+  runtimeResources: { STORAGE?: string } = {},
 ): Promise<void> {
   const bindings: Binding[] = [
     {
@@ -249,6 +377,15 @@ export async function uploadPluginWorker(
   }
   if (manifest.runtimeBindings?.includes("ai"))
     bindings.push({ type: "ai", name: "AI" });
+  if (manifest.runtimeBindings?.includes("r2")) {
+    const bucketName = runtimeResources.STORAGE;
+    if (!bucketName) throw new Error("PLUGIN_RUNTIME_R2_REQUIRED");
+    bindings.push({
+      type: "r2_bucket",
+      name: "STORAGE",
+      bucket_name: bucketName,
+    });
+  }
   const aiObservability = manifest.runtimeBindings?.includes("ai")
     ? {
         observability: {
@@ -566,7 +703,12 @@ export async function deletePluginWorker(
   env: CoreEnv,
   workerName: string,
 ): Promise<void> {
-  await cf(env, `/workers/scripts/${encodeURIComponent(workerName)}`, {
-    method: "DELETE",
-  });
+  try {
+    await cf(env, `/workers/scripts/${encodeURIComponent(workerName)}`, {
+      method: "DELETE",
+    });
+  } catch (error) {
+    if (!(error instanceof CloudflareApiError) || error.status !== 404)
+      throw error;
+  }
 }

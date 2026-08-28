@@ -4,6 +4,7 @@ import {
   createBrowserRouter,
   isRouteErrorResponse,
   Navigate,
+  Outlet,
   RouterProvider,
   useRouteError,
 } from "react-router-dom";
@@ -19,6 +20,7 @@ import {
 import DashboardPage from "./features/dashboard.js";
 import { useI18n } from "./i18n/index.js";
 import { registerChunkRecovery } from "./lib/chunk-recovery.js";
+import { isReloadGuarded } from "./lib/reload-guard.js";
 import {
   pluginUiRegistry,
   SoletrandoChildDetailPage,
@@ -81,6 +83,38 @@ const RouteErrorPage = () => {
   );
 };
 
+const AuthenticatedContent = () => <Outlet />;
+
+const AuthenticatedRouteErrorPage = () => {
+  const { t } = useI18n();
+  const error = useRouteError();
+  const detail =
+    error instanceof Error ? error.message : t("errors.pageLoadDescription");
+  const reload = () => {
+    if (isReloadGuarded()) {
+      window.dispatchEvent(new CustomEvent("app:request-safe-reload"));
+      return;
+    }
+    window.location.reload();
+  };
+  return (
+    <div className="mx-auto max-w-xl rounded-2xl border bg-white p-8 text-center shadow-sm">
+      <h1 className="text-xl font-bold">{t("errors.pageLoadTitle")}</h1>
+      <p className="mt-2 text-sm text-slate-500">{detail}</p>
+      <div className="mt-5 flex justify-center gap-3">
+        <Button variant="secondary" onClick={() => window.history.back()}>
+          {t("common.back")}
+        </Button>
+        <Button onClick={reload}>
+          {isReloadGuarded()
+            ? t("meetingRecorder.stopAndUpdate")
+            : t("errors.reloadPage")}
+        </Button>
+      </div>
+    </div>
+  );
+};
+
 const router = createBrowserRouter([
   { path: "/", element: <HomeRedirect /> },
   { path: "/setup", element: <SetupPage /> },
@@ -95,38 +129,63 @@ const router = createBrowserRouter([
     element: <AuthenticatedLayout />,
     errorElement: <RouteErrorPage />,
     children: [
-      { index: true, element: <DashboardPage /> },
-      { path: "users", element: lazyElement(UsersPage) },
-      { path: "groups", element: lazyElement(GroupsPage) },
-      { path: "settings/api-keys", element: lazyElement(ApiKeysPage) },
-      { path: "settings/webhooks", element: lazyElement(WebhooksPage) },
-      { path: "plugins", element: lazyElement(PluginsPage) },
-      { path: "audit", element: lazyElement(AuditPage) },
-      { path: "settings/general", element: lazyElement(GeneralSettingsPage) },
-      { path: "crm", element: lazyElement(pluginUiRegistry["crm.home"]) },
       {
-        path: "crm/leads",
-        element: lazyElement(pluginUiRegistry["crm.leads"]),
-      },
-      {
-        path: "crm/leads/:leadId",
-        element: lazyElement(pluginUiRegistry["crm.leads"]),
-      },
-      {
-        path: "meta-ads",
-        element: lazyElement(pluginUiRegistry["meta_ads.dashboard"]),
-      },
-      {
-        path: "meta-ads/accounts",
-        element: lazyElement(pluginUiRegistry["meta_ads.accounts"]),
-      },
-      {
-        path: "soletrando",
-        element: lazyElement(pluginUiRegistry["soletrando.children"]),
-      },
-      {
-        path: "soletrando/children/:childId",
-        element: lazyElement(SoletrandoChildDetailPage),
+        element: <AuthenticatedContent />,
+        errorElement: <AuthenticatedRouteErrorPage />,
+        children: [
+          { index: true, element: <DashboardPage /> },
+          { path: "users", element: lazyElement(UsersPage) },
+          { path: "groups", element: lazyElement(GroupsPage) },
+          { path: "settings/api-keys", element: lazyElement(ApiKeysPage) },
+          { path: "settings/webhooks", element: lazyElement(WebhooksPage) },
+          { path: "plugins", element: lazyElement(PluginsPage) },
+          { path: "audit", element: lazyElement(AuditPage) },
+          {
+            path: "settings/general",
+            element: lazyElement(GeneralSettingsPage),
+          },
+          { path: "crm", element: lazyElement(pluginUiRegistry["crm.home"]) },
+          {
+            path: "crm/leads",
+            element: lazyElement(pluginUiRegistry["crm.leads"]),
+          },
+          {
+            path: "crm/leads/:leadId",
+            element: lazyElement(pluginUiRegistry["crm.leads"]),
+          },
+          {
+            path: "meta-ads",
+            element: lazyElement(pluginUiRegistry["meta_ads.dashboard"]),
+          },
+          {
+            path: "meta-ads/accounts",
+            element: lazyElement(pluginUiRegistry["meta_ads.accounts"]),
+          },
+          {
+            path: "soletrando",
+            element: lazyElement(pluginUiRegistry["soletrando.children"]),
+          },
+          {
+            path: "soletrando/children/:childId",
+            element: lazyElement(SoletrandoChildDetailPage),
+          },
+          {
+            path: "meeting-recorder",
+            element: lazyElement(pluginUiRegistry["meeting_recorder.home"]),
+          },
+          {
+            path: "meeting-recorder/new",
+            element: lazyElement(pluginUiRegistry["meeting_recorder.new"]),
+          },
+          {
+            path: "meeting-recorder/settings",
+            element: lazyElement(pluginUiRegistry["meeting_recorder.settings"]),
+          },
+          {
+            path: "meeting-recorder/:recordingId",
+            element: lazyElement(pluginUiRegistry["meeting_recorder.detail"]),
+          },
+        ],
       },
     ],
   },

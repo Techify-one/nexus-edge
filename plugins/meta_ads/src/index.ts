@@ -1,6 +1,6 @@
 import { Hono, type Context } from "hono";
 import { createDatabase } from "@app/database";
-import type { PluginContext } from "@app/core-contract";
+import type { PluginContext, PluginInstallerContext } from "@app/core-contract";
 import { z } from "zod";
 import type { MetaAdsEnv } from "./env.js";
 import {
@@ -67,9 +67,14 @@ export async function mapWithConcurrency<T, R>(
 const repository = (c: Context<MetaAdsEnv>) =>
   new AccountRepository(c.get("db"));
 
-const requirePermission = (c: Context<MetaAdsEnv>, permission: string) => {
-  if (!c.get("pluginContext").permissions.includes(permission))
+const requirePermission = (
+  c: Context<MetaAdsEnv>,
+  permission: string,
+): PluginContext => {
+  const context = c.get("pluginContext");
+  if (!context?.permissions.includes(permission))
     throw new MetaApiError("FORBIDDEN", "Permission denied.", 403);
+  return context;
 };
 
 const parseCsv = (value: string | undefined, max: number): string[] => {
@@ -164,7 +169,8 @@ app.get("/health", (c) =>
 app.use("/*", async (c, next) => {
   if (c.req.path === "/health") return next();
   const encoded = c.req.header("X-Plugin-Context");
-  if (!encoded)
+  const installerEncoded = c.req.header("X-Plugin-Installer-Context");
+  if (Boolean(encoded) === Boolean(installerEncoded))
     return c.json(
       {
         error: {
@@ -174,12 +180,31 @@ app.use("/*", async (c, next) => {
       },
       401,
     );
-  let context: PluginContext;
   try {
-    const normalized = encoded.replaceAll("-", "+").replaceAll("_", "/");
-    context = JSON.parse(
+    const value = encoded ?? installerEncoded!;
+    const normalized = value.replaceAll("-", "+").replaceAll("_", "/");
+    const context = JSON.parse(
       atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=")),
-    ) as PluginContext;
+    ) as PluginContext | PluginInstallerContext;
+    if (encoded) {
+      if (
+        !("userId" in context) ||
+        !context.userId ||
+        !context.requestId ||
+        !Array.isArray(context.permissions)
+      )
+        throw new Error("invalid context");
+      c.set("pluginContext", context);
+    } else {
+      if (
+        !("operationId" in context) ||
+        context.pluginId !== "meta_ads" ||
+        !context.operationId ||
+        !context.requestId
+      )
+        throw new Error("invalid installer context");
+      c.set("installerContext", context);
+    }
   } catch {
     return c.json(
       {
@@ -191,23 +216,8 @@ app.use("/*", async (c, next) => {
       401,
     );
   }
-  if (
-    !context.userId ||
-    !context.requestId ||
-    !Array.isArray(context.permissions)
-  )
-    return c.json(
-      {
-        error: {
-          code: "INVALID_PLUGIN_CONTEXT",
-          message: "Internal context is invalid",
-        },
-      },
-      401,
-    );
   const db = await createDatabase(c.env);
   c.set("db", db);
-  c.set("pluginContext", context);
   try {
     await next();
   } finally {
@@ -216,6 +226,17 @@ app.use("/*", async (c, next) => {
 });
 
 app.post("/__installer/smoke", async (c) => {
+  const installer = c.get("installerContext");
+  if (!installer)
+    return c.json(
+      {
+        error: {
+          code: "INSTALLER_CONTEXT_REQUIRED",
+          message: "Installer context required",
+        },
+      },
+      403,
+    );
   const db = c.get("db");
   const id = `maa_smoke_${crypto.randomUUID().replaceAll("-", "")}`;
   const now = db.provider === "d1" ? Date.now() : new Date();
@@ -227,7 +248,7 @@ app.post("/__installer/smoke", async (c) => {
       id,
       "Installer smoke",
       db.provider === "d1" ? 0 : false,
-      c.get("pluginContext").userId,
+      installer.operationId,
       now,
       now,
     ],
@@ -252,7 +273,7 @@ export const metaAdsRoutes = new Hono<MetaAdsEnv>()
     return c.json({ items: await discoverAccounts(c.env) });
   })
   .post("/accounts", async (c) => {
-    requirePermission(c, "meta_ads.account.create");
+    const context = requirePermission(c, "meta_ads.account.create");
     const parsed = accountInput.parse(await c.req.json());
     const input = {
       ...parsed,
@@ -265,7 +286,6 @@ export const metaAdsRoutes = new Hono<MetaAdsEnv>()
         409,
       );
     const meta = await inspectAccount(c.env, input.adAccountId);
-    const context = c.get("pluginContext");
     return c.json(
       await repository(c).create(
         input,
@@ -277,7 +297,7 @@ export const metaAdsRoutes = new Hono<MetaAdsEnv>()
     );
   })
   .patch("/accounts/:accountId", async (c) => {
-    requirePermission(c, "meta_ads.account.update");
+    const context = requirePermission(c, "meta_ads.account.update");
     const parsed = accountUpdateInput.parse(await c.req.json());
     const input = {
       ...parsed,
@@ -291,7 +311,6 @@ export const metaAdsRoutes = new Hono<MetaAdsEnv>()
         409,
       );
     const meta = await inspectAccount(c.env, input.adAccountId);
-    const context = c.get("pluginContext");
     const updated = await repository(c).update(
       c.req.param("accountId"),
       input,
@@ -308,8 +327,7 @@ export const metaAdsRoutes = new Hono<MetaAdsEnv>()
     return c.json(updated);
   })
   .delete("/accounts/:accountId", async (c) => {
-    requirePermission(c, "meta_ads.account.delete");
-    const context = c.get("pluginContext");
+    const context = requirePermission(c, "meta_ads.account.delete");
     if (
       !(await repository(c).delete(
         c.req.param("accountId"),
@@ -400,7 +418,7 @@ export const metaAdsRoutes = new Hono<MetaAdsEnv>()
   })
   .post("/status", async (c) => {
     const input = statusInput.parse(await c.req.json());
-    requirePermission(c, `meta_ads.${input.objectType}.update`);
+    const context = requirePermission(c, `meta_ads.${input.objectType}.update`);
     const configured = await repository(c).enabledAccountIds();
     const objectAccountId = await getObjectAccountId(c.env, input.objectId);
     if (!configured.has(objectAccountId))
@@ -410,7 +428,6 @@ export const metaAdsRoutes = new Hono<MetaAdsEnv>()
         403,
       );
     await setObjectStatus(c.env, input.objectId, input.status);
-    const context = c.get("pluginContext");
     await repository(c).auditStatusChange(
       input.objectId,
       input.objectType,

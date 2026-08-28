@@ -1,6 +1,10 @@
 import { Hono, type Context } from "hono";
 import { createDatabase } from "@app/database";
-import type { PluginContext, PluginPublicContext } from "@app/core-contract";
+import type {
+  PluginContext,
+  PluginInstallerContext,
+  PluginPublicContext,
+} from "@app/core-contract";
 import { z } from "zod";
 import type { SoletrandoEnv } from "./env.js";
 import { SoletrandoRepository } from "./repository.js";
@@ -79,6 +83,18 @@ const isPublicContext = (value: unknown): value is PluginPublicContext => {
   return Boolean(context.requestId && context.pluginId === "soletrando");
 };
 
+const isInstallerContext = (
+  value: unknown,
+): value is PluginInstallerContext => {
+  if (!value || typeof value !== "object") return false;
+  const context = value as Partial<PluginInstallerContext>;
+  return Boolean(
+    context.requestId &&
+    context.operationId &&
+    context.pluginId === "soletrando",
+  );
+};
+
 app.get("/health", (c) =>
   c.json({ ok: true, plugin: "soletrando", version: "1.2.3" }),
 );
@@ -87,7 +103,10 @@ app.use("/*", async (c, next) => {
   if (c.req.path === "/health") return next();
   const internal = c.req.header("X-Plugin-Context");
   const publicInternal = c.req.header("X-Plugin-Public-Context");
-  if (Boolean(internal) === Boolean(publicInternal))
+  const installerInternal = c.req.header("X-Plugin-Installer-Context");
+  if (
+    [internal, publicInternal, installerInternal].filter(Boolean).length !== 1
+  )
     return error(
       c,
       401,
@@ -99,10 +118,14 @@ app.use("/*", async (c, next) => {
       const context = decodeContext<unknown>(internal);
       if (!isPluginContext(context)) throw new Error("invalid");
       c.set("pluginContext", context);
-    } else {
+    } else if (publicInternal) {
       const context = decodeContext<unknown>(publicInternal!);
       if (!isPublicContext(context)) throw new Error("invalid");
       c.set("publicContext", context);
+    } else {
+      const context = decodeContext<unknown>(installerInternal!);
+      if (!isInstallerContext(context)) throw new Error("invalid");
+      c.set("installerContext", context);
     }
   } catch {
     return error(
@@ -145,7 +168,14 @@ const requirePermission = (
 };
 
 app.post("/__installer/smoke", async (c) => {
-  const context = requireAdminContext(c);
+  const context = c.get("installerContext");
+  if (!context)
+    return error(
+      c,
+      403,
+      "INSTALLER_CONTEXT_REQUIRED",
+      "Installer context required.",
+    );
   const db = c.get("db");
   const id = `child_smoke_${crypto.randomUUID().replaceAll("-", "")}`;
   const token = `smoke_${crypto.randomUUID().replaceAll("-", "")}`;
@@ -161,7 +191,7 @@ app.post("/__installer/smoke", async (c) => {
   );
   await db.execute("DELETE FROM soletrando_children WHERE id=?", [id]);
   const aiAvailable = typeof c.env.AI?.run === "function";
-  return created?.id === id && aiAvailable && context.userId
+  return created?.id === id && aiAvailable && context.operationId
     ? c.json({ ok: true, read: true, write: true, ai: true })
     : c.json({ ok: false }, 500);
 });

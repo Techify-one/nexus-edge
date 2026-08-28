@@ -44,8 +44,11 @@ The manifest is strict and accepts only these fields:
 - a real `compatibilityDate` in `YYYY-MM-DD` format;
 - only compatibility flags allowed by the Core environment;
 - `databaseDialects: ["d1", "postgres"]` in that order;
-- optional `runtimeBindings`, currently limited to `["ai"]`, when the plugin
-  uses the account's Workers AI binding;
+- optional `runtimeBindings`, limited to `"ai"` and `"r2"` in canonical
+  lexicographic order, when the plugin uses Workers AI or dedicated object
+  storage;
+- optional localized metadata for `pt-BR` and `en`, with menu keys already
+  declared by the manifest;
 - `tablePrefix` equal to `<id>_`;
 - namespaced permissions in `<id>.<resource>.<action>` form;
 - menu entries whose route keys are compiled into the Core.
@@ -64,7 +67,15 @@ and `wrangler.jsonc`. Keep these Wrangler security settings:
 
 The Installer supplies the production database binding and provider variable.
 For a manifest that declares `runtimeBindings: ["ai"]`, it also supplies a
-single `AI` binding without exposing Cloudflare credentials to the plugin.
+single `AI` binding without exposing Cloudflare credentials to the plugin. A
+plugin declaring `"r2"` receives a dedicated private `STORAGE` bucket binding.
+The Installer asks for a narrowly scoped temporary user API token with only
+`Account > Workers R2 Storage > Edit` on the target account, provisions or
+reattaches the deterministic bucket, and discards the token. Do not use an
+account-owned R2 object token for this step: Cloudflare does not allow that
+token type to create an uncreated bucket with this narrow scope. Bucket names
+and account identifiers are installation state and must never enter the
+portable ZIP. Uninstall preserves the bucket and its objects by default.
 Never put Cloudflare tokens, passwords, connection strings, session cookies, or
 other secrets in the plugin, manifest, ZIP, migrations, or Wrangler file.
 
@@ -105,6 +116,9 @@ internal header and sends only `userId`, concrete permission keys, and
   internal context is valid.
 - Expose business routes through `/api/v1/p/<plugin-id>/*`, not a public Worker
   hostname.
+- If a plugin needs an external webhook, expose only the narrow handler through
+  `/api/v1/public/p/<plugin-id>/*`, validate a provider secret before reading
+  the payload, and keep every other route behind the authenticated gateway.
 - Use the shared database abstraction and the active provider supplied by the
   Installer.
 

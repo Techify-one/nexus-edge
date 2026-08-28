@@ -626,6 +626,222 @@ export const OPENAPI_DOCUMENT = {
         },
       },
     },
+    "/api/v1/plugin-operations/{operationId}/provision-r2": {
+      post: {
+        parameters: [
+          { name: "operationId", in: "path", required: true },
+          { name: "Idempotency-Key", in: "header", required: true },
+          { name: "X-Reauth-Token", in: "header", required: true },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["token"],
+                properties: {
+                  token: {
+                    type: "string",
+                    minLength: 40,
+                    maxLength: 200,
+                    writeOnly: true,
+                  },
+                  mode: { type: "string", enum: ["create", "attach"] },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description: "Dedicated R2 bucket provisioned and attached",
+          },
+          "403": {
+            description: "Recent reauthentication or R2 permission required",
+          },
+          "409": { description: "Operation is not in the provisioning state" },
+          "422": {
+            description: "Temporary R2 token is invalid or over-privileged",
+          },
+        },
+      },
+    },
+    "/api/v1/p/meeting_recorder/recordings": {
+      get: {
+        parameters: [
+          { name: "cursor", in: "query", required: false },
+          { name: "sort", in: "query", required: false },
+          { name: "direction", in: "query", required: false },
+        ],
+        responses: { "200": { description: "Authorized recording page" } },
+      },
+      post: {
+        parameters: [{ name: "Idempotency-Key", in: "header", required: true }],
+        responses: { "201": { description: "Live recording created" } },
+      },
+    },
+    "/api/v1/p/meeting_recorder/imports": {
+      post: {
+        parameters: [{ name: "Idempotency-Key", in: "header", required: true }],
+        responses: { "201": { description: "Audio import reserved" } },
+      },
+    },
+    "/api/v1/p/meeting_recorder/recordings/{recordingId}/reconcile": {
+      post: {
+        parameters: [
+          { name: "recordingId", in: "path", required: true },
+          { name: "Idempotency-Key", in: "header", required: true },
+        ],
+        responses: {
+          "200": { description: "Up to 25 pending segment objects reconciled" },
+        },
+      },
+    },
+    "/api/v1/p/meeting_recorder/recordings/{recordingId}/segments/{sequence}": {
+      put: {
+        parameters: [
+          { name: "recordingId", in: "path", required: true },
+          { name: "sequence", in: "path", required: true },
+          { name: "X-Segment-SHA256", in: "header", required: true },
+          { name: "X-Segment-Bytes", in: "header", required: true },
+          { name: "X-Segment-Duration-Ms", in: "header", required: true },
+          { name: "X-Segment-Start-Ms", in: "header", required: true },
+          { name: "X-Client-Session-Id", in: "header", required: true },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "audio/webm": { schema: { type: "string", format: "binary" } },
+          },
+        },
+        responses: {
+          "200": { description: "Idempotent replay" },
+          "201": { description: "Segment streamed to private R2 storage" },
+        },
+      },
+      head: {
+        parameters: [
+          { name: "recordingId", in: "path", required: true },
+          { name: "sequence", in: "path", required: true },
+        ],
+        responses: { "200": { description: "Stored segment metadata" } },
+      },
+    },
+    "/api/v1/p/meeting_recorder/recordings/{recordingId}/segments/{sequence}/audio":
+      {
+        get: {
+          parameters: [
+            { name: "recordingId", in: "path", required: true },
+            { name: "sequence", in: "path", required: true },
+            { name: "Range", in: "header", required: false },
+          ],
+          responses: {
+            "200": { description: "Private audio segment" },
+            "206": { description: "Private audio byte range" },
+          },
+        },
+      },
+    "/api/v1/p/meeting_recorder/recordings/{recordingId}/segments/{sequence}/transcribe":
+      {
+        post: {
+          parameters: [
+            { name: "recordingId", in: "path", required: true },
+            { name: "sequence", in: "path", required: true },
+            { name: "Idempotency-Key", in: "header", required: true },
+          ],
+          responses: {
+            "200": { description: "Segment transcribed with Workers AI" },
+          },
+        },
+      },
+    "/api/v1/p/meeting_recorder/recordings/{recordingId}/transcript": {
+      get: {
+        parameters: [{ name: "recordingId", in: "path", required: true }],
+        responses: {
+          "200": { description: "Transcript as JSON, plain text, or WebVTT" },
+        },
+      },
+    },
+    "/api/v1/p/meeting_recorder/recordings/{recordingId}": {
+      get: {
+        parameters: [{ name: "recordingId", in: "path", required: true }],
+        responses: { "200": { description: "Recording details" } },
+      },
+      delete: {
+        parameters: [
+          { name: "recordingId", in: "path", required: true },
+          { name: "X-Reauth-Token", in: "header", required: true },
+        ],
+        responses: { "202": { description: "Resumable deletion started" } },
+      },
+    },
+    "/api/v1/p/meeting_recorder/recordings/{recordingId}/deletion-steps": {
+      post: {
+        parameters: [
+          { name: "recordingId", in: "path", required: true },
+          { name: "Idempotency-Key", in: "header", required: true },
+        ],
+        responses: {
+          "202": { description: "Up to 500 private audio objects deleted" },
+          "204": { description: "Recording deletion completed" },
+        },
+      },
+    },
+    "/api/v1/p/meeting_recorder/settings": {
+      get: {
+        responses: {
+          "200": { description: "Recorder and Telegram secret status" },
+        },
+      },
+      put: {
+        responses: { "200": { description: "Recorder defaults updated" } },
+      },
+    },
+    "/api/v1/p/meeting_recorder/telegram/configure": {
+      post: {
+        parameters: [{ name: "Idempotency-Key", in: "header", required: true }],
+        responses: {
+          "200": { description: "Telegram webhook registered" },
+          "503": { description: "Telegram Worker secrets are not active" },
+        },
+      },
+    },
+    "/api/v1/plugins/meeting_recorder/runtime-secrets/{secretName}": {
+      get: {
+        parameters: [{ name: "secretName", in: "path", required: true }],
+        responses: {
+          "200": { description: "Secret configuration status only" },
+        },
+      },
+      put: {
+        parameters: [
+          { name: "secretName", in: "path", required: true },
+          { name: "X-Reauth-Token", in: "header", required: true },
+        ],
+        responses: {
+          "200": { description: "Telegram Worker secret configured" },
+        },
+      },
+      delete: {
+        parameters: [
+          { name: "secretName", in: "path", required: true },
+          { name: "X-Reauth-Token", in: "header", required: true },
+        ],
+        responses: { "204": { description: "Telegram Worker secret deleted" } },
+      },
+    },
+    "/api/v1/public/p/meeting_recorder/telegram/webhook": {
+      post: {
+        security: [],
+        responses: {
+          "200": {
+            description: "Telegram update accepted or ignored idempotently",
+          },
+          "403": { description: "Telegram webhook secret rejected" },
+        },
+      },
+    },
     "/api/v1/audit": {
       get: { responses: { "200": { description: "Audit trail" } } },
     },

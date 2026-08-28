@@ -13,6 +13,7 @@
     { "path": "./plugins/crm" },
     { "path": "./plugins/meta_ads" },
     { "path": "./plugins/soletrando" },
+    { "path": "./plugins/meeting_recorder" },
     { "path": "./plugins/template" },
     { "path": "./frontend" }
   ]

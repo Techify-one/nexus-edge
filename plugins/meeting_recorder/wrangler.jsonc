@@ -1,0 +1,30 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "app-plugin-meeting-recorder",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-28",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": {
+    "enabled": true,
+    "logs": { "head_sampling_rate": 1 },
+  },
+  "vars": { "DATABASE_PROVIDER": "d1" },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "nexus-edge-db",
+      "database_id": "replace-with-d1-database-id",
+      "migrations_dir": "migrations/d1",
+    },
+  ],
+  "r2_buckets": [
+    {
+      "binding": "STORAGE",
+      "bucket_name": "meeting-recorder-local",
+      "remote": true,
+    },
+  ],
+  "ai": { "binding": "AI", "remote": true },
+}

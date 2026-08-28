@@ -27,10 +27,12 @@ import {
   api,
   apiFile,
   idempotencyKey,
+  recentReauthHeaders,
 } from "../../lib/api/core-client.js";
 import {
   cloudflareAccountTokensUrl,
   cloudflarePluginTokenTemplateUrl,
+  cloudflareUserTokensUrl,
 } from "../../lib/cloudflare-token.js";
 import { translate, useI18n, type TranslationKey } from "../../i18n/index.js";
 import { can } from "../../lib/ability.js";
@@ -46,6 +48,7 @@ type Manifest = {
   coreMinVersion: string;
   permissions: string[];
   menu: { title: string; routeKey: string }[];
+  runtimeBindings?: Array<"ai" | "r2">;
 };
 type Plugin = {
   id: string;
@@ -55,6 +58,7 @@ type Plugin = {
   databaseProvider: string;
   workerName: string;
   status: string;
+  runtimeStorageStatus?: string | null;
   installedAt: string | number;
   packageAvailable: boolean | number;
 };
@@ -125,7 +129,7 @@ function RuntimeCredentialGuide({
           type="password"
           autoComplete="off"
           minLength={40}
-          maxLength={200}
+          maxLength={2048}
           value={token}
           onChange={(event) => onTokenChange(event.target.value)}
           placeholder={t("plugins.runtimeCredentialPlaceholder")}
@@ -150,6 +154,7 @@ function RuntimeCredentialGuide({
 
 const states = [
   "validating",
+  "provisioning",
   "migrating",
   "deploying",
   "hardening",
@@ -160,6 +165,7 @@ const states = [
 const terminal = new Set(["installed", "failed"]);
 const stateKeys: Record<string, TranslationKey> = {
   validating: "plugins.state.validating",
+  provisioning: "plugins.state.provisioning",
   migrating: "plugins.state.migrating",
   deploying: "plugins.state.deploying",
   hardening: "plugins.state.hardening",
@@ -253,6 +259,7 @@ export default function PluginsPage() {
   const [operation, setOperation] = useState<Operation | null>(null);
   const [supportReport, setSupportReport] = useState<string | null>(null);
   const [runtimeToken, setRuntimeToken] = useState("");
+  const [r2Token, setR2Token] = useState("");
   const [runtimeCredentialBusy, setRuntimeCredentialBusy] = useState(false);
   const [runtimeCredentialSetupOpen, setRuntimeCredentialSetupOpen] =
     useState(false);
@@ -261,6 +268,12 @@ export default function PluginsPage() {
     queryKey: ["plugins"],
     queryFn: () => api<{ items: Plugin[] }>("/api/v1/plugins"),
   });
+  const requiresR2Provisioning = (manifest: Manifest): boolean =>
+    Boolean(
+      manifest.runtimeBindings?.includes("r2") &&
+      (plugins.data?.items ?? []).find((plugin) => plugin.id === manifest.id)
+        ?.runtimeStorageStatus !== "ready",
+    );
   const runtimeCredential = useQuery({
     queryKey: ["plugin-runtime-credential"],
     queryFn: () =>
@@ -311,6 +324,7 @@ export default function PluginsPage() {
       setOperation(null);
       setSupportReport(null);
       setRuntimeToken("");
+      setR2Token("");
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : t("plugins.invalidPackage"),
@@ -321,11 +335,18 @@ export default function PluginsPage() {
     mutationFn: async (packageParts: PluginParts) => {
       setSupportReport(null);
       let current: Operation | null = null;
+      const requiresR2 = requiresR2Provisioning(packageParts.manifest);
+      const temporaryR2Token = r2Token.trim();
       try {
         if (packageParts.rawBytes > 4 * 1024 * 1024)
           throw new Error(t("plugins.rawTooLarge"));
         if (packageParts.gzipBytes > 3 * 1024 * 1024)
           throw new Error(t("plugins.gzipTooLarge"));
+        if (requiresR2 && temporaryR2Token.length < 40)
+          throw new Error(t("plugins.r2TokenRequired"));
+        const r2Reauth = requiresR2
+          ? await recentReauthHeaders(t("plugins.r2ReauthPassword"))
+          : {};
         current = await api<Operation>("/api/v1/plugin-operations", {
           method: "POST",
           headers: {
@@ -335,6 +356,27 @@ export default function PluginsPage() {
         });
         setOperation(current);
         while (!terminal.has(current.state)) {
+          if (current.state === "provisioning") {
+            if (!requiresR2 || temporaryR2Token.length < 40)
+              throw new Error(t("plugins.r2TokenRequired"));
+            current = await api<Operation>(
+              `/api/v1/plugin-operations/${current.operationId}/provision-r2`,
+              {
+                method: "POST",
+                headers: {
+                  ...r2Reauth,
+                  "Idempotency-Key": `r2-${current.operationId}`,
+                },
+                body: JSON.stringify({
+                  token: temporaryR2Token,
+                  mode: "create",
+                }),
+              },
+            );
+            setR2Token("");
+            setOperation(current);
+            continue;
+          }
           if (current.state === "registering")
             await new Promise((resolve) => setTimeout(resolve, 3_000));
           current = await api<Operation>(
@@ -350,6 +392,7 @@ export default function PluginsPage() {
           throw new Error(t("plugins.installFailed"));
         return current;
       } catch (error) {
+        setR2Token("");
         const operationType = (plugins.data?.items ?? []).some(
           (plugin) =>
             plugin.id === packageParts.manifest.id &&
@@ -405,6 +448,7 @@ export default function PluginsPage() {
       setParts(null);
       setOperation(null);
       setSupportReport(null);
+      setR2Token("");
       void client.invalidateQueries({ queryKey: ["plugins"] });
       void client.invalidateQueries({ queryKey: ["me", "ability"] });
       void client.invalidateQueries({
@@ -772,6 +816,7 @@ export default function PluginsPage() {
             setOperation(null);
             setSupportReport(null);
             setRuntimeToken("");
+            setR2Token("");
           }
         }}
         title={t("plugins.installTitle")}
@@ -843,6 +888,51 @@ export default function PluginsPage() {
                 onTokenChange={setRuntimeToken}
               />
             )}
+            {requiresR2Provisioning(parts.manifest) && (
+              <section className="space-y-3 rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm">
+                <h3 className="font-semibold text-slate-900">
+                  {t("plugins.r2ProvisioningTitle")}
+                </h3>
+                <p className="text-slate-700">
+                  {t("plugins.r2ProvisioningDescription")}
+                </p>
+                <ol className="list-decimal space-y-1 pl-5 text-slate-700">
+                  <li>{t("plugins.r2ProvisioningStepPermission")}</li>
+                  <li>{t("plugins.r2ProvisioningStepPaste")}</li>
+                  <li>{t("plugins.r2ProvisioningStepRevoke")}</li>
+                </ol>
+                {runtimeCredential.data?.accountId && (
+                  <a
+                    className="inline-flex items-center gap-1 font-medium text-indigo-700 underline"
+                    href={cloudflareUserTokensUrl()}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                  >
+                    {t("plugins.r2OpenTokens")}
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                )}
+                <div>
+                  <Label htmlFor="plugin-r2-token">
+                    {t("plugins.r2TokenLabel")}
+                  </Label>
+                  <Input
+                    id="plugin-r2-token"
+                    type="password"
+                    autoComplete="off"
+                    minLength={40}
+                    maxLength={2048}
+                    value={r2Token}
+                    onChange={(event) => setR2Token(event.target.value)}
+                    placeholder={t("plugins.r2TokenPlaceholder")}
+                    required
+                  />
+                </div>
+                <p className="text-xs text-slate-600">
+                  {t("plugins.r2TokenPrivacy")}
+                </p>
+              </section>
+            )}
             {operation && (
               <div className="rounded-xl border p-4" aria-live="polite">
                 <p className="text-sm font-semibold">
@@ -905,6 +995,7 @@ export default function PluginsPage() {
                   setOperation(null);
                   setSupportReport(null);
                   setRuntimeToken("");
+                  setR2Token("");
                 }}
               >
                 {t("common.cancel")}
@@ -914,7 +1005,9 @@ export default function PluginsPage() {
                 disabled={
                   runtimeCredential.isPending ||
                   runtimeCredential.isError ||
-                  runtimeCredentialBusy
+                  runtimeCredentialBusy ||
+                  (requiresR2Provisioning(parts.manifest) &&
+                    r2Token.trim().length < 40)
                 }
               >
                 <UploadCloud className="h-4 w-4" />

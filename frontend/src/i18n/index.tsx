@@ -10,6 +10,7 @@ import {
 import { crmFrontendMessages } from "../../../plugins/crm/frontend/i18n.js";
 import { metaAdsFrontendMessages } from "../../../plugins/meta_ads/frontend/i18n.js";
 import { soletrandoFrontendMessages } from "../../../plugins/soletrando/frontend/i18n.js";
+import { meetingRecorderFrontendMessages } from "../../../plugins/meeting_recorder/frontend/i18n.js";
 
 export const supportedLocales = ["pt-BR", "en"] as const;
 export type AppLocale = (typeof supportedLocales)[number];
@@ -17,6 +18,7 @@ export type AppLocale = (typeof supportedLocales)[number];
 const ptBR = {
   "common.actions": "Ações",
   "common.add": "Adicionar",
+  "common.back": "Voltar",
   "common.active": "Ativo",
   "common.cancel": "Cancelar",
   "common.close": "Fechar",
@@ -383,6 +385,7 @@ const ptBR = {
   ...crmFrontendMessages["pt-BR"],
   ...metaAdsFrontendMessages["pt-BR"],
   ...soletrandoFrontendMessages["pt-BR"],
+  ...meetingRecorderFrontendMessages["pt-BR"],
 
   "audit.description": "Ações administrativas e rastreabilidade por requestId.",
   "audit.search": "Buscar por ação",
@@ -480,6 +483,7 @@ const ptBR = {
   "plugins.deleteRecordConfirm":
     "Excluir {{name}} da lista de plugins? As tabelas e o histórico serão preservados.",
   "plugins.state.validating": "Validando",
+  "plugins.state.provisioning": "Provisionando R2",
   "plugins.state.migrating": "Aplicando migrations",
   "plugins.state.deploying": "Publicando",
   "plugins.state.hardening": "Protegendo",
@@ -487,6 +491,22 @@ const ptBR = {
   "plugins.state.registering": "Registrando",
   "plugins.state.installed": "Instalado",
   "plugins.state.failed": "Falhou",
+  "plugins.r2ProvisioningTitle": "Armazenamento privado R2",
+  "plugins.r2ProvisioningDescription":
+    "Este plugin precisa de um bucket próprio. Use um token temporário somente para criar e vincular esse bucket.",
+  "plugins.r2ProvisioningStepPermission":
+    "Em Meu perfil → Tokens de API, crie um token de usuário limitado à permissão Account → Workers R2 Storage → Edit nesta conta.",
+  "plugins.r2ProvisioningStepPaste":
+    "Cole o token abaixo e conclua a instalação.",
+  "plugins.r2ProvisioningStepRevoke":
+    "Revogue o token na Cloudflare depois que a instalação terminar.",
+  "plugins.r2OpenTokens": "Abrir tokens de API do usuário",
+  "plugins.r2TokenLabel": "Token temporário do R2",
+  "plugins.r2TokenPlaceholder": "Cole o token temporário",
+  "plugins.r2TokenPrivacy":
+    "O token permanece apenas na memória desta tela e é descartado após o provisionamento.",
+  "plugins.r2TokenRequired": "Informe o token temporário do R2.",
+  "plugins.r2ReauthPassword": "Confirme sua senha para provisionar o R2",
 
   "errors.fallback": "Não foi possível concluir a operação.",
   "errors.BOOTSTRAP_UNAVAILABLE": "A configuração inicial já foi concluída.",
@@ -505,6 +525,8 @@ const ptBR = {
     "O arquivo selecionado não é exatamente o pacote usado nesta instalação.",
   "errors.PLUGIN_PACKAGE_CONTAINS_RUNTIME_VALUE":
     "O pacote contém uma configuração ou credencial específica desta instalação e não pode ser instalado.",
+  "errors.PLUGIN_CORE_VERSION_UNSUPPORTED":
+    "Atualize o Core do Nexus antes de instalar esta versão do plugin.",
   "errors.PLUGIN_RUNTIME_CREDENTIAL_REQUIRED":
     "Configure o token limitado da Cloudflare antes de instalar o plugin.",
   "errors.PLUGIN_RUNTIME_CREDENTIAL_INVALID":
@@ -543,6 +565,7 @@ export type TranslationKey = keyof typeof ptBR;
 const en: Record<TranslationKey, string> = {
   "common.actions": "Actions",
   "common.add": "Add",
+  "common.back": "Back",
   "common.active": "Active",
   "common.cancel": "Cancel",
   "common.close": "Close",
@@ -894,6 +917,7 @@ const en: Record<TranslationKey, string> = {
   ...crmFrontendMessages.en,
   ...metaAdsFrontendMessages.en,
   ...soletrandoFrontendMessages.en,
+  ...meetingRecorderFrontendMessages.en,
   "audit.description": "Administrative actions and requestId traceability.",
   "audit.search": "Search by action",
   "audit.noEvents": "No events",
@@ -988,6 +1012,7 @@ const en: Record<TranslationKey, string> = {
   "plugins.deleteRecordConfirm":
     "Delete {{name}} from the plugin list? Tables and history will be preserved.",
   "plugins.state.validating": "Validating",
+  "plugins.state.provisioning": "Provisioning R2",
   "plugins.state.migrating": "Running migrations",
   "plugins.state.deploying": "Deploying",
   "plugins.state.hardening": "Hardening",
@@ -995,6 +1020,22 @@ const en: Record<TranslationKey, string> = {
   "plugins.state.registering": "Registering",
   "plugins.state.installed": "Installed",
   "plugins.state.failed": "Failed",
+  "plugins.r2ProvisioningTitle": "Private R2 storage",
+  "plugins.r2ProvisioningDescription":
+    "This plugin requires a dedicated bucket. Use a temporary token only to create and attach that bucket.",
+  "plugins.r2ProvisioningStepPermission":
+    "In My Profile → API Tokens, create a user token limited to Account → Workers R2 Storage → Edit for this account.",
+  "plugins.r2ProvisioningStepPaste":
+    "Paste the token below and complete the installation.",
+  "plugins.r2ProvisioningStepRevoke":
+    "Revoke the token in Cloudflare after installation completes.",
+  "plugins.r2OpenTokens": "Open user API tokens",
+  "plugins.r2TokenLabel": "Temporary R2 token",
+  "plugins.r2TokenPlaceholder": "Paste the temporary token",
+  "plugins.r2TokenPrivacy":
+    "The token stays only in this screen's memory and is discarded after provisioning.",
+  "plugins.r2TokenRequired": "Enter the temporary R2 token.",
+  "plugins.r2ReauthPassword": "Confirm your password to provision R2",
   "errors.fallback": "Unable to complete the operation.",
   "errors.BOOTSTRAP_UNAVAILABLE": "Initial setup has already been completed.",
   "errors.BOOTSTRAP_ALREADY_CLAIMED":
@@ -1012,6 +1053,8 @@ const en: Record<TranslationKey, string> = {
     "The selected file is not exactly the package used for this installation.",
   "errors.PLUGIN_PACKAGE_CONTAINS_RUNTIME_VALUE":
     "The package contains configuration or credentials specific to this installation and cannot be installed.",
+  "errors.PLUGIN_CORE_VERSION_UNSUPPORTED":
+    "Update the Nexus Core before installing this plugin version.",
   "errors.PLUGIN_RUNTIME_CREDENTIAL_REQUIRED":
     "Configure the limited Cloudflare token before installing the plugin.",
   "errors.PLUGIN_RUNTIME_CREDENTIAL_INVALID":

@@ -1,0 +1,21 @@
+{
+  "name": "@app/plugin-meeting-recorder",
+  "version": "1.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./contract": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "wrangler deploy --dry-run --outdir dist --config wrangler.jsonc",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "wrangler dev --config wrangler.jsonc"
+  },
+  "dependencies": {
+    "@app/core-contract": "workspace:*",
+    "@app/database": "workspace:*",
+    "hono": "4.13.3",
+    "zod": "4.4.3"
+  }
+}

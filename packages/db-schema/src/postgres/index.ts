@@ -359,6 +359,26 @@ export const pluginPackageChunks = pgTable(
   },
   (t) => [primaryKey({ columns: [t.operationId, t.path, t.chunkIndex] })],
 );
+export const pluginRuntimeResources = pgTable(
+  "plugin_runtime_resources",
+  {
+    pluginId: text("plugin_id").notNull(),
+    resourceType: text("resource_type").notNull(),
+    bindingName: text("binding_name").notNull(),
+    externalName: text("external_name").notNull().unique(),
+    status: text("status").notNull(),
+    createdByOperationId: text("created_by_operation_id").notNull(),
+    lastVerifiedAt: instant("last_verified_at"),
+    lastErrorCode: text("last_error_code"),
+    createdAt: instant("created_at").notNull(),
+    updatedAt: instant("updated_at").notNull(),
+    preservedAt: instant("preserved_at"),
+  },
+  (t) => [
+    primaryKey({ columns: [t.pluginId, t.bindingName] }),
+    index("plugin_runtime_resources_status_idx").on(t.status, t.updatedAt),
+  ],
+);
 export const installerLock = pgTable("installer_lock", {
   id: text("id").primaryKey(),
   operationId: text("operation_id"),

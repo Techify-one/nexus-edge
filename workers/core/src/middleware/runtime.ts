@@ -54,10 +54,10 @@ export const securityHeaders: MiddlewareHandler<HonoEnv> = async (c, next) => {
   c.header("Referrer-Policy", "strict-origin-when-cross-origin");
   c.header(
     "Permissions-Policy",
-    "camera=(), microphone=(self), geolocation=()",
+    "camera=(), microphone=(self), display-capture=(self), geolocation=()",
   );
   c.header(
     "Content-Security-Policy",
-    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
   );
 };

@@ -57,6 +57,16 @@ export declare const soletrandoAdminRoutes: import("hono/hono-base").HonoBase<So
     "/children": {
         $post: {
             output: {
+                error: {
+                    code: string;
+                    message: string;
+                };
+            };
+            outputFormat: "json";
+            status: 400 | 401 | 403 | 404 | 409 | 413 | 422 | 500 | 503;
+            input: {};
+        } | {
+            output: {
                 child: {
                     id: string;
                     name: string;
@@ -69,16 +79,6 @@ export declare const soletrandoAdminRoutes: import("hono/hono-base").HonoBase<So
             };
             outputFormat: "json";
             status: 201;
-            input: {};
-        } | {
-            output: {
-                error: {
-                    code: string;
-                    message: string;
-                };
-            };
-            outputFormat: "json";
-            status: 400 | 401 | 403 | 404 | 409 | 413 | 422 | 500 | 503;
             input: {};
         };
     };

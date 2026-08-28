@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
-const shippedPlugins = ["crm", "meta_ads", "soletrando"];
+const shippedPlugins = ["crm", "meta_ads", "soletrando", "meeting_recorder"];
 
 describe("plugin colocation", () => {
   it("includes colocated plugin screens in Tailwind class detection", () => {

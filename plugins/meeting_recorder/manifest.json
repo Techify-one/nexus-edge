@@ -1,0 +1,44 @@
+{
+  "id": "meeting_recorder",
+  "name": "Meeting Recorder",
+  "version": "1.0.1",
+  "apiVersion": 1,
+  "coreMinVersion": "1.1.0-beta.3",
+  "compatibilityDate": "2026-08-28",
+  "compatibilityFlags": ["nodejs_compat"],
+  "databaseDialects": ["d1", "postgres"],
+  "runtimeBindings": ["ai", "r2"],
+  "tablePrefix": "meeting_recorder_",
+  "localizedMetadata": {
+    "pt-BR": {
+      "name": "Gravador de reuniões",
+      "menuTitles": {
+        "meeting_recorder.home": "Gravador de reuniões"
+      }
+    },
+    "en": {
+      "name": "Meeting Recorder",
+      "menuTitles": {
+        "meeting_recorder.home": "Meeting Recorder"
+      }
+    }
+  },
+  "permissions": [
+    "meeting_recorder.recording.read",
+    "meeting_recorder.recording.create",
+    "meeting_recorder.recording.update",
+    "meeting_recorder.recording.delete",
+    "meeting_recorder.recording.read_all",
+    "meeting_recorder.recording.manage_all",
+    "meeting_recorder.transcription.create",
+    "meeting_recorder.settings.read",
+    "meeting_recorder.settings.update",
+    "meeting_recorder.storage.read"
+  ],
+  "menu": [
+    {
+      "title": "Meeting Recorder",
+      "routeKey": "meeting_recorder.home"
+    }
+  ]
+}

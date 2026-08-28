@@ -326,6 +326,9 @@ managementRoutes.put("/me/overview-preference", async (c) => {
 });
 
 managementRoutes.get("/me/plugin-navigation", async (c) => {
+  const locale = /^en(?:-|,|;|$)/iu.test(c.req.header("Accept-Language") ?? "")
+    ? "en"
+    : "pt-BR";
   const plugins = await c
     .get("db")
     .query<{ id: string; name: string; manifest: unknown }>(
@@ -337,7 +340,14 @@ managementRoutes.get("/me/plugin-navigation", async (c) => {
   const visiblePlugins = plugins.flatMap((plugin) => {
     const manifest = parseJson<{
       menu?: Array<{ title: string; routeKey: string }>;
+      localizedMetadata?: Partial<
+        Record<
+          "pt-BR" | "en",
+          { name?: string; menuTitles?: Record<string, string> }
+        >
+      >;
     }>(plugin.manifest, {});
+    const localized = manifest.localizedMetadata?.[locale];
     const namespaceAllowed = permissions.some(
       ({ key }) =>
         key.startsWith(`${plugin.id}.`) && canPermission(c.get("ability"), key),
@@ -346,8 +356,11 @@ managementRoutes.get("/me/plugin-navigation", async (c) => {
       ? [
           {
             pluginId: plugin.id,
-            name: plugin.name,
-            menu: manifest.menu ?? [],
+            name: localized?.name ?? plugin.name,
+            menu: (manifest.menu ?? []).map((entry) => ({
+              ...entry,
+              title: localized?.menuTitles?.[entry.routeKey] ?? entry.title,
+            })),
           },
         ]
       : [];

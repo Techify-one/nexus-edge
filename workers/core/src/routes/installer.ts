@@ -1,5 +1,5 @@
 import { Hono, type Context } from "hono";
-import { createId } from "@app/core-contract";
+import { createId, type PluginInstallerContext } from "@app/core-contract";
 import { sha256, stableJson } from "@app/webhook-contract";
 import type { SqlStatement } from "@app/database";
 import semver from "semver";
@@ -13,11 +13,14 @@ import {
   PluginRuntimeCredentialError,
   pluginSecretConfigured,
   pluginRuntimeCredentialStatus,
+  provisionR2Bucket,
   putPluginSecret,
   removeCoreServiceBinding,
+  R2ProvisioningError,
   uploadPluginWorker,
 } from "../installer/cloudflare.js";
 import {
+  PluginManifestPolicyError,
   pluginManifestSchema,
   validateManifestPolicy,
   type PluginManifest,
@@ -64,6 +67,7 @@ type PackageParts = {
 
 const failureStages = new Set([
   "validating",
+  "provisioning",
   "migrating",
   "deploying",
   "hardening",
@@ -176,8 +180,21 @@ const safeFailureSummary = (
 const bindingName = (id: string): string => `PLUGIN_${id.toUpperCase()}`;
 const workerName = (id: string): string =>
   `app-plugin-${id.replaceAll("_", "-")}`;
-const allowedRuntimeSecrets = new Map([
-  ["meta_ads", new Set(["META_ACCESS_TOKEN"])],
+const allowedRuntimeSecrets = new Map<
+  string,
+  { names: Set<string>; permissionResource: string }
+>([
+  [
+    "meta_ads",
+    { names: new Set(["META_ACCESS_TOKEN"]), permissionResource: "account" },
+  ],
+  [
+    "meeting_recorder",
+    {
+      names: new Set(["TELEGRAM_BOT_TOKEN", "TELEGRAM_WEBHOOK_SECRET"]),
+      permissionResource: "settings",
+    },
+  ],
 ]);
 
 const runtimeSecretTarget = async (
@@ -186,9 +203,15 @@ const runtimeSecretTarget = async (
 ) => {
   const pluginId = c.req.param("pluginId") ?? "";
   const secretName = c.req.param("secretName") ?? "";
-  if (!allowedRuntimeSecrets.get(pluginId)?.has(secretName))
+  const policy = allowedRuntimeSecrets.get(pluginId);
+  if (!policy?.names.has(secretName))
     throw new AppError(404, "PLUGIN_SECRET_NOT_FOUND", "Secret not found.");
-  if (!canPermission(c.get("ability"), `${pluginId}.account.${access}`))
+  if (
+    !canPermission(
+      c.get("ability"),
+      `${pluginId}.${policy.permissionResource}.${access}`,
+    )
+  )
     throw new AppError(403, "FORBIDDEN", "Permission denied.");
   const plugin = await c
     .get("db")
@@ -209,18 +232,53 @@ const insertAdminPermission = (provider: "d1" | "postgres"): string =>
     ? "INSERT OR IGNORE INTO group_permissions(group_id,permission_id,created_at) VALUES ('grp_administrators', ?, ?)"
     : "INSERT INTO group_permissions(group_id,permission_id,created_at) VALUES ('grp_administrators', ?, ?) ON CONFLICT (group_id,permission_id) DO NOTHING";
 
-const pluginContextHeader = (
-  userId: string,
-  permissions: string[],
-  requestId: string,
-): string => {
-  const binary = unescape(
-    encodeURIComponent(JSON.stringify({ userId, permissions, requestId })),
-  );
+// Cloudflare account-owned API tokens use the newer `cfat_` opaque format and
+// can be considerably longer than legacy user tokens. Keep a bounded input,
+// but do not assume the old 80/200-character representation.
+const validCloudflareTokenLength = (token: string): boolean =>
+  token.length >= 40 && token.length <= 2_048;
+
+const encodedContextHeader = (context: unknown): string => {
+  const binary = unescape(encodeURIComponent(JSON.stringify(context)));
   return btoa(binary)
     .replaceAll("+", "-")
     .replaceAll("/", "_")
     .replace(/=+$/u, "");
+};
+
+const deterministicR2BucketName = async (
+  installationId: string,
+  pluginId: string,
+) => {
+  const digest = new Uint8Array(
+    await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(installationId),
+    ),
+  );
+  const prefix = [...digest]
+    .slice(0, 6)
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+  const pluginSlug = pluginId.replaceAll("_", "-").slice(0, 43);
+  return `nexus-${prefix}-${pluginSlug}`;
+};
+
+const runtimeBoundaryValues = async (
+  c: Context<HonoEnv>,
+  pluginId: string,
+): Promise<Array<string | undefined>> => {
+  const resources = await c.get("db").query<{ externalName: string }>(
+    `SELECT external_name AS "externalName"
+         FROM plugin_runtime_resources WHERE plugin_id = ?`,
+    [pluginId],
+  );
+  return [
+    ...resources.map((resource) => resource.externalName),
+    c.env.APP_INSTALLATION_ID
+      ? await deterministicR2BucketName(c.env.APP_INSTALLATION_ID, pluginId)
+      : undefined,
+  ];
 };
 
 async function readPackage(c: Context<HonoEnv>): Promise<PackageParts> {
@@ -291,6 +349,7 @@ const hashes = async (parts: PackageParts) => ({
 const verifyPortablePackageBoundary = (
   env: HonoEnv["Bindings"],
   parts: PackageParts,
+  resourceValues: Array<string | undefined> = [],
 ): void => {
   try {
     assertNoRuntimeValues(parts, [
@@ -306,12 +365,57 @@ const verifyPortablePackageBoundary = (
       env.TRUSTED_ORIGINS,
       env.CORE_WORKER_NAME,
       env.WEBHOOK_ALLOWED_DOMAINS,
+      ...resourceValues,
     ]);
   } catch {
     throw new AppError(
       422,
       "PLUGIN_PACKAGE_CONTAINS_RUNTIME_VALUE",
       "Plugin packages cannot contain installation-specific runtime values.",
+    );
+  }
+};
+
+const validatePackagePolicy = (
+  c: Context<HonoEnv>,
+  manifest: PluginManifest,
+): void => {
+  try {
+    validateManifestPolicy(
+      manifest,
+      c.env.APP_VERSION,
+      c.env.PLUGIN_COMPATIBILITY_FLAGS,
+    );
+  } catch (error) {
+    if (!(error instanceof PluginManifestPolicyError)) throw error;
+    const mapped =
+      error.code === "core_version_unsupported"
+        ? [
+            409,
+            "PLUGIN_CORE_VERSION_UNSUPPORTED",
+            `This plugin requires Core ${manifest.coreMinVersion} or newer.`,
+          ]
+        : error.code === "api_version_unsupported"
+          ? [
+              422,
+              "PLUGIN_API_VERSION_UNSUPPORTED",
+              "The plugin API version is not supported by this Core.",
+            ]
+          : error.code === "compatibility_flag_unsupported"
+            ? [
+                422,
+                "PLUGIN_COMPATIBILITY_FLAG_UNSUPPORTED",
+                "The plugin requests an unsupported compatibility flag.",
+              ]
+            : [
+                422,
+                "PLUGIN_FRONTEND_UNAVAILABLE",
+                "The plugin frontend is not available in this Core version.",
+              ];
+    throw new AppError(
+      mapped[0] as 409 | 422,
+      mapped[1] as string,
+      mapped[2] as string,
     );
   }
 };
@@ -400,7 +504,7 @@ installerRoutes.put(
       token?: unknown;
     } | null;
     const token = typeof body?.token === "string" ? body.token.trim() : "";
-    if (token.length < 40 || token.length > 200)
+    if (!validCloudflareTokenLength(token))
       throw new AppError(
         422,
         "PLUGIN_RUNTIME_CREDENTIAL_INVALID",
@@ -460,6 +564,8 @@ installerRoutes.get(
         `SELECT p.id, p.name, p.installed_version AS "installedVersion", p.api_version AS "apiVersion",
                   p.active_database_provider AS "databaseProvider", p.worker_name AS "workerName", p.status,
                   p.installed_at AS "installedAt", p.updated_at AS "updatedAt",
+                  (SELECT pr.status FROM plugin_runtime_resources pr
+                    WHERE pr.plugin_id = p.id AND pr.binding_name = 'STORAGE') AS "runtimeStorageStatus",
                   CASE WHEN p.status = 'installed' AND EXISTS (
                     SELECT 1 FROM plugin_operations po
                     JOIN plugin_package_chunks pc ON pc.operation_id = po.operation_id
@@ -570,11 +676,7 @@ installerRoutes.get(
 
 installerRoutes.post("/plugin-operations", async (c) => {
   const parts = await readPackage(c);
-  validateManifestPolicy(
-    parts.manifest,
-    c.env.APP_VERSION,
-    c.env.PLUGIN_COMPATIBILITY_FLAGS,
-  );
+  validatePackagePolicy(c, parts.manifest);
   if (!parts.worker)
     throw new AppError(422, "PLUGIN_WORKER_MISSING", "worker.mjs is required.");
   const d1Ids = Object.keys(parts.d1Migrations).sort();
@@ -587,7 +689,11 @@ installerRoutes.post("/plugin-operations", async (c) => {
     );
   migrationStatements(parts.d1Migrations, parts.manifest.tablePrefix);
   migrationStatements(parts.postgresMigrations, parts.manifest.tablePrefix);
-  verifyPortablePackageBoundary(c.env, parts);
+  verifyPortablePackageBoundary(
+    c.env,
+    parts,
+    await runtimeBoundaryValues(c, parts.manifest.id),
+  );
   const installed = await c.get("db").first<{ installedVersion: string }>(
     `SELECT installed_version AS "installedVersion"
            FROM plugins
@@ -692,6 +798,13 @@ installerRoutes.post("/plugin-operations/:operationId/resume", async (c) => {
       "Only a failed operation can be resumed.",
     );
   const failure = JSON.parse(operation.lastError) as { from: string };
+  const preservedResource = await c.get("db").first<{ status: string }>(
+    `SELECT status FROM plugin_runtime_resources
+      WHERE plugin_id = ? AND binding_name = 'STORAGE'
+        AND created_by_operation_id = ? AND status IN ('preserved','missing')`,
+    [operation.pluginId, operation.operationId],
+  );
+  const resumeState = preservedResource ? "provisioning" : failure.from;
   const now = Date.now();
   const lock = await c
     .get("db")
@@ -715,10 +828,234 @@ installerRoutes.post("/plugin-operations/:operationId/resume", async (c) => {
     .get("db")
     .execute(
       "UPDATE plugin_operations SET state = ?, last_error = NULL WHERE operation_id = ?",
-      [failure.from, operation.operationId],
+      [resumeState, operation.operationId],
     );
-  return c.json({ operationId: operation.operationId, state: failure.from });
+  return c.json({ operationId: operation.operationId, state: resumeState });
 });
+
+installerRoutes.post(
+  "/plugin-operations/:operationId/provision-r2",
+  async (c) => {
+    const operation = await getOperation(c);
+    requirePluginOperationPermission(c, operation.type);
+    await validateRecentReauth(c);
+    if (!(c.req.header("Idempotency-Key") ?? "").trim())
+      throw new AppError(
+        400,
+        "IDEMPOTENCY_KEY_REQUIRED",
+        "Idempotency-Key is required for R2 provisioning.",
+      );
+    if (operation.state === "migrating") {
+      const ready = await c.get("db").first<{ operationId: string }>(
+        `SELECT created_by_operation_id AS "operationId"
+           FROM plugin_runtime_resources
+          WHERE plugin_id = ? AND binding_name = 'STORAGE' AND status = 'ready'`,
+        [operation.pluginId],
+      );
+      if (ready?.operationId === operation.operationId)
+        return c.json({
+          operationId: operation.operationId,
+          state: "migrating",
+          resource: { type: "r2", binding: "STORAGE" },
+          replay: true,
+        });
+    }
+    if (operation.state !== "provisioning")
+      throw new AppError(
+        409,
+        "OPERATION_NOT_PROVISIONING",
+        "This operation is not waiting for R2 provisioning.",
+      );
+    if (!c.env.CF_ACCOUNT_ID || !c.env.APP_INSTALLATION_ID)
+      throw new AppError(
+        503,
+        "R2_PROVISIONING_TARGET_MISSING",
+        "The Cloudflare account or installation identifier is unavailable.",
+      );
+    const body = (await c.req.json().catch(() => null)) as {
+      token?: unknown;
+      mode?: unknown;
+      bucketName?: unknown;
+    } | null;
+    const token = typeof body?.token === "string" ? body.token.trim() : "";
+    const mode = body?.mode === "attach" ? "attach" : "create";
+    if (!validCloudflareTokenLength(token))
+      throw new AppError(
+        422,
+        "R2_TOKEN_INVALID",
+        "Enter a valid temporary Cloudflare R2 token.",
+      );
+    const deterministicName = await deterministicR2BucketName(
+      c.env.APP_INSTALLATION_ID,
+      operation.pluginId,
+    );
+    const requestedName =
+      mode === "attach" && typeof body?.bucketName === "string"
+        ? body.bucketName.trim()
+        : deterministicName;
+    if (!/^[a-z0-9][a-z0-9-]{2,62}$/u.test(requestedName))
+      throw new AppError(
+        422,
+        "R2_BUCKET_NAME_INVALID",
+        "The R2 bucket name is invalid.",
+      );
+    const db = c.get("db");
+    const existing = await db.first<{
+      externalName: string;
+      operationId: string;
+      status: string;
+    }>(
+      `SELECT external_name AS "externalName",
+              created_by_operation_id AS "operationId", status
+         FROM plugin_runtime_resources
+        WHERE plugin_id = ? AND binding_name = 'STORAGE'`,
+      [operation.pluginId],
+    );
+    if (existing && existing.externalName !== requestedName)
+      throw new AppError(
+        409,
+        "R2_BUCKET_CONFLICT",
+        "A different preserved bucket is already registered for this plugin.",
+      );
+    const now = dbTime(db);
+    const reserved = await db.execute(
+      `INSERT INTO plugin_runtime_resources(
+         plugin_id, resource_type, binding_name, external_name, status,
+         created_by_operation_id, created_at, updated_at
+       ) VALUES (?, 'r2', 'STORAGE', ?, 'provisioning', ?, ?, ?)
+       ON CONFLICT(plugin_id, binding_name) DO UPDATE SET
+         status = 'provisioning', created_by_operation_id = excluded.created_by_operation_id,
+         updated_at = excluded.updated_at, last_error_code = NULL
+       WHERE plugin_runtime_resources.external_name = excluded.external_name`,
+      [operation.pluginId, requestedName, operation.operationId, now, now],
+    );
+    if (!reserved.rowsAffected)
+      throw new AppError(
+        409,
+        "R2_BUCKET_CONFLICT",
+        "The requested R2 bucket conflicts with a registered resource.",
+      );
+    try {
+      const provisionMode =
+        existing &&
+        ["preserving", "preserved", "missing"].includes(existing.status)
+          ? "attach"
+          : mode;
+      const result = await provisionR2Bucket(
+        token,
+        c.env.CF_ACCOUNT_ID,
+        requestedName,
+        provisionMode,
+      );
+      if (provisionMode === "create" && !result.created && !existing)
+        throw new R2ProvisioningError("bucket_conflict");
+      const verifiedAt = dbTime(db);
+      await db.atomic([
+        {
+          sql: `UPDATE plugin_runtime_resources
+                   SET status = 'ready', last_verified_at = ?, last_error_code = NULL,
+                       updated_at = ?, preserved_at = NULL
+                 WHERE plugin_id = ? AND binding_name = 'STORAGE'
+                   AND external_name = ?`,
+          params: [verifiedAt, verifiedAt, operation.pluginId, requestedName],
+        },
+        {
+          sql: `UPDATE plugin_operations SET state = 'migrating', lock_expires_at = ?
+                 WHERE operation_id = ? AND state = 'provisioning'`,
+          params: [dbTime(db, Date.now() + 300_000), operation.operationId],
+        },
+      ]);
+      await audit(
+        c,
+        "core.plugin.runtime_resource_ready",
+        "core.plugin",
+        operation.pluginId,
+        { operationId: operation.operationId, resourceType: "r2" },
+      );
+      return c.json({
+        operationId: operation.operationId,
+        state: "migrating",
+        resource: { type: "r2", binding: "STORAGE" },
+      });
+    } catch (error) {
+      const code =
+        error instanceof R2ProvisioningError ? error.code : "unavailable";
+      await db.atomic([
+        {
+          sql: `UPDATE plugin_runtime_resources
+                   SET status = ?, last_error_code = ?, updated_at = ?
+                 WHERE plugin_id = ? AND binding_name = 'STORAGE'`,
+          params: [
+            code === "bucket_missing" ? "missing" : "error",
+            code,
+            dbTime(db),
+            operation.pluginId,
+          ],
+        },
+        {
+          sql: `UPDATE plugin_operations SET state = 'failed', last_error = ?
+                 WHERE operation_id = ?`,
+          params: [
+            JSON.stringify({
+              from: "provisioning",
+              detail: `r2_${code}`,
+              requestId: c.get("requestId"),
+              failedAt: Date.now(),
+            }),
+            operation.operationId,
+          ],
+        },
+        {
+          sql: `UPDATE installer_lock SET operation_id = NULL, acquired_at = NULL,
+                       expires_at = NULL
+                 WHERE id = 'global' AND operation_id = ?`,
+          params: [operation.operationId],
+        },
+      ]);
+      const mapped =
+        code === "too_broad"
+          ? [
+              422,
+              "R2_TOKEN_TOO_BROAD",
+              "Use a token limited to Workers R2 Storage Write.",
+            ]
+          : code === "invalid"
+            ? [
+                422,
+                "R2_TOKEN_INVALID",
+                "The temporary R2 token is invalid or belongs to another account.",
+              ]
+            : code === "not_entitled"
+              ? [
+                  409,
+                  "R2_NOT_ENTITLED",
+                  "Activate R2 on this Cloudflare account before installing the plugin.",
+                ]
+              : code === "bucket_missing"
+                ? [
+                    404,
+                    "R2_BUCKET_MISSING",
+                    "The selected R2 bucket does not exist.",
+                  ]
+                : code === "bucket_conflict"
+                  ? [
+                      409,
+                      "R2_BUCKET_CONFLICT",
+                      "The deterministic bucket already exists outside this Nexus installation.",
+                    ]
+                  : [
+                      503,
+                      "R2_UNAVAILABLE",
+                      "Cloudflare could not provision the private R2 bucket.",
+                    ];
+      throw new AppError(
+        mapped[0] as 404 | 409 | 422 | 503,
+        mapped[1] as string,
+        mapped[2] as string,
+      );
+    }
+  },
+);
 
 installerRoutes.post("/plugin-operations/:operationId/advance", async (c) => {
   const operation = await getOperation(c);
@@ -735,6 +1072,18 @@ installerRoutes.post("/plugin-operations/:operationId/advance", async (c) => {
             requestId: c.get("requestId"),
             failedAt: Date.now(),
           }),
+          operation.operationId,
+        ],
+      },
+      {
+        sql: `UPDATE plugin_runtime_resources
+                 SET status = 'preserved', preserved_at = ?, updated_at = ?
+               WHERE plugin_id = ? AND binding_name = 'STORAGE'
+                 AND created_by_operation_id = ? AND status = 'ready'`,
+        params: [
+          dbTime(db),
+          dbTime(db),
+          operation.pluginId,
           operation.operationId,
         ],
       },
@@ -766,16 +1115,40 @@ installerRoutes.post("/plugin-operations/:operationId/advance", async (c) => {
     if (operation.state === "validating") {
       const parts = await readPackage(c);
       await verifyPackage(operation, parts);
-      validateManifestPolicy(
-        parts.manifest,
-        c.env.APP_VERSION,
-        c.env.PLUGIN_COMPATIBILITY_FLAGS,
+      validatePackagePolicy(c, parts.manifest);
+      verifyPortablePackageBoundary(
+        c.env,
+        parts,
+        await runtimeBoundaryValues(c, operation.pluginId),
       );
-      verifyPortablePackageBoundary(c.env, parts);
+      await db.atomic(
+        archivePackageStatements(operation.operationId, parts, dbTime(db)),
+      );
+      const resource = await db.first<{ status: string }>(
+        `SELECT status FROM plugin_runtime_resources
+          WHERE plugin_id = ? AND binding_name = 'STORAGE'`,
+        [operation.pluginId],
+      );
+      const nextState =
+        parts.manifest.runtimeBindings?.includes("r2") &&
+        resource?.status !== "ready"
+          ? "provisioning"
+          : "migrating";
       await db.execute(
-        "UPDATE plugin_operations SET state = 'migrating', lock_expires_at = ? WHERE operation_id = ?",
-        [dbTime(db, Date.now() + 300_000), operation.operationId],
+        "UPDATE plugin_operations SET state = ?, lock_expires_at = ? WHERE operation_id = ?",
+        [nextState, dbTime(db, Date.now() + 300_000), operation.operationId],
       );
+      return c.json({ operationId: operation.operationId, state: nextState });
+    }
+    if (operation.state === "provisioning")
+      throw new AppError(
+        409,
+        "PLUGIN_RUNTIME_R2_REQUIRED",
+        "Provision the private R2 bucket before advancing this operation.",
+      );
+    if (operation.state === "migrating") {
+      const parts = await readPackage(c);
+      await verifyPackage(operation, parts);
       const activeSet =
         c.env.DATABASE_PROVIDER === "d1"
           ? parts.d1Migrations
@@ -783,9 +1156,6 @@ installerRoutes.post("/plugin-operations/:operationId/advance", async (c) => {
       const migrations = migrationStatements(
         activeSet,
         parts.manifest.tablePrefix,
-      );
-      await db.atomic(
-        archivePackageStatements(operation.operationId, parts, dbTime(db)),
       );
       const statements: SqlStatement[] = [];
       for (const migration of migrations) {
@@ -810,8 +1180,8 @@ installerRoutes.post("/plugin-operations/:operationId/advance", async (c) => {
       }
       await db.atomic(statements);
       await db.execute(
-        "UPDATE plugin_operations SET state = 'deploying' WHERE operation_id = ?",
-        [operation.operationId],
+        "UPDATE plugin_operations SET state = 'deploying', lock_expires_at = ? WHERE operation_id = ?",
+        [dbTime(db, Date.now() + 300_000), operation.operationId],
       );
       return c.json({
         operationId: operation.operationId,
@@ -821,11 +1191,25 @@ installerRoutes.post("/plugin-operations/:operationId/advance", async (c) => {
     if (operation.state === "deploying") {
       const parts = await readPackage(c);
       await verifyPackage(operation, parts);
+      const resource = parts.manifest.runtimeBindings?.includes("r2")
+        ? await db.first<{ externalName: string; status: string }>(
+            `SELECT external_name AS "externalName", status
+               FROM plugin_runtime_resources
+              WHERE plugin_id = ? AND binding_name = 'STORAGE'`,
+            [operation.pluginId],
+          )
+        : null;
+      if (
+        parts.manifest.runtimeBindings?.includes("r2") &&
+        resource?.status !== "ready"
+      )
+        throw new Error("PLUGIN_RUNTIME_R2_REQUIRED");
       await uploadPluginWorker(
         c.env,
         workerName(operation.pluginId),
         parts.worker,
         parts.manifest,
+        resource ? { STORAGE: resource.externalName } : {},
       );
       await db.execute(
         "UPDATE plugin_operations SET state = 'hardening' WHERE operation_id = ?",
@@ -872,11 +1256,11 @@ installerRoutes.post("/plugin-operations/:operationId/advance", async (c) => {
         new Request("https://plugin.internal/__installer/smoke", {
           method: "POST",
           headers: {
-            "X-Plugin-Context": pluginContextHeader(
-              c.get("principal").userId,
-              parts.manifest.permissions,
-              c.get("requestId"),
-            ),
+            "X-Plugin-Installer-Context": encodedContextHeader({
+              pluginId: operation.pluginId,
+              operationId: operation.operationId,
+              requestId: c.get("requestId"),
+            } satisfies PluginInstallerContext),
           },
         }),
       );
@@ -926,6 +1310,17 @@ installerRoutes.post("/plugin-operations/:operationId/advance", async (c) => {
             sql: "UPDATE plugin_operations SET state = 'installed', finished_at = ? WHERE operation_id = ?",
             params: [now, operation.operationId],
           },
+          ...(parts.manifest.runtimeBindings?.includes("r2")
+            ? []
+            : [
+                {
+                  sql: `UPDATE plugin_runtime_resources
+                           SET status = 'preserved', preserved_at = ?, updated_at = ?
+                         WHERE plugin_id = ? AND binding_name = 'STORAGE'
+                           AND status = 'ready'`,
+                  params: [now, now, operation.pluginId],
+                },
+              ]),
           {
             sql: "UPDATE installer_lock SET operation_id = NULL, acquired_at = NULL, expires_at = NULL WHERE id = 'global' AND operation_id = ?",
             params: [operation.operationId],
@@ -1106,11 +1501,7 @@ installerRoutes.post(
         "Select the original package for this installed plugin and version.",
       );
     try {
-      validateManifestPolicy(
-        parts.manifest,
-        c.env.APP_VERSION,
-        c.env.PLUGIN_COMPATIBILITY_FLAGS,
-      );
+      validatePackagePolicy(c, parts.manifest);
       if (!parts.worker) throw new Error("worker.mjs is required.");
       const d1Ids = Object.keys(parts.d1Migrations).sort();
       const postgresIds = Object.keys(parts.postgresMigrations).sort();
@@ -1118,7 +1509,11 @@ installerRoutes.post(
         throw new Error("Plugin migrations are not paired.");
       migrationStatements(parts.d1Migrations, parts.manifest.tablePrefix);
       migrationStatements(parts.postgresMigrations, parts.manifest.tablePrefix);
-      verifyPortablePackageBoundary(c.env, parts);
+      verifyPortablePackageBoundary(
+        c.env,
+        parts,
+        await runtimeBoundaryValues(c, pluginId),
+      );
       await verifyPackage(operation, parts);
     } catch (error) {
       if (error instanceof AppError) {
@@ -1201,12 +1596,20 @@ installerRoutes.delete(
         "PLUGIN_STATE_CONFLICT",
         `The plugin cannot be removed while its status is ${plugin.status}.`,
       );
-    await c
-      .get("db")
-      .execute(
-        "UPDATE plugins SET status = 'uninstalling', updated_at = ? WHERE id = ?",
-        [dbTime(c.get("db")), pluginId],
-      );
+    const uninstallingAt = dbTime(c.get("db"));
+    await c.get("db").atomic([
+      {
+        sql: "UPDATE plugins SET status = 'uninstalling', updated_at = ? WHERE id = ?",
+        params: [uninstallingAt, pluginId],
+      },
+      {
+        sql: `UPDATE plugin_runtime_resources
+                 SET status = 'preserving', updated_at = ?
+               WHERE plugin_id = ? AND binding_name = 'STORAGE'
+                 AND status IN ('ready','error')`,
+        params: [uninstallingAt, pluginId],
+      },
+    ]);
     await removeCoreServiceBinding(c.env, bindingName(pluginId));
     await deletePluginWorker(c.env, plugin.workerName);
     await commitWithEvent(
@@ -1224,15 +1627,23 @@ installerRoutes.delete(
           sql: "UPDATE plugins SET status = 'uninstalled', updated_at = ? WHERE id = ?",
           params: [dbTime(c.get("db")), pluginId],
         },
+        {
+          sql: `UPDATE plugin_runtime_resources
+                   SET status = 'preserved', preserved_at = ?, updated_at = ?
+                 WHERE plugin_id = ? AND binding_name = 'STORAGE'`,
+          params: [dbTime(c.get("db")), dbTime(c.get("db")), pluginId],
+        },
       ],
       {
         eventType: "core.plugin.uninstalled",
         resourceType: "core.plugin",
         resourceId: pluginId,
-        data: { tablesPreserved: true },
+        data: { tablesPreserved: true, objectStoragePreserved: true },
       },
     );
-    await audit(c, "core.plugin.uninstalled", "core.plugin", pluginId);
+    await audit(c, "core.plugin.uninstalled", "core.plugin", pluginId, {
+      objectStoragePreserved: true,
+    });
     return c.body(null, 204);
   },
 );

@@ -5,6 +5,7 @@ const workerBundles = [
   "plugins/crm/dist/index.js",
   "plugins/meta_ads/dist/index.js",
   "plugins/soletrando/dist/index.js",
+  "plugins/meeting_recorder/dist/index.js",
   "plugins/template/dist/index.js",
 ];
 const unsupportedDynamicRequires = [

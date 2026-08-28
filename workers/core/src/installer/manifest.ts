@@ -11,6 +11,13 @@ const compatibilityDate = z
     (value) => !Number.isNaN(Date.parse(`${value}T00:00:00.000Z`)),
     "invalid compatibility date",
   );
+const runtimeBinding = z.enum(["ai", "r2"]);
+const localizedMetadata = z
+  .object({
+    name: z.string().min(2).max(80),
+    menuTitles: z.record(z.string().min(3).max(100), z.string().min(1).max(80)),
+  })
+  .strict();
 
 export const pluginManifestSchema = z
   .object({
@@ -26,8 +33,15 @@ export const pluginManifestSchema = z
     compatibilityDate,
     compatibilityFlags: z.array(z.string()).max(20),
     databaseDialects: z.tuple([z.literal("d1"), z.literal("postgres")]),
-    runtimeBindings: z.array(z.literal("ai")).max(1).optional(),
+    runtimeBindings: z.array(runtimeBinding).max(2).optional(),
     tablePrefix: z.string(),
+    localizedMetadata: z
+      .object({
+        "pt-BR": localizedMetadata.optional(),
+        en: localizedMetadata.optional(),
+      })
+      .strict()
+      .optional(),
     permissions: z.array(permission).max(200),
     menu: z
       .array(
@@ -52,9 +66,47 @@ export const pluginManifestSchema = z
         message: "permission namespace must match id",
         path: ["permissions"],
       });
+    const runtimeBindings = manifest.runtimeBindings ?? [];
+    if (new Set(runtimeBindings).size !== runtimeBindings.length)
+      context.addIssue({
+        code: "custom",
+        message: "runtimeBindings cannot contain duplicates",
+        path: ["runtimeBindings"],
+      });
+    if (runtimeBindings.join(",") !== [...runtimeBindings].sort().join(","))
+      context.addIssue({
+        code: "custom",
+        message: "runtimeBindings must use canonical order: ai, r2",
+        path: ["runtimeBindings"],
+      });
+    const menuRouteKeys = new Set(manifest.menu.map((entry) => entry.routeKey));
+    for (const [locale, metadata] of Object.entries(
+      manifest.localizedMetadata ?? {},
+    ))
+      for (const routeKey of Object.keys(metadata?.menuTitles ?? {}))
+        if (!menuRouteKeys.has(routeKey))
+          context.addIssue({
+            code: "custom",
+            message: "localized menu title must reference a manifest route",
+            path: ["localizedMetadata", locale, "menuTitles", routeKey],
+          });
   });
 
 export type PluginManifest = z.infer<typeof pluginManifestSchema>;
+
+export class PluginManifestPolicyError extends Error {
+  constructor(
+    readonly code:
+      | "core_version_unsupported"
+      | "api_version_unsupported"
+      | "compatibility_flag_unsupported"
+      | "frontend_unavailable",
+  ) {
+    super(code);
+    this.name = "PluginManifestPolicyError";
+  }
+}
+
 export const CORE_ROUTE_KEYS = new Set([
   "crm.home",
   "crm.leads",
@@ -62,6 +114,7 @@ export const CORE_ROUTE_KEYS = new Set([
   "meta_ads.dashboard",
   "meta_ads.accounts",
   "soletrando.children",
+  "meeting_recorder.home",
 ]);
 
 export function validateManifestPolicy(
@@ -70,9 +123,9 @@ export function validateManifestPolicy(
   allowedFlagsRaw = "",
 ): void {
   if (semver.gt(manifest.coreMinVersion, coreVersion))
-    throw new Error(`Plugin requires Core ${manifest.coreMinVersion}`);
+    throw new PluginManifestPolicyError("core_version_unsupported");
   if (manifest.apiVersion !== 1)
-    throw new Error("Unsupported plugin apiVersion");
+    throw new PluginManifestPolicyError("api_version_unsupported");
   const allowedFlags = new Set(
     allowedFlagsRaw
       .split(",")
@@ -80,11 +133,7 @@ export function validateManifestPolicy(
       .filter(Boolean),
   );
   if (manifest.compatibilityFlags.some((flag) => !allowedFlags.has(flag)))
-    throw new Error(
-      "Manifest contains a compatibility flag outside the Core allowlist",
-    );
+    throw new PluginManifestPolicyError("compatibility_flag_unsupported");
   if (manifest.menu.some((entry) => !CORE_ROUTE_KEYS.has(entry.routeKey)))
-    throw new Error(
-      "The plugin frontend is not available in this Core version",
-    );
+    throw new PluginManifestPolicyError("frontend_unavailable");
 }

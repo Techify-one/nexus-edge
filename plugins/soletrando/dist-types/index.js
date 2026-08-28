@@ -54,13 +54,22 @@ const isPublicContext = (value) => {
     const context = value;
     return Boolean(context.requestId && context.pluginId === "soletrando");
 };
+const isInstallerContext = (value) => {
+    if (!value || typeof value !== "object")
+        return false;
+    const context = value;
+    return Boolean(context.requestId &&
+        context.operationId &&
+        context.pluginId === "soletrando");
+};
 app.get("/health", (c) => c.json({ ok: true, plugin: "soletrando", version: "1.2.3" }));
 app.use("/*", async (c, next) => {
     if (c.req.path === "/health")
         return next();
     const internal = c.req.header("X-Plugin-Context");
     const publicInternal = c.req.header("X-Plugin-Public-Context");
-    if (Boolean(internal) === Boolean(publicInternal))
+    const installerInternal = c.req.header("X-Plugin-Installer-Context");
+    if ([internal, publicInternal, installerInternal].filter(Boolean).length !== 1)
         return error(c, 401, "MISSING_PLUGIN_CONTEXT", "An exclusive internal context is required.");
     try {
         if (internal) {
@@ -69,11 +78,17 @@ app.use("/*", async (c, next) => {
                 throw new Error("invalid");
             c.set("pluginContext", context);
         }
-        else {
+        else if (publicInternal) {
             const context = decodeContext(publicInternal);
             if (!isPublicContext(context))
                 throw new Error("invalid");
             c.set("publicContext", context);
+        }
+        else {
+            const context = decodeContext(installerInternal);
+            if (!isInstallerContext(context))
+                throw new Error("invalid");
+            c.set("installerContext", context);
         }
     }
     catch {
@@ -106,7 +121,9 @@ const requirePermission = (c, permission) => {
     return context;
 };
 app.post("/__installer/smoke", async (c) => {
-    const context = requireAdminContext(c);
+    const context = c.get("installerContext");
+    if (!context)
+        return error(c, 403, "INSTALLER_CONTEXT_REQUIRED", "Installer context required.");
     const db = c.get("db");
     const id = `child_smoke_${crypto.randomUUID().replaceAll("-", "")}`;
     const token = `smoke_${crypto.randomUUID().replaceAll("-", "")}`;
@@ -116,7 +133,7 @@ app.post("/__installer/smoke", async (c) => {
     const created = await db.first("SELECT id FROM soletrando_children WHERE id=?", [id]);
     await db.execute("DELETE FROM soletrando_children WHERE id=?", [id]);
     const aiAvailable = typeof c.env.AI?.run === "function";
-    return created?.id === id && aiAvailable && context.userId
+    return created?.id === id && aiAvailable && context.operationId
         ? c.json({ ok: true, read: true, write: true, ai: true })
         : c.json({ ok: false }, 500);
 });

@@ -1,5 +1,6 @@
 const CHUNK_RELOAD_KEY = "nexus.chunk-reload-at";
 const CHUNK_RELOAD_WINDOW_MS = 30_000;
+import { isReloadGuarded, publishUpdatePending } from "./reload-guard.js";
 
 export const shouldReloadChunk = (
   previousReloadAt: number,
@@ -24,6 +25,10 @@ export const registerChunkRecovery = (): void => {
 
     if (!shouldReloadChunk(previousReloadAt, now)) return;
     event.preventDefault();
+    if (isReloadGuarded()) {
+      publishUpdatePending();
+      return;
+    }
     try {
       window.sessionStorage.setItem(CHUNK_RELOAD_KEY, String(now));
     } catch {

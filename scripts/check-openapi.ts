@@ -10,6 +10,15 @@ const required = [
   "/api/v1/public/p/soletrando/play/{token}",
   "/api/v1/webhooks/endpoints",
   "/api/v1/plugin-operations",
+  "/api/v1/plugin-operations/{operationId}/provision-r2",
+  "/api/v1/p/meeting_recorder/recordings",
+  "/api/v1/p/meeting_recorder/recordings/{recordingId}/reconcile",
+  "/api/v1/p/meeting_recorder/recordings/{recordingId}/segments/{sequence}",
+  "/api/v1/p/meeting_recorder/recordings/{recordingId}/segments/{sequence}/audio",
+  "/api/v1/p/meeting_recorder/recordings/{recordingId}/segments/{sequence}/transcribe",
+  "/api/v1/p/meeting_recorder/recordings/{recordingId}/deletion-steps",
+  "/api/v1/plugins/meeting_recorder/runtime-secrets/{secretName}",
+  "/api/v1/public/p/meeting_recorder/telegram/webhook",
   "/api/v1/audit",
 ];
 for (const path of required)

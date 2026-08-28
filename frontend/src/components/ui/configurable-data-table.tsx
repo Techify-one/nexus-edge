@@ -279,6 +279,9 @@ export function ConfigurableDataTable<T extends { id: string }>({
   actions,
   emptyTitle,
   emptyDescription,
+  sorting: controlledSorting,
+  onSortingChange,
+  manualSorting = false,
 }: {
   tableId: string;
   rows: T[];
@@ -287,6 +290,9 @@ export function ConfigurableDataTable<T extends { id: string }>({
   actions?: ((row: T) => ReactNode) | undefined;
   emptyTitle?: string;
   emptyDescription?: string;
+  sorting?: SortingState;
+  onSortingChange?: (sorting: SortingState) => void;
+  manualSorting?: boolean;
 }) {
   const { t } = useI18n();
   const preferenceSignature = columns
@@ -306,7 +312,8 @@ export function ConfigurableDataTable<T extends { id: string }>({
     defaults.columnVisibility,
   );
   const [columnSizing, setColumnSizing] = useState(defaults.columnSizing);
-  const [sorting, setSorting] = useState(defaults.sorting);
+  const [localSorting, setLocalSorting] = useState(defaults.sorting);
+  const sorting = controlledSorting ?? localSorting;
   const [hydrated, setHydrated] = useState(false);
   const hydratedTableId = useRef<string | null>(null);
   const skipNextSave = useRef(false);
@@ -358,7 +365,8 @@ export function ConfigurableDataTable<T extends { id: string }>({
       setColumnOrder(defaults.columnOrder);
       setColumnVisibility(defaults.columnVisibility);
       setColumnSizing(defaults.columnSizing);
-      setSorting(defaults.sorting);
+      setLocalSorting(defaults.sorting);
+      onSortingChange?.(defaults.sorting);
     },
     onError: () => toast.error(t("table.saveFailed")),
   });
@@ -369,11 +377,18 @@ export function ConfigurableDataTable<T extends { id: string }>({
     setColumnOrder(normalized.columnOrder);
     setColumnVisibility(normalized.columnVisibility);
     setColumnSizing(normalized.columnSizing);
-    setSorting(normalized.sorting);
+    setLocalSorting(normalized.sorting);
+    onSortingChange?.(normalized.sorting);
     latestConfig.current = normalized;
     hydratedTableId.current = tableId;
     setHydrated(true);
-  }, [columns, preference.data?.config, preference.isPending, tableId]);
+  }, [
+    columns,
+    onSortingChange,
+    preference.data?.config,
+    preference.isPending,
+    tableId,
+  ]);
 
   const currentConfig = useMemo<TablePreferenceConfig>(
     () => ({
@@ -451,7 +466,12 @@ export function ConfigurableDataTable<T extends { id: string }>({
     onColumnOrderChange: setColumnOrder,
     onColumnVisibilityChange: setColumnVisibility,
     onColumnSizingChange: setColumnSizing,
-    onSortingChange: setSorting,
+    onSortingChange: (updater) => {
+      const next = typeof updater === "function" ? updater(sorting) : updater;
+      setLocalSorting(next);
+      onSortingChange?.(next);
+    },
+    manualSorting,
     columnResizeMode: "onChange",
     enableMultiSort: false,
     maxMultiSortColCount: 1,
@@ -605,7 +625,8 @@ export function ConfigurableDataTable<T extends { id: string }>({
                                     defaults.columnVisibility,
                                   );
                                   setColumnSizing(defaults.columnSizing);
-                                  setSorting(defaults.sorting);
+                                  setLocalSorting(defaults.sorting);
+                                  onSortingChange?.(defaults.sorting);
                                   return;
                                 }
                                 resetPreference.mutate();

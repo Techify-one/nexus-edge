@@ -63,10 +63,12 @@ pnpm verify:artifacts
 pnpm verify:bundle
 ```
 
-The installable packages will be `plugins/crm/release/crm.plugin.zip` and
-`plugins/meta_ads/release/meta_ads.plugin.zip`. They are reproducible tracked
-release outputs; commit them with the source that generated them. CI rebuilds
-and compares the packages so a stale or missing artifact blocks deployment.
+The installable packages include `plugins/crm/release/crm.plugin.zip`,
+`plugins/meta_ads/release/meta_ads.plugin.zip`, and
+`plugins/meeting_recorder/release/meeting_recorder.plugin.zip`. They are
+reproducible tracked release outputs; commit them with the source that generated
+them. CI rebuilds and compares the packages so a stale or missing artifact
+blocks deployment.
 
 ## 3A. D1 path
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   cloudflareAccountTokensUrl,
   cloudflarePluginTokenTemplateUrl,
+  cloudflareUserTokensUrl,
 } from "../frontend/src/lib/cloudflare-token.js";
 
 describe("plugin runtime token link", () => {
@@ -25,5 +26,13 @@ describe("plugin runtime token link", () => {
       JSON.parse(url.searchParams.get("permissionGroupKeys") ?? "[]"),
     ).toEqual([{ key: "workers_scripts", type: "edit" }]);
     expect(url.searchParams.get("name")).toBe("Nexus Edge Plugins");
+  });
+
+  it("opens the user API token page for temporary R2 provisioning", () => {
+    const url = new URL(cloudflareUserTokensUrl());
+
+    expect(url.origin).toBe("https://dash.cloudflare.com");
+    expect(url.pathname).toBe("/profile/api-tokens");
+    expect(url.search).toBe("");
   });
 });

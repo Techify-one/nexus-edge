@@ -1,9 +1,12 @@
 import { Hono } from "hono";
-import type { PluginContext } from "@app/core-contract";
+import type { PluginContext, PluginInstallerContext } from "@app/core-contract";
 
 type Env = {
   Bindings: { DATABASE_PROVIDER: "d1" | "postgres" };
-  Variables: { pluginContext: PluginContext };
+  Variables: {
+    pluginContext?: PluginContext;
+    installerContext?: PluginInstallerContext;
+  };
 };
 const app = new Hono<Env>();
 
@@ -13,7 +16,8 @@ app.get("/health", (c) =>
 app.use("/*", async (c, next) => {
   if (c.req.path === "/health") return next();
   const value = c.req.header("X-Plugin-Context");
-  if (!value)
+  const installerValue = c.req.header("X-Plugin-Installer-Context");
+  if (Boolean(value) === Boolean(installerValue))
     return c.json(
       {
         error: {
@@ -24,17 +28,30 @@ app.use("/*", async (c, next) => {
       401,
     );
   try {
-    const normalized = value.replaceAll("-", "+").replaceAll("_", "/");
+    const selected = value ?? installerValue!;
+    const normalized = selected.replaceAll("-", "+").replaceAll("_", "/");
     const context = JSON.parse(
       atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=")),
-    ) as PluginContext;
-    if (
-      !context.userId ||
-      !context.requestId ||
-      !Array.isArray(context.permissions)
-    )
-      throw new Error("invalid context");
-    c.set("pluginContext", context);
+    ) as PluginContext | PluginInstallerContext;
+    if (value) {
+      if (
+        !("userId" in context) ||
+        !context.userId ||
+        !context.requestId ||
+        !Array.isArray(context.permissions)
+      )
+        throw new Error("invalid context");
+      c.set("pluginContext", context);
+    } else {
+      if (
+        !("operationId" in context) ||
+        context.pluginId !== "template" ||
+        !context.operationId ||
+        !context.requestId
+      )
+        throw new Error("invalid context");
+      c.set("installerContext", context);
+    }
   } catch {
     return c.json(
       {
@@ -50,13 +67,25 @@ app.use("/*", async (c, next) => {
 });
 
 app.get("/items", (c) =>
-  c.get("pluginContext").permissions.includes("template.item.read")
+  c.get("pluginContext")?.permissions.includes("template.item.read")
     ? c.json({ items: [] })
     : c.json(
         { error: { code: "FORBIDDEN", message: "Permission denied" } },
         403,
       ),
 );
-app.post("/__installer/smoke", (c) => c.json({ ok: true, template: true }));
+app.post("/__installer/smoke", (c) =>
+  c.get("installerContext")
+    ? c.json({ ok: true, template: true })
+    : c.json(
+        {
+          error: {
+            code: "INSTALLER_CONTEXT_REQUIRED",
+            message: "Installer context required",
+          },
+        },
+        403,
+      ),
+);
 
 export default app;

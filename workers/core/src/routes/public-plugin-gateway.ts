@@ -113,6 +113,7 @@ publicPluginGatewayRoutes.all("/:pluginId/*", async (c) => {
     "X-Reauth-Token",
     "X-Plugin-Context",
     "X-Plugin-Public-Context",
+    "X-Plugin-Installer-Context",
   ])
     headers.delete(name);
   const context: PluginPublicContext = {

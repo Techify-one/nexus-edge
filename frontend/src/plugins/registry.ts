@@ -1,4 +1,4 @@
-import type { ComponentType, LazyExoticComponent } from "react";
+import type { ComponentType, LazyExoticComponent, ReactNode } from "react";
 import {
   crmPluginRoutePaths,
   crmPluginUiRegistry,
@@ -11,6 +11,11 @@ import {
   soletrandoPluginRoutePaths,
   soletrandoPluginUiRegistry,
 } from "../../../plugins/soletrando/frontend/registry.js";
+import {
+  meetingRecorderPersistentSurface,
+  meetingRecorderPluginRoutePaths,
+  meetingRecorderPluginUiRegistry,
+} from "../../../plugins/meeting_recorder/frontend/registry.js";
 export {
   SoletrandoChildDetailPage,
   SoletrandoPracticePage,
@@ -20,7 +25,8 @@ type PluginPage = LazyExoticComponent<ComponentType>;
 export type PluginRouteKey =
   | keyof typeof crmPluginRoutePaths
   | keyof typeof metaAdsPluginRoutePaths
-  | keyof typeof soletrandoPluginRoutePaths;
+  | keyof typeof soletrandoPluginRoutePaths
+  | keyof typeof meetingRecorderPluginRoutePaths;
 
 /**
  * Plugin UI is compiled into the Core SPA. Record-list pages registered here
@@ -31,6 +37,7 @@ export const pluginUiRegistry: Record<PluginRouteKey, PluginPage> = {
   ...crmPluginUiRegistry,
   ...metaAdsPluginUiRegistry,
   ...soletrandoPluginUiRegistry,
+  ...meetingRecorderPluginUiRegistry,
 };
 
 /**
@@ -42,7 +49,12 @@ export const pluginRoutePaths = {
   ...crmPluginRoutePaths,
   ...metaAdsPluginRoutePaths,
   ...soletrandoPluginRoutePaths,
+  ...meetingRecorderPluginRoutePaths,
 } satisfies Record<PluginRouteKey, string>;
+
+export const persistentPluginSurfaceRegistry = {
+  meeting_recorder: meetingRecorderPersistentSurface,
+} satisfies Record<string, ComponentType<{ children: ReactNode }>>;
 
 export const resolvePluginRoute = (routeKey: string): string | undefined =>
   pluginRoutePaths[routeKey as PluginRouteKey];

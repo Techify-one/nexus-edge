@@ -9,6 +9,7 @@ import type { CoreEnv, HonoEnv } from "../workers/core/src/env.js";
 import {
   deletePluginSecret,
   pluginSecretConfigured,
+  provisionR2Bucket,
   putPluginSecret,
   replaceCoreBindings,
   uploadPluginWorker,
@@ -51,9 +52,36 @@ const crmPackageBody = (worker?: string) => {
   return body;
 };
 
+const releasePackageBody = (pluginId: string) => {
+  const archive = unzipSync(
+    readFileSync(`plugins/${pluginId}/release/${pluginId}.plugin.zip`),
+  );
+  const manifest = strFromU8(archive["manifest.json"]!);
+  const d1Migration = strFromU8(archive["migrations/d1/0001_init.sql"]!);
+  const postgresMigration = strFromU8(
+    archive["migrations/postgres/0001_init.sql"]!,
+  );
+  const body = new FormData();
+  body.set("manifest", manifest);
+  body.set(
+    "worker",
+    new File([archive["worker.mjs"]!.buffer as ArrayBuffer], "worker.mjs", {
+      type: "application/javascript",
+    }),
+  );
+  body.set("d1Migrations", JSON.stringify({ "0001_init": d1Migration }));
+  body.set(
+    "postgresMigrations",
+    JSON.stringify({ "0001_init": postgresMigration }),
+  );
+  return body;
+};
+
 const installerApp = (options?: {
   operation?: Record<string, unknown>;
   plugin?: Record<string, unknown>;
+  runtimeResource?: Record<string, unknown>;
+  reauth?: Record<string, unknown>;
   executedSql?: string[];
   atomicSql?: string[];
   atomicStatements?: SqlStatement[];
@@ -75,6 +103,13 @@ const installerApp = (options?: {
         return options.operation as T;
       if (sql.includes("FROM plugins") && options?.plugin)
         return options.plugin as T;
+      if (
+        sql.includes("FROM plugin_runtime_resources") &&
+        options?.runtimeResource
+      )
+        return options.runtimeResource as T;
+      if (sql.includes("FROM api_reauth_tokens") && options?.reauth)
+        return options.reauth as T;
       return null;
     },
     execute: async (sql: string) => {
@@ -213,6 +248,9 @@ describe("CRM plugin installer", () => {
     expect(atomicSql).toContainEqual(
       expect.stringContaining("UPDATE installer_lock SET operation_id = NULL"),
     );
+    expect(atomicSql).toContainEqual(
+      expect.stringContaining("SET status = 'preserved'"),
+    );
     expect(executedSql).toContainEqual(
       expect.stringContaining("INSERT INTO audit_log"),
     );
@@ -247,6 +285,37 @@ describe("CRM plugin installer", () => {
     expect(response.status).toBe(409);
     expect(atomicSql).toContainEqual(
       expect.stringContaining("UPDATE installer_lock SET operation_id = NULL"),
+    );
+  });
+
+  it("revalidates a preserved operation bucket before resuming later stages", async () => {
+    const executedSql: string[] = [];
+    const response = await installerApp({
+      executedSql,
+      operation: {
+        operationId: "pop_resume_preserved",
+        pluginId: "meeting_recorder",
+        type: "install",
+        targetVersion: "1.0.1",
+        state: "failed",
+        manifestSha256: "manifest",
+        workerSha256: "worker",
+        d1MigrationsSha256: "d1",
+        postgresMigrationsSha256: "postgres",
+        lastError: JSON.stringify({ from: "registering" }),
+      },
+      runtimeResource: { status: "preserved" },
+    }).request("/plugin-operations/pop_resume_preserved/resume", {
+      method: "POST",
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      operationId: "pop_resume_preserved",
+      state: "provisioning",
+    });
+    expect(executedSql).toContainEqual(
+      expect.stringContaining("UPDATE plugin_operations SET state = ?"),
     );
   });
 
@@ -589,6 +658,59 @@ describe("CRM plugin installer", () => {
   });
 });
 
+describe("Meeting Recorder release installation contract", () => {
+  it("accepts the exact release package on the first compatible Core", async () => {
+    const response = await installerApp({ executedSql: [] }).request(
+      "/plugin-operations",
+      {
+        method: "POST",
+        headers: { "Idempotency-Key": "meeting-recorder-install-beta-3" },
+        body: releasePackageBody("meeting_recorder"),
+      },
+      {
+        APP_VERSION: "1.1.0-beta.3",
+        APP_INSTALLATION_ID: "install_meeting_recorder_test",
+        CF_API_TOKEN: "configured-plugin-runtime-token",
+        CF_ACCOUNT_ID: "a".repeat(32),
+        DATABASE_PROVIDER: "d1",
+        PLUGIN_COMPATIBILITY_FLAGS: "nodejs_compat",
+      } as CoreEnv,
+    );
+
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual(
+      expect.objectContaining({
+        pluginId: "meeting_recorder",
+        state: "validating",
+      }),
+    );
+  });
+
+  it("returns an actionable compatibility error on an older Core", async () => {
+    const response = await installerApp({ executedSql: [] }).request(
+      "/plugin-operations",
+      {
+        method: "POST",
+        headers: { "Idempotency-Key": "meeting-recorder-install-beta-2" },
+        body: releasePackageBody("meeting_recorder"),
+      },
+      {
+        APP_VERSION: "1.1.0-beta.2",
+        APP_INSTALLATION_ID: "install_meeting_recorder_test",
+        CF_API_TOKEN: "configured-plugin-runtime-token",
+        CF_ACCOUNT_ID: "a".repeat(32),
+        DATABASE_PROVIDER: "d1",
+        PLUGIN_COMPATIBILITY_FLAGS: "nodejs_compat",
+      } as CoreEnv,
+    );
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      code: "PLUGIN_CORE_VERSION_UNSUPPORTED",
+    });
+  });
+});
+
 describe("Cloudflare plugin bindings", () => {
   afterEach(() => vi.unstubAllGlobals());
 
@@ -665,9 +787,238 @@ describe("Cloudflare plugin bindings", () => {
     );
   });
 
+  it("attaches a dedicated R2 binding without exposing a bucket in the manifest", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const metadata = (init?.body as FormData).get("metadata");
+        const parsed = JSON.parse(await (metadata as Blob).text());
+        expect(parsed.bindings).toEqual(
+          expect.arrayContaining([
+            {
+              type: "r2_bucket",
+              name: "STORAGE",
+              bucket_name: "nexus-private-recorder",
+            },
+          ]),
+        );
+        return Response.json({ success: true, result: {} });
+      }),
+    );
+
+    await uploadPluginWorker(
+      {
+        CF_API_TOKEN: "test-token",
+        CF_ACCOUNT_ID: "test-account",
+        DATABASE_PROVIDER: "d1",
+        D1_DATABASE_ID: "database-id",
+      } as CoreEnv,
+      "app-plugin-meeting-recorder",
+      "export default {};",
+      {
+        compatibilityDate: "2026-08-28",
+        compatibilityFlags: ["nodejs_compat"],
+        runtimeBindings: ["ai", "r2"],
+      },
+      { STORAGE: "nexus-private-recorder" },
+    );
+  });
+
+  it("creates an R2 bucket only with a narrow temporary token", async () => {
+    const accountId = "a".repeat(32);
+    // Cloudflare tokens are opaque and their representation can grow; this
+    // guards against regressing to the legacy UI limit.
+    const token = `cfat_${"x".repeat(300)}`;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        expect(new Headers(init?.headers).get("Authorization")).toBe(
+          `Bearer ${token}`,
+        );
+        if (url.endsWith(`/accounts/${accountId}/tokens/verify`))
+          return Response.json({ success: true, result: { status: "active" } });
+        if (url.endsWith("/accounts?per_page=50"))
+          return Response.json(
+            { success: false, result: null, errors: [{ code: 10000 }] },
+            { status: 403 },
+          );
+        if (
+          url.endsWith(`/accounts/${accountId}/workers/scripts`) ||
+          url.includes("/d1/database")
+        )
+          return Response.json(
+            { success: false, result: null, errors: [{ code: 10000 }] },
+            { status: 403 },
+          );
+        if (url.endsWith("/r2/buckets/nexus-private-recorder"))
+          return Response.json(
+            { success: false, result: null, errors: [{ code: 10006 }] },
+            { status: 404 },
+          );
+        if (url.endsWith("/r2/buckets") && init?.method === "POST")
+          return Response.json({
+            success: true,
+            result: { name: "nexus-private-recorder" },
+          });
+        throw new Error(`Unexpected URL: ${url}`);
+      }),
+    );
+
+    await expect(
+      provisionR2Bucket(token, accountId, "nexus-private-recorder", "create"),
+    ).resolves.toEqual({ name: "nexus-private-recorder", created: true });
+  });
+
+  it("accepts a least-privilege user API token for R2 provisioning", async () => {
+    const accountId = "a".repeat(32);
+    const token = `user-${"x".repeat(48)}`;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith(`/accounts/${accountId}/tokens/verify`))
+          return Response.json(
+            { success: false, result: null, errors: [{ code: 10000 }] },
+            { status: 403 },
+          );
+        if (url.endsWith("/user/tokens/verify"))
+          return Response.json({ success: true, result: { status: "active" } });
+        if (url.endsWith("/accounts?per_page=50"))
+          return Response.json({
+            success: true,
+            result: [{ id: accountId }],
+          });
+        if (
+          url.endsWith(`/accounts/${accountId}/workers/scripts`) ||
+          url.includes("/d1/database")
+        )
+          return Response.json(
+            { success: false, result: null, errors: [{ code: 10000 }] },
+            { status: 403 },
+          );
+        if (url.endsWith("/r2/buckets/nexus-private-recorder"))
+          return Response.json(
+            { success: false, result: null, errors: [{ code: 10006 }] },
+            { status: 404 },
+          );
+        if (url.endsWith("/r2/buckets") && init?.method === "POST")
+          return Response.json({
+            success: true,
+            result: { name: "nexus-private-recorder" },
+          });
+        throw new Error(`Unexpected URL: ${url}`);
+      }),
+    );
+
+    await expect(
+      provisionR2Bucket(token, accountId, "nexus-private-recorder", "create"),
+    ).resolves.toEqual({ name: "nexus-private-recorder", created: true });
+  });
+
+  it("never recreates a preserved R2 bucket that is missing externally", async () => {
+    const accountId = "a".repeat(32);
+    const installationId = "install_meeting_recorder_preserved";
+    const digest = new Uint8Array(
+      await crypto.subtle.digest(
+        "SHA-256",
+        new TextEncoder().encode(installationId),
+      ),
+    );
+    const prefix = [...digest]
+      .slice(0, 6)
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("");
+    const bucketName = `nexus-${prefix}-meeting-recorder`;
+    const requests: Array<{ url: string; method: string }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        requests.push({ url, method: init?.method ?? "GET" });
+        if (url.endsWith(`/accounts/${accountId}/tokens/verify`))
+          return Response.json({ success: true, result: { status: "active" } });
+        if (
+          url.endsWith("/accounts?per_page=50") ||
+          url.endsWith(`/accounts/${accountId}/workers/scripts`) ||
+          url.includes("/d1/database")
+        )
+          return Response.json(
+            { success: false, result: null, errors: [{ code: 10000 }] },
+            { status: 403 },
+          );
+        if (url.endsWith(`/r2/buckets/${bucketName}`))
+          return Response.json(
+            { success: false, result: null, errors: [{ code: 10006 }] },
+            { status: 404 },
+          );
+        throw new Error(`Unexpected URL: ${url}`);
+      }),
+    );
+    const atomicStatements: SqlStatement[] = [];
+    const response = await installerApp({
+      atomicStatements,
+      operation: {
+        operationId: "pop_preserved_r2",
+        pluginId: "meeting_recorder",
+        type: "install",
+        targetVersion: "1.0.1",
+        state: "provisioning",
+        manifestSha256: "manifest",
+        workerSha256: "worker",
+        d1MigrationsSha256: "d1",
+        postgresMigrationsSha256: "postgres",
+        lastError: null,
+      },
+      runtimeResource: {
+        externalName: bucketName,
+        operationId: "pop_original_install",
+        status: "preserved",
+      },
+      reauth: {
+        userId: "usr_admin",
+        authMethod: "cookie",
+        credentialId: null,
+        expiresAt: Date.now() + 60_000,
+      },
+    }).request(
+      "/plugin-operations/pop_preserved_r2/provision-r2",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": "r2-pop-preserved",
+          "X-Reauth-Token": "reauth-test-token",
+        },
+        body: JSON.stringify({ token: `r2-${"x".repeat(48)}`, mode: "create" }),
+      },
+      {
+        APP_INSTALLATION_ID: installationId,
+        CF_ACCOUNT_ID: accountId,
+        DATABASE_PROVIDER: "d1",
+      } as CoreEnv,
+    );
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ code: "R2_BUCKET_MISSING" });
+    expect(
+      requests.some(
+        (request) =>
+          request.url.endsWith("/r2/buckets") && request.method === "POST",
+      ),
+    ).toBe(false);
+    expect(atomicStatements[0]?.params?.[0]).toBe("missing");
+  });
+
+  it("rejects R2 bucket names shorter than three characters", async () => {
+    await expect(
+      provisionR2Bucket(`r2-${"x".repeat(48)}`, "a".repeat(32), "ab", "create"),
+    ).rejects.toMatchObject({ code: "invalid" });
+  });
+
   it("validates and stores the first-plugin token without returning it", async () => {
     const accountId = "a".repeat(32);
-    const token = `test-${"x".repeat(48)}`;
+    const token = `cfat_${"x".repeat(300)}`;
     const requests: Array<{ url: string; method: string; body?: string }> = [];
     vi.stubGlobal(
       "fetch",

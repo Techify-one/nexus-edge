@@ -1,5 +1,5 @@
 import type { DatabasePort } from "@app/database";
-import type { PluginContext } from "@app/core-contract";
+import type { PluginContext, PluginInstallerContext } from "@app/core-contract";
 
 export type CrmBindings = {
   DATABASE_PROVIDER: "d1" | "postgres";
@@ -7,5 +7,9 @@ export type CrmBindings = {
   HYPERDRIVE?: Hyperdrive;
   DATABASE_URL?: string;
 };
-export type CrmVariables = { db: DatabasePort; pluginContext: PluginContext };
+export type CrmVariables = {
+  db: DatabasePort;
+  pluginContext?: PluginContext;
+  installerContext?: PluginInstallerContext;
+};
 export type CrmEnv = { Bindings: CrmBindings; Variables: CrmVariables };

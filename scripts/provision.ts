@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
+import { SCHEMA_VERSION } from "../packages/db-schema/src/common/index.js";
 import { Client } from "pg";
 
 const provider = process.argv[2];
@@ -9,6 +10,8 @@ if (provider !== "d1" && provider !== "postgres")
 const installationId =
   process.env.APP_INSTALLATION_ID ||
   `install_${randomUUID().replaceAll("-", "")}`;
+if (!/^install_[A-Za-z0-9_-]{20,80}$/u.test(installationId))
+  throw new Error("APP_INSTALLATION_ID is invalid.");
 
 if (provider === "d1") {
   const config =
@@ -29,7 +32,11 @@ if (provider === "d1") {
     ],
     { stdio: "inherit" },
   );
-  const sql = `INSERT OR IGNORE INTO app_settings(id,installation_id,database_provider,schema_version,bootstrap_state) VALUES ('system','${installationId}','d1',1,'open')`;
+  const sql = `INSERT INTO app_settings(id,installation_id,database_provider,schema_version,bootstrap_state)
+    VALUES ('system','${installationId}','d1',${SCHEMA_VERSION},'open')
+    ON CONFLICT(id) DO UPDATE SET schema_version = excluded.schema_version
+      WHERE app_settings.installation_id = excluded.installation_id
+        AND app_settings.database_provider = excluded.database_provider`;
   execFileSync(
     "pnpm",
     [
@@ -62,8 +69,12 @@ if (provider === "d1") {
         readFileSync(`${migrationsDirectory}/${migration}`, "utf8"),
       );
     await client.query(
-      "INSERT INTO app_settings(id,installation_id,database_provider,schema_version,bootstrap_state) VALUES ('system',$1,'postgres',1,'open') ON CONFLICT (id) DO NOTHING",
-      [installationId],
+      `INSERT INTO app_settings(id,installation_id,database_provider,schema_version,bootstrap_state)
+       VALUES ('system',$1,'postgres',$2,'open')
+       ON CONFLICT (id) DO UPDATE SET schema_version = excluded.schema_version
+         WHERE app_settings.installation_id = excluded.installation_id
+           AND app_settings.database_provider = excluded.database_provider`,
+      [installationId, SCHEMA_VERSION],
     );
   } finally {
     await client.end();

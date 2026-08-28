@@ -1,5 +1,5 @@
 import type { DatabasePort } from "@app/database";
-import type { PluginContext } from "@app/core-contract";
+import type { PluginContext, PluginInstallerContext } from "@app/core-contract";
 
 export type MetaAdsBindings = {
   DATABASE_PROVIDER: "d1" | "postgres";
@@ -12,7 +12,8 @@ export type MetaAdsBindings = {
 
 export type MetaAdsVariables = {
   db: DatabasePort;
-  pluginContext: PluginContext;
+  pluginContext?: PluginContext;
+  installerContext?: PluginInstallerContext;
 };
 
 export type MetaAdsEnv = {

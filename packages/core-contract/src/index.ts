@@ -4,10 +4,17 @@ export type PluginContext = {
   userId: string;
   permissions: string[];
   requestId: string;
+  origin?: string;
 };
 
 export type PluginPublicContext = {
   pluginId: string;
+  requestId: string;
+};
+
+export type PluginInstallerContext = {
+  pluginId: string;
+  operationId: string;
   requestId: string;
 };
 

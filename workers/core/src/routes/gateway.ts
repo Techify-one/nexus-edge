@@ -43,13 +43,17 @@ gatewayRoutes.all("/:pluginId/*", async (c) => {
       pluginId,
     ),
     requestId: c.get("requestId"),
+    origin: new URL(c.req.url).origin,
   };
   const prefix = `/api/v1/p/${pluginId}`;
   const incoming = new URL(c.req.url);
-  const internalUrl = new URL(
-    incoming.pathname.slice(prefix.length) || "/",
-    "https://plugin.internal",
-  );
+  const forwardedPath = incoming.pathname.slice(prefix.length) || "/";
+  if (
+    forwardedPath === "/__installer" ||
+    forwardedPath.startsWith("/__installer/")
+  )
+    throw new AppError(404, "NOT_FOUND", "Resource not found.");
+  const internalUrl = new URL(forwardedPath, "https://plugin.internal");
   internalUrl.search = incoming.search;
   const idempotency =
     c.req.method === "POST"
@@ -72,6 +76,8 @@ gatewayRoutes.all("/:pluginId/*", async (c) => {
   headers.delete("Cookie");
   headers.delete("X-API-Key");
   headers.delete("X-Reauth-Token");
+  headers.delete("X-Plugin-Installer-Context");
+  headers.delete("X-Plugin-Public-Context");
   headers.set("X-Plugin-Context", encode(context));
   const response = await (binding as Fetcher).fetch(
     new Request(internalUrl, {

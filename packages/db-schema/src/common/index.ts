@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 export const SYSTEM_SETTINGS_ID = "system";
 export const INSTALLER_LOCK_ID = "global";
 
