@@ -11,8 +11,14 @@ import {
   collapsedRecognitionMatches,
   normalizeRecognitionForExpected,
   parseSpelling,
+  recognizeSpelling,
   scoreAttempt,
 } from "../src/spelling.js";
+import {
+  DEFAULT_TRANSCRIPTION_MODEL,
+  resolveTranscriptionModel,
+  TRANSCRIPTION_MODELS,
+} from "../src/transcription-models.js";
 import { PHASES } from "../src/words.js";
 
 describe("Soletrando plugin", () => {
@@ -22,6 +28,13 @@ describe("Soletrando plugin", () => {
     );
     expect(manifest.id).toBe("soletrando");
     expect(manifest.runtimeBindings).toEqual(["ai"]);
+    expect(manifest.version).toBe("1.2.0");
+    expect(manifest.permissions).toEqual(
+      expect.arrayContaining([
+        "soletrando.settings.read",
+        "soletrando.settings.update",
+      ]),
+    );
     expect(manifest.menu).toEqual([
       { title: "Soletrando", routeKey: "soletrando.children" },
     ]);
@@ -107,6 +120,26 @@ describe("Soletrando plugin", () => {
     expect(normalizeRecognitionForExpected("H O R I A", "CASA")).toBe("HORIA");
   });
 
+  it("rejects ambiguous transcripts instead of dropping unknown tokens", () => {
+    expect(recognizeSpelling("bê ó ele a", "BOLA")).toBe("BOLA");
+    expect(recognizeSpelling("bola", "BOLA")).toBe("BOLA");
+    expect(recognizeSpelling("bê ó ruído ele a", "BOLA")).toBe("");
+    expect(recognizeSpelling("boa", "BOLA")).toBe("");
+  });
+
+  it("allows only the two administrator-selectable transcription models", () => {
+    expect(TRANSCRIPTION_MODELS).toEqual([
+      "@cf/openai/whisper-large-v3-turbo",
+      "@cf/deepgram/nova-3",
+    ]);
+    expect(resolveTranscriptionModel("@cf/deepgram/nova-3")).toBe(
+      "@cf/deepgram/nova-3",
+    );
+    expect(resolveTranscriptionModel("unsupported")).toBe(
+      DEFAULT_TRANSCRIPTION_MODEL,
+    );
+  });
+
   it("scores accuracy and speed without using AI for the decision", () => {
     expect(scoreAttempt("BOLA", "BOLA", 4_000)).toEqual({
       correct: true,
@@ -149,10 +182,11 @@ describe("Soletrando plugin", () => {
   });
 
   it("never persists audio and never renders the secret word in practice", () => {
-    const migration = readFileSync(
-      "plugins/soletrando/migrations/d1/0001_init.sql",
-      "utf8",
-    );
+    const migration = ["0001_init.sql", "0002_transcription_settings.sql"]
+      .map((name) =>
+        readFileSync(`plugins/soletrando/migrations/d1/${name}`, "utf8"),
+      )
+      .join("\n");
     const practice = readFileSync(
       "plugins/soletrando/frontend/PracticePage.tsx",
       "utf8",
@@ -193,12 +227,36 @@ describe("Soletrando plugin", () => {
     expect(transcription).toContain(
       '{ signal, tags: ["soletrando", "transcription"] }',
     );
+    expect(transcription).toContain("@cf/deepgram/nova-3");
+    expect(transcription).toContain('language: "pt-BR"');
+    expect(transcription).toContain("mip_opt_out: true");
     expect(transcription).toContain(
-      "Nunca acrescente E antes de R nem I antes de A",
+      "Transcreva literalmente os nomes das letras",
     );
     expect(route).toContain('event: "transcription_failed"');
     expect(route).toContain('event: "transcription_completed"');
     expect(route).toContain('return "AI_DAILY_LIMIT"');
+  });
+
+  it("keeps model selection in the administrator interface only", () => {
+    const admin = readFileSync(
+      "plugins/soletrando/frontend/ChildrenPage.tsx",
+      "utf8",
+    );
+    const practice = readFileSync(
+      "plugins/soletrando/frontend/PracticePage.tsx",
+      "utf8",
+    );
+    const route = readFileSync("plugins/soletrando/src/index.ts", "utf8");
+
+    expect(admin).toContain("/settings/transcription");
+    expect(admin).toContain('can("soletrando.settings.update")');
+    expect(practice).not.toContain("/settings/transcription");
+    expect(practice).not.toContain("@cf/deepgram/nova-3");
+    expect(route).toContain('requirePermission(c, "soletrando.settings.read")');
+    expect(route).toContain(
+      'requirePermission(c, "soletrando.settings.update")',
+    );
   });
 
   it("keeps the installable child app scoped away from administration", () => {

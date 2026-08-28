@@ -1,4 +1,5 @@
 import type { DatabasePort } from "@app/database";
+import { type TranscriptionModel } from "./transcription-models.js";
 export type ChildSummary = {
     id: string;
     name: string;
@@ -39,6 +40,14 @@ export type AttemptRecord = {
 export declare class SoletrandoRepository {
     private readonly db;
     constructor(db: DatabasePort);
+    transcriptionSettings(): Promise<{
+        transcriptionModel: "@cf/deepgram/nova-3" | "@cf/openai/whisper-large-v3-turbo";
+        updatedAt: {} | null;
+    }>;
+    updateTranscriptionSettings(transcriptionModel: TranscriptionModel, userId: string, requestId: string): Promise<{
+        transcriptionModel: "@cf/deepgram/nova-3" | "@cf/openai/whisper-large-v3-turbo";
+        updatedAt: number | Date;
+    }>;
     overview(search?: string): Promise<{
         children: {
             id: string;

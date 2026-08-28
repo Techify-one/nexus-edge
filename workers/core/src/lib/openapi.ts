@@ -358,6 +358,19 @@ export const OPENAPI_DOCUMENT = {
         },
       },
     },
+    "/api/v1/p/soletrando/settings/transcription": {
+      get: {
+        responses: {
+          "200": { description: "Active transcription model" },
+        },
+      },
+      put: {
+        parameters: [{ name: "Idempotency-Key", in: "header", required: true }],
+        responses: {
+          "200": { description: "Transcription model updated" },
+        },
+      },
+    },
     "/api/v1/p/soletrando/children/{childId}": {
       get: {
         parameters: [{ name: "childId", in: "path", required: true }],

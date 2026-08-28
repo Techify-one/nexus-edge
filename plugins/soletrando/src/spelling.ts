@@ -160,6 +160,20 @@ export function normalizeRecognitionForExpected(
   return matches(0, 0) ? target : actual;
 }
 
+export function recognizeSpelling(
+  transcript: string,
+  expected: string,
+): string {
+  const parsed = parseSpelling(transcript);
+  if (!parsed.ambiguous)
+    return normalizeRecognitionForExpected(parsed.letters, expected);
+
+  const collapsed = collapseRecognition(transcript);
+  if (!collapsed) return "";
+  const normalized = normalizeRecognitionForExpected(collapsed, expected);
+  return normalized === collapseRecognition(expected) ? normalized : "";
+}
+
 export function levenshteinDistance(left: string, right: string): number {
   const rows = left.length + 1;
   const columns = right.length + 1;

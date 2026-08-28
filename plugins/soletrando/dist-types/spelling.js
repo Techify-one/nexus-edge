@@ -134,6 +134,16 @@ export function normalizeRecognitionForExpected(recognized, expected) {
     };
     return matches(0, 0) ? target : actual;
 }
+export function recognizeSpelling(transcript, expected) {
+    const parsed = parseSpelling(transcript);
+    if (!parsed.ambiguous)
+        return normalizeRecognitionForExpected(parsed.letters, expected);
+    const collapsed = collapseRecognition(transcript);
+    if (!collapsed)
+        return "";
+    const normalized = normalizeRecognitionForExpected(collapsed, expected);
+    return normalized === collapseRecognition(expected) ? normalized : "";
+}
 export function levenshteinDistance(left, right) {
     const rows = left.length + 1;
     const columns = right.length + 1;

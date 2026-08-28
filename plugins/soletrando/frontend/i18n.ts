@@ -3,6 +3,24 @@ export const soletrandoFrontendMessages = {
     "soletrando.title": "Soletrando",
     "soletrando.description":
       "Cadastre crianças, compartilhe links individuais e acompanhe o progresso.",
+    "soletrando.settings.title": "Reconhecimento de voz",
+    "soletrando.settings.description":
+      "Escolha o modelo usado nas próximas gravações. Esta configuração aparece somente no painel administrativo.",
+    "soletrando.settings.model": "Modelo de transcrição",
+    "soletrando.settings.whisper": "Whisper Large V3 Turbo",
+    "soletrando.settings.nova": "Deepgram Nova-3",
+    "soletrando.settings.whisperDescription":
+      "Opção padrão, com menor custo e prompt específico para nomes de letras em português.",
+    "soletrando.settings.novaDescription":
+      "Alternativa otimizada para português brasileiro e áudio desafiador, com custo de processamento maior.",
+    "soletrando.settings.save": "Aplicar modelo",
+    "soletrando.settings.saved":
+      "Modelo atualizado para as próximas gravações.",
+    "permissions.soletrando.settings.read":
+      "Visualizar configuração de transcrição",
+    "permissions.soletrando.settings.update": "Alterar modelo de transcrição",
+    "permissionGroups.soletrando.settings":
+      "Soletrando — Reconhecimento de voz",
     "soletrando.children": "Crianças",
     "soletrando.completedPhases": "Fases concluídas",
     "soletrando.completedSessions": "Sessões concluídas",
@@ -135,6 +153,22 @@ export const soletrandoFrontendMessages = {
     "soletrando.title": "Spelling Practice",
     "soletrando.description":
       "Register children, share individual links, and follow their progress.",
+    "soletrando.settings.title": "Voice recognition",
+    "soletrando.settings.description":
+      "Choose the model used for future recordings. This setting is available only in the administrator panel.",
+    "soletrando.settings.model": "Transcription model",
+    "soletrando.settings.whisper": "Whisper Large V3 Turbo",
+    "soletrando.settings.nova": "Deepgram Nova-3",
+    "soletrando.settings.whisperDescription":
+      "Default option with lower cost and a prompt tailored to Portuguese letter names.",
+    "soletrando.settings.novaDescription":
+      "Alternative optimized for Brazilian Portuguese and challenging audio, with higher processing cost.",
+    "soletrando.settings.save": "Apply model",
+    "soletrando.settings.saved": "Model updated for future recordings.",
+    "permissions.soletrando.settings.read": "View transcription settings",
+    "permissions.soletrando.settings.update": "Change transcription model",
+    "permissionGroups.soletrando.settings":
+      "Spelling Practice — Voice recognition",
     "soletrando.children": "Children",
     "soletrando.completedPhases": "Completed phases",
     "soletrando.completedSessions": "Completed sessions",

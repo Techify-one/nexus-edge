@@ -1,17 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, Link2, Pencil, Plus, Search, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ConfigurableDataTable } from "../../../frontend/src/components/ui/configurable-data-table.js";
 import { Modal } from "../../../frontend/src/components/ui/modal.js";
 import {
   Button,
+  Card,
   DataValue,
   Input,
   Label,
   MetricCard,
   PageHeader,
+  Select,
   Skeleton,
 } from "../../../frontend/src/components/ui/index.js";
 import { can } from "../../../frontend/src/lib/ability.js";
@@ -21,7 +23,11 @@ import {
   recentReauthHeaders,
 } from "../../../frontend/src/lib/api/core-client.js";
 import { useI18n } from "../../../frontend/src/i18n/index.js";
-import type { ChildSummary, Overview } from "./types.js";
+import {
+  DEFAULT_TRANSCRIPTION_MODEL,
+  type TranscriptionModel,
+} from "../src/transcription-models.js";
+import type { ChildSummary, Overview, TranscriptionSettings } from "./types.js";
 
 const childLink = (token: string): string =>
   `${window.location.origin}/soletrando/c/${token}`;
@@ -32,13 +38,42 @@ export default function ChildrenPage() {
   const client = useQueryClient();
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<ChildSummary | "new" | null>(null);
+  const [transcriptionModel, setTranscriptionModel] =
+    useState<TranscriptionModel>(DEFAULT_TRANSCRIPTION_MODEL);
   const current = selected === "new" ? null : selected;
+  const canReadSettings = can("soletrando.settings.read");
+  const canUpdateSettings = can("soletrando.settings.update");
   const overview = useQuery({
     queryKey: ["soletrando", "overview", search],
     queryFn: () =>
       api<Overview>(
         `/api/v1/p/soletrando/overview?search=${encodeURIComponent(search)}`,
       ),
+  });
+  const settings = useQuery({
+    queryKey: ["soletrando", "settings", "transcription"],
+    queryFn: () =>
+      api<TranscriptionSettings>("/api/v1/p/soletrando/settings/transcription"),
+    enabled: canReadSettings,
+  });
+  useEffect(() => {
+    if (settings.data) setTranscriptionModel(settings.data.transcriptionModel);
+  }, [settings.data]);
+  const updateSettings = useMutation({
+    mutationFn: (model: TranscriptionModel) =>
+      api<TranscriptionSettings>(
+        "/api/v1/p/soletrando/settings/transcription",
+        {
+          method: "PUT",
+          headers: { "Idempotency-Key": idempotencyKey() },
+          body: JSON.stringify({ transcriptionModel: model }),
+        },
+      ),
+    onSuccess: (data) => {
+      client.setQueryData(["soletrando", "settings", "transcription"], data);
+      toast.success(t("soletrando.settings.saved"));
+    },
+    onError: (cause: Error) => toast.error(cause.message),
   });
   const save = useMutation({
     mutationFn: (name: string) =>
@@ -110,6 +145,64 @@ export default function ChildrenPage() {
           ) : undefined
         }
       />
+      {canReadSettings && (
+        <Card className="mb-6">
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,420px)] lg:items-end">
+            <div>
+              <h2 className="text-base font-semibold text-slate-900">
+                {t("soletrando.settings.title")}
+              </h2>
+              <p className="mt-1 text-sm text-slate-600">
+                {t("soletrando.settings.description")}
+              </p>
+              <p className="mt-2 text-xs text-slate-500">
+                {t(
+                  transcriptionModel === "@cf/deepgram/nova-3"
+                    ? "soletrando.settings.novaDescription"
+                    : "soletrando.settings.whisperDescription",
+                )}
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+              <div>
+                <Label htmlFor="soletrando-transcription-model">
+                  {t("soletrando.settings.model")}
+                </Label>
+                <Select
+                  id="soletrando-transcription-model"
+                  value={transcriptionModel}
+                  disabled={settings.isPending || !canUpdateSettings}
+                  onChange={(event) =>
+                    setTranscriptionModel(
+                      event.target.value as TranscriptionModel,
+                    )
+                  }
+                >
+                  <option value="@cf/openai/whisper-large-v3-turbo">
+                    {t("soletrando.settings.whisper")}
+                  </option>
+                  <option value="@cf/deepgram/nova-3">
+                    {t("soletrando.settings.nova")}
+                  </option>
+                </Select>
+              </div>
+              {canUpdateSettings && (
+                <Button
+                  type="button"
+                  busy={updateSettings.isPending}
+                  disabled={
+                    settings.isPending ||
+                    transcriptionModel === settings.data?.transcriptionModel
+                  }
+                  onClick={() => updateSettings.mutate(transcriptionModel)}
+                >
+                  {t("soletrando.settings.save")}
+                </Button>
+              )}
+            </div>
+          </div>
+        </Card>
+      )}
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label={t("soletrando.children")}

@@ -8,17 +8,12 @@ import {
   isPerfectPhase,
   summarizeSessionProgress,
 } from "./session-progress.js";
-import {
-  collapseRecognition,
-  collapsedRecognitionMatches,
-  normalizeRecognitionForExpected,
-  parseSpelling,
-  scoreAttempt,
-} from "./spelling.js";
+import { recognizeSpelling, scoreAttempt } from "./spelling.js";
 import {
   transcribeSpelling,
   TranscriptionUnavailableError,
 } from "./transcription.js";
+import { TRANSCRIPTION_MODELS } from "./transcription-models.js";
 import { getPhase, getWord, TOTAL_PHASES } from "./words.js";
 import {
   SOLETRANDO_ICON_SVG,
@@ -32,6 +27,9 @@ const childUpdateInput = childInput.extend({
   version: z.number().int().positive(),
 });
 const phaseInput = z.object({ phase: z.number().int().min(1).max(4) });
+const transcriptionSettingsInput = z.object({
+  transcriptionModel: z.enum(TRANSCRIPTION_MODELS),
+});
 const tokenPattern = /^[A-Za-z0-9_-]{32,128}$/u;
 
 const transcriptionFailureCode = (cause: unknown): string => {
@@ -82,7 +80,7 @@ const isPublicContext = (value: unknown): value is PluginPublicContext => {
 };
 
 app.get("/health", (c) =>
-  c.json({ ok: true, plugin: "soletrando", version: "1.1.5" }),
+  c.json({ ok: true, plugin: "soletrando", version: "1.2.0" }),
 );
 
 app.use("/*", async (c, next) => {
@@ -172,6 +170,21 @@ export const soletrandoAdminRoutes = new Hono<SoletrandoEnv>()
   .get("/overview", async (c) => {
     requirePermission(c, "soletrando.child.read");
     return c.json(await repository(c).overview(c.req.query("search")));
+  })
+  .get("/settings/transcription", async (c) => {
+    requirePermission(c, "soletrando.settings.read");
+    return c.json(await repository(c).transcriptionSettings());
+  })
+  .put("/settings/transcription", async (c) => {
+    const context = requirePermission(c, "soletrando.settings.update");
+    const input = transcriptionSettingsInput.parse(await c.req.json());
+    return c.json(
+      await repository(c).updateTranscriptionSettings(
+        input.transcriptionModel,
+        context.userId,
+        context.requestId,
+      ),
+    );
   })
   .post("/children", async (c) => {
     const context = requirePermission(c, "soletrando.child.create");
@@ -414,10 +427,13 @@ export const soletrandoPublicRoutes = new Hono<SoletrandoEnv>()
         "This word was already answered.",
       );
 
+    const settings = await repository(c).transcriptionSettings();
     let transcript: string;
     const transcriptionStartedAt = performance.now();
     try {
-      transcript = await transcribeSpelling(audio, c.env);
+      transcript = await transcribeSpelling(audio, c.env, {
+        model: settings.transcriptionModel,
+      });
     } catch (cause) {
       console.error(
         JSON.stringify({
@@ -425,6 +441,7 @@ export const soletrandoPublicRoutes = new Hono<SoletrandoEnv>()
           event: "transcription_failed",
           requestId: c.get("publicContext")?.requestId,
           code: transcriptionFailureCode(cause),
+          model: settings.transcriptionModel,
           durationMs: Math.round(performance.now() - transcriptionStartedAt),
           audioBytes: audio.size,
         }),
@@ -440,20 +457,13 @@ export const soletrandoPublicRoutes = new Hono<SoletrandoEnv>()
         plugin: "soletrando",
         event: "transcription_completed",
         requestId: c.get("publicContext")?.requestId,
+        model: settings.transcriptionModel,
         durationMs: Math.round(performance.now() - transcriptionStartedAt),
         audioBytes: audio.size,
         aiGatewayLogId: c.env.AI?.aiGatewayLogId ?? undefined,
       }),
     );
-    const parsed = parseSpelling(transcript);
-    const collapsedMatch = collapsedRecognitionMatches(transcript, expected);
-    const rawRecognizedLetters =
-      parsed.letters ||
-      (collapsedMatch ? expected : collapseRecognition(transcript));
-    const recognizedLetters = normalizeRecognitionForExpected(
-      rawRecognizedLetters,
-      expected,
-    );
+    const recognizedLetters = recognizeSpelling(transcript, expected);
     if (!recognizedLetters)
       return c.json(
         {

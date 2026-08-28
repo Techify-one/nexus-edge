@@ -2,6 +2,10 @@ import type { DatabasePort } from "@app/database";
 import { createId } from "@app/core-contract";
 import { PHASES, TOTAL_PHASES } from "./words.js";
 import { summarizeSessionProgress } from "./session-progress.js";
+import {
+  resolveTranscriptionModel,
+  type TranscriptionModel,
+} from "./transcription-models.js";
 
 const dbTime = (db: DatabasePort, value = Date.now()): number | Date =>
   db.provider === "d1" ? value : new Date(value);
@@ -20,10 +24,19 @@ const auditStatement = (
   userId: string,
   action: string,
   resourceId: string,
+  resourceType = "soletrando.child",
 ) => ({
   sql: `INSERT INTO audit_log(id,request_id,user_id,auth_method,action,resource_type,resource_id,metadata_json,created_at)
-        VALUES (?,?,?,'internal',?,'soletrando.child',?,'{}',?)`,
-  params: [createId("aud"), requestId, userId, action, resourceId, dbTime(db)],
+        VALUES (?,?,?,'internal',?,?,?,'{}',?)`,
+  params: [
+    createId("aud"),
+    requestId,
+    userId,
+    action,
+    resourceType,
+    resourceId,
+    dbTime(db),
+  ],
 });
 
 export type ChildSummary = {
@@ -68,6 +81,48 @@ export type AttemptRecord = {
 
 export class SoletrandoRepository {
   constructor(private readonly db: DatabasePort) {}
+
+  async transcriptionSettings() {
+    const row = await this.db.first<{
+      transcriptionModel: string;
+      updatedAt: unknown;
+    }>(
+      `SELECT transcription_model AS "transcriptionModel",updated_at AS "updatedAt"
+         FROM soletrando_settings WHERE id='transcription'`,
+    );
+    return {
+      transcriptionModel: resolveTranscriptionModel(row?.transcriptionModel),
+      updatedAt: row?.updatedAt ?? null,
+    };
+  }
+
+  async updateTranscriptionSettings(
+    transcriptionModel: TranscriptionModel,
+    userId: string,
+    requestId: string,
+  ) {
+    const updatedAt = dbTime(this.db);
+    await this.db.atomic([
+      {
+        sql: `INSERT INTO soletrando_settings(id,transcription_model,updated_by,updated_at)
+              VALUES ('transcription',?,?,?)
+              ON CONFLICT(id) DO UPDATE SET
+                transcription_model=excluded.transcription_model,
+                updated_by=excluded.updated_by,
+                updated_at=excluded.updated_at`,
+        params: [transcriptionModel, userId, updatedAt],
+      },
+      auditStatement(
+        this.db,
+        requestId,
+        userId,
+        "soletrando.settings.updated",
+        "transcription",
+        "soletrando.settings",
+      ),
+    ]);
+    return { transcriptionModel, updatedAt };
+  }
 
   async overview(search?: string) {
     const term = search?.trim() ? `%${search.trim()}%` : null;

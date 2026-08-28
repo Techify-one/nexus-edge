@@ -1,3 +1,10 @@
+import type { TranscriptionModel } from "../src/transcription-models.js";
+
+export type TranscriptionSettings = {
+  transcriptionModel: TranscriptionModel;
+  updatedAt: string | number | null;
+};
+
 export type ChildSummary = {
   id: string;
   name: string;

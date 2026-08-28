@@ -6,9 +6,11 @@ público individual em `/soletrando/c/<token>`.
 
 O Worker do plugin continua privado e só é chamado pelo Core por Service
 Binding. O gateway público do Core remove credenciais recebidas, aplica limite
-de requisições e envia apenas um contexto interno. Workers AI transcreve o
-áudio em memória; o código determinístico avalia a sequência de letras. O
-áudio nunca é persistido.
+de requisições e envia apenas um contexto interno. O administrador escolhe no
+painel entre Whisper Large V3 Turbo e Deepgram Nova-3; Workers AI transcreve o
+áudio em memória e o código determinístico avalia a sequência de letras. O
+áudio nunca é persistido. Para o Nova-3, o Worker solicita `pt-BR` e opt-out do
+programa de melhoria do modelo.
 
 ## Contratos preservados
 
@@ -21,6 +23,8 @@ de requisições e envia apenas um contexto interno. Workers AI transcreve o
 - uma sequência reconhecida diferente recebe zero em assertividade, velocidade
   e pontos, com feedback claro de erro;
 - somente áudio vazio ou indecifrável pede nova gravação sem criar tentativa;
+- transcrições com tokens desconhecidos são tratadas como ambíguas e pedem uma
+  nova gravação, sem descartar partes silenciosamente;
 - sessões ativas retomam na primeira posição ainda não respondida;
 - a próxima fase só é liberada após dez acertos consecutivos na mesma rodada;
 - a área infantil mantém manifesto e Service Worker instaláveis, restritos ao

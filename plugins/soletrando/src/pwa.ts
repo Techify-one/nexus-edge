@@ -5,7 +5,7 @@ export const SOLETRANDO_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" view
 </svg>`;
 
 export const SOLETRANDO_SERVICE_WORKER = `const CACHE_PREFIX = "soletrando-shell-";
-const CACHE = CACHE_PREFIX + "v1.1.5";
+const CACHE = CACHE_PREFIX + "v1.2.0";
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => {
   event.waitUntil(
