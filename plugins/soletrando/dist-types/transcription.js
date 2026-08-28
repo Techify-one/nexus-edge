@@ -5,17 +5,18 @@ export class TranscriptionUnavailableError extends Error {
 }
 const spellingPrompt = "Soletração infantil em português brasileiro. Transcreva literalmente os nomes das letras, na ordem falada, separados por vírgulas. Não una as letras para formar uma palavra, não complete e não corrija a soletração. Vocabulário: a, bê, cê, dê, e, efe, gê, agá, i, jota, cá, ele, eme, ene, ó, pê, quê, erre, esse, tê, u, vê, dáblio, xis, ípsilon, zê.";
 const novaTranscript = (result) => result.results?.channels?.[0]?.alternatives?.[0]?.transcript?.trim() ?? "";
+const novaContentType = (audio) => audio.type.split(";", 1)[0]?.trim().toLowerCase() ||
+    "application/octet-stream";
 export async function transcribeSpelling(audio, env, options = {}) {
     if (!env.AI)
         throw new TranscriptionUnavailableError("A transcrição está temporariamente indisponível.");
     const model = options.model ?? DEFAULT_TRANSCRIPTION_MODEL;
     const signal = options.signal ?? AbortSignal.timeout(TRANSCRIPTION_TIMEOUT_MS);
-    const audioBytes = await audio.arrayBuffer();
     const transcript = model === "@cf/deepgram/nova-3"
         ? novaTranscript(await env.AI.run(model, {
             audio: {
-                body: audioBytes,
-                contentType: audio.type || "application/octet-stream",
+                body: audio.stream(),
+                contentType: novaContentType(audio),
             },
             language: "pt-BR",
             mode: "general",
@@ -26,7 +27,7 @@ export async function transcribeSpelling(audio, env, options = {}) {
             mip_opt_out: true,
         }, { signal, tags: ["soletrando", "transcription"] }))
         : ((await env.AI.run(model, {
-            audio: Buffer.from(audioBytes).toString("base64"),
+            audio: Buffer.from(await audio.arrayBuffer()).toString("base64"),
             task: "transcribe",
             language: "pt",
             vad_filter: true,

@@ -20,6 +20,10 @@ const spellingPrompt =
 const novaTranscript = (result: Ai_Cf_Deepgram_Nova_3_Output): string =>
   result.results?.channels?.[0]?.alternatives?.[0]?.transcript?.trim() ?? "";
 
+const novaContentType = (audio: File): string =>
+  audio.type.split(";", 1)[0]?.trim().toLowerCase() ||
+  "application/octet-stream";
+
 export async function transcribeSpelling(
   audio: File,
   env: SoletrandoBindings,
@@ -32,7 +36,6 @@ export async function transcribeSpelling(
   const model = options.model ?? DEFAULT_TRANSCRIPTION_MODEL;
   const signal =
     options.signal ?? AbortSignal.timeout(TRANSCRIPTION_TIMEOUT_MS);
-  const audioBytes = await audio.arrayBuffer();
   const transcript =
     model === "@cf/deepgram/nova-3"
       ? novaTranscript(
@@ -40,8 +43,8 @@ export async function transcribeSpelling(
             model,
             {
               audio: {
-                body: audioBytes,
-                contentType: audio.type || "application/octet-stream",
+                body: audio.stream(),
+                contentType: novaContentType(audio),
               },
               language: "pt-BR",
               mode: "general",
@@ -58,7 +61,7 @@ export async function transcribeSpelling(
           await env.AI.run(
             model,
             {
-              audio: Buffer.from(audioBytes).toString("base64"),
+              audio: Buffer.from(await audio.arrayBuffer()).toString("base64"),
               task: "transcribe",
               language: "pt",
               vad_filter: true,

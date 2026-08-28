@@ -19,6 +19,7 @@ import {
   resolveTranscriptionModel,
   TRANSCRIPTION_MODELS,
 } from "../src/transcription-models.js";
+import { transcribeSpelling } from "../src/transcription.js";
 import { PHASES } from "../src/words.js";
 
 describe("Soletrando plugin", () => {
@@ -28,7 +29,7 @@ describe("Soletrando plugin", () => {
     );
     expect(manifest.id).toBe("soletrando");
     expect(manifest.runtimeBindings).toEqual(["ai"]);
-    expect(manifest.version).toBe("1.2.0");
+    expect(manifest.version).toBe("1.2.1");
     expect(manifest.permissions).toEqual(
       expect.arrayContaining([
         "soletrando.settings.read",
@@ -138,6 +139,33 @@ describe("Soletrando plugin", () => {
     expect(resolveTranscriptionModel("unsupported")).toBe(
       DEFAULT_TRANSCRIPTION_MODEL,
     );
+  });
+
+  it("streams browser audio to Nova-3 using its container MIME type", async () => {
+    let receivedInput: Ai_Cf_Deepgram_Nova_3_Input | undefined;
+    const env = {
+      AI: {
+        run: async (_model: string, input: Ai_Cf_Deepgram_Nova_3_Input) => {
+          receivedInput = input;
+          return {
+            results: {
+              channels: [{ alternatives: [{ transcript: "bê ó ele a" }] }],
+            },
+          };
+        },
+      } as unknown as Ai,
+    };
+    const audio = new File([new Uint8Array([1, 2, 3])], "spelling.webm", {
+      type: "audio/webm;codecs=opus",
+    });
+
+    await expect(
+      transcribeSpelling(audio, env as never, {
+        model: "@cf/deepgram/nova-3",
+      }),
+    ).resolves.toBe("bê ó ele a");
+    expect(receivedInput?.audio.contentType).toBe("audio/webm");
+    expect(receivedInput?.audio.body).toBeInstanceOf(ReadableStream);
   });
 
   it("scores accuracy and speed without using AI for the decision", () => {
