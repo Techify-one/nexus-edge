@@ -711,9 +711,9 @@ export async function mergeCoreServiceBinding(
   bindingName: string,
   workerName: string,
 ): Promise<void> {
-  const bindings = (await getCoreBindings(env)).filter(
-    (binding) => binding.name !== bindingName,
-  );
+  const bindings: Binding[] = (await getCoreBindings(env))
+    .filter((binding) => binding.name !== bindingName)
+    .map((binding) => ({ type: "inherit", name: binding.name }));
   bindings.push({ type: "service", name: bindingName, service: workerName });
   await replaceCoreBindings(env, bindings);
   const verified = await getCoreBindings(env);
@@ -731,9 +731,9 @@ export async function removeCoreServiceBinding(
 ): Promise<void> {
   await replaceCoreBindings(
     env,
-    (await getCoreBindings(env)).filter(
-      (binding) => binding.name !== bindingName,
-    ),
+    (await getCoreBindings(env))
+      .filter((binding) => binding.name !== bindingName)
+      .map((binding) => ({ type: "inherit", name: binding.name })),
   );
 }
 

@@ -9,6 +9,7 @@ import type { CoreEnv, HonoEnv } from "../workers/core/src/env.js";
 import {
   attachPluginR2Binding,
   deletePluginSecret,
+  mergeCoreServiceBinding,
   pluginSecretConfigured,
   provisionR2Bucket,
   putPluginSecret,
@@ -1435,6 +1436,68 @@ describe("Cloudflare plugin bindings", () => {
     );
 
     expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("inherits existing Core bindings when adding a plugin service", async () => {
+    let reads = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "GET") {
+          reads += 1;
+          return Response.json({
+            success: true,
+            result: {
+              bindings:
+                reads === 1
+                  ? [
+                      { type: "assets", name: "ASSETS" },
+                      { type: "secret_text", name: "BETTER_AUTH_SECRET" },
+                      { type: "d1", name: "DB", id: "database-id" },
+                      {
+                        type: "service",
+                        name: "PLUGIN_SOLETRANDO",
+                        service: "app-plugin-soletrando",
+                        environment: "production",
+                      },
+                    ]
+                  : [
+                      {
+                        type: "service",
+                        name: "PLUGIN_MEETING_RECORDER",
+                        service: "scoped-meeting-recorder",
+                      },
+                    ],
+            },
+          });
+        }
+        const settings = (init?.body as FormData).get("settings") as Blob;
+        expect(JSON.parse(await settings.text())).toEqual({
+          bindings: [
+            { type: "inherit", name: "ASSETS" },
+            { type: "inherit", name: "BETTER_AUTH_SECRET" },
+            { type: "inherit", name: "DB" },
+            { type: "inherit", name: "PLUGIN_SOLETRANDO" },
+            {
+              type: "service",
+              name: "PLUGIN_MEETING_RECORDER",
+              service: "scoped-meeting-recorder",
+            },
+          ],
+        });
+        return Response.json({ success: true, result: {} });
+      }),
+    );
+
+    await mergeCoreServiceBinding(
+      {
+        CF_API_TOKEN: "test-token",
+        CF_ACCOUNT_ID: "test-account",
+        CORE_WORKER_NAME: "test-core",
+      } as CoreEnv,
+      "PLUGIN_MEETING_RECORDER",
+      "scoped-meeting-recorder",
+    );
   });
 
   it("writes, detects, and deletes Worker secrets without reading values", async () => {

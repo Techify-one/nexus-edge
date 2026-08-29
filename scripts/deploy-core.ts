@@ -1,6 +1,9 @@
 import { execFileSync } from "node:child_process";
+import {
+  bindingsForServiceRestore,
+  type WorkerBinding,
+} from "./cloudflare-bindings.js";
 
-type Binding = Record<string, unknown> & { name: string; type: string };
 type Envelope<T> = {
   success: boolean;
   result: T;
@@ -14,13 +17,15 @@ const config =
   process.env.CORE_WRANGLER_CONFIG ?? "workers/core/wrangler.jsonc";
 const api = `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts/${encodeURIComponent(workerName)}/settings`;
 
-async function settings(): Promise<Binding[]> {
+async function settings(): Promise<WorkerBinding[]> {
   if (!token || !accountId) return [];
   const response = await fetch(api, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (response.status === 404) return [];
-  const body = (await response.json()) as Envelope<{ bindings?: Binding[] }>;
+  const body = (await response.json()) as Envelope<{
+    bindings?: WorkerBinding[];
+  }>;
   if (!response.ok || !body.success)
     throw new Error(
       `Unable to read current bindings: ${body.errors?.map((error) => error.message).join(", ") ?? response.status}`,
@@ -28,7 +33,7 @@ async function settings(): Promise<Binding[]> {
   return body.result.bindings ?? [];
 }
 
-async function replaceBindings(bindings: Binding[]): Promise<void> {
+async function replaceBindings(bindings: WorkerBinding[]): Promise<void> {
   if (!token || !accountId)
     throw new Error(
       "CF_API_TOKEN and CF_ACCOUNT_ID are required to preserve dynamic bindings.",
@@ -56,6 +61,11 @@ async function replaceBindings(bindings: Binding[]): Promise<void> {
 const pluginBindings = (await settings()).filter(
   (binding) => binding.type === "service" && binding.name.startsWith("PLUGIN_"),
 );
+for (const binding of pluginBindings)
+  if (typeof binding.service !== "string")
+    throw new Error(
+      `Dynamic binding ${binding.name} has no writable service target.`,
+    );
 execFileSync("pnpm", ["build:frontend"], { stdio: "inherit" });
 execFileSync(
   "pnpm",
@@ -79,13 +89,7 @@ execFileSync(
 );
 if (pluginBindings.length) {
   const current = await settings();
-  const merged = [
-    ...current.filter(
-      (binding) =>
-        !pluginBindings.some((plugin) => plugin.name === binding.name),
-    ),
-    ...pluginBindings,
-  ];
+  const merged = bindingsForServiceRestore(current, pluginBindings);
   await replaceBindings(merged);
   const verified = await settings();
   for (const plugin of pluginBindings)

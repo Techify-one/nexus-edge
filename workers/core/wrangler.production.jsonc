@@ -18,7 +18,7 @@
     "run_worker_first": ["/api/*", "/health"],
   },
   "vars": {
-    "APP_VERSION": "1.1.0-beta.5",
+    "APP_VERSION": "1.1.0-beta.6",
     "CORE_UPDATE_PUBLIC_KEY": "MCowBQYDK2VwAyEAxuOKnkDa5oHc4zGhCxV6GIUU6LhZ7bStR3CgoS9adGo=",
     "APP_INSTALLATION_ID": "install_41d0f93d4e5c41b0be14f175aed651bf",
     "DATABASE_PROVIDER": "d1",
