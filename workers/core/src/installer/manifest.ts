@@ -34,6 +34,7 @@ export const pluginManifestSchema = z
     compatibilityFlags: z.array(z.string()).max(20),
     databaseDialects: z.tuple([z.literal("d1"), z.literal("postgres")]),
     runtimeBindings: z.array(runtimeBinding).max(2).optional(),
+    optionalRuntimeBindings: z.array(runtimeBinding).max(2).optional(),
     tablePrefix: z.string(),
     localizedMetadata: z
       .object({
@@ -79,6 +80,31 @@ export const pluginManifestSchema = z
         message: "runtimeBindings must use canonical order: ai, r2",
         path: ["runtimeBindings"],
       });
+    const optionalRuntimeBindings = manifest.optionalRuntimeBindings ?? [];
+    if (
+      new Set(optionalRuntimeBindings).size !== optionalRuntimeBindings.length
+    )
+      context.addIssue({
+        code: "custom",
+        message: "optionalRuntimeBindings cannot contain duplicates",
+        path: ["optionalRuntimeBindings"],
+      });
+    if (
+      optionalRuntimeBindings.join(",") !==
+      [...optionalRuntimeBindings].sort().join(",")
+    )
+      context.addIssue({
+        code: "custom",
+        message: "optionalRuntimeBindings must use canonical order: ai, r2",
+        path: ["optionalRuntimeBindings"],
+      });
+    for (const binding of optionalRuntimeBindings)
+      if (runtimeBindings.includes(binding))
+        context.addIssue({
+          code: "custom",
+          message: "a runtime binding cannot be both required and optional",
+          path: ["optionalRuntimeBindings"],
+        });
     const menuRouteKeys = new Set(manifest.menu.map((entry) => entry.routeKey));
     for (const [locale, metadata] of Object.entries(
       manifest.localizedMetadata ?? {},

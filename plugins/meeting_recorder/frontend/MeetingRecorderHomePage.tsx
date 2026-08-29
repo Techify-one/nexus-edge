@@ -94,6 +94,11 @@ function HomeContent() {
     queryKey: ["meeting-recorder", "recordings", queryString.toString()],
     queryFn: () => recorderApi.recordings(queryString),
   });
+  const defaults = useQuery({
+    queryKey: ["meeting-recorder", "defaults"],
+    queryFn: recorderApi.defaults,
+    enabled: can("meeting_recorder.recording.create"),
+  });
   const changeSorting = useCallback((next: SortingState) => {
     setCursor(null);
     setSorting(next.length ? next : [{ id: "started_at", desc: true }]);
@@ -140,8 +145,8 @@ function HomeContent() {
       {
         key: "duration",
         label: t("meetingRecorder.column.duration"),
-        render: (row: Recording) => duration(row.storedDurationMs),
-        sortValue: (row: Recording) => row.storedDurationMs,
+        render: (row: Recording) => duration(row.timelineDurationMs),
+        sortValue: (row: Recording) => row.timelineDurationMs,
         size: 120,
         minSize: 90,
         maxSize: 180,
@@ -207,7 +212,17 @@ function HomeContent() {
               </Button>
             )}
             {can("meeting_recorder.recording.create") && (
-              <Button onClick={() => navigate("/app/meeting-recorder/new")}>
+              <Button
+                disabled={
+                  defaults.isPending || defaults.data?.storageEnabled === false
+                }
+                title={
+                  defaults.data?.storageEnabled === false
+                    ? t("meetingRecorder.r2RequiredTitle")
+                    : undefined
+                }
+                onClick={() => navigate("/app/meeting-recorder/new")}
+              >
                 <Plus className="h-4 w-4" />
                 {t("meetingRecorder.new")}
               </Button>
@@ -215,6 +230,11 @@ function HomeContent() {
           </div>
         }
       />
+      {defaults.data?.storageEnabled === false && (
+        <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+          {t("meetingRecorder.r2Disabled")}
+        </div>
+      )}
       <div className="mb-5 grid gap-3 sm:grid-cols-4">
         <MetricCard
           label={t("meetingRecorder.metric.duration")}

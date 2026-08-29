@@ -132,6 +132,13 @@ function DetailContent() {
       (segment) => segment.storageStatus === "stored",
     ) ?? [];
   const activeAudio = audioSegments[playlistIndex];
+  const hasTranscribableAudio = Boolean(
+    segments.data?.items.some(
+      (segment) =>
+        segment.storageStatus === "stored" &&
+        segment.transcriptionStatus !== "ready",
+    ),
+  );
   const downloadTranscript = async () => {
     const response = await fetch(
       `/api/v1/p/meeting_recorder/recordings/${encodeURIComponent(recordingId)}/transcript`,
@@ -212,7 +219,11 @@ function DetailContent() {
               </>
             ) : (
               <p className="mt-3 text-sm text-slate-500">
-                {t("meetingRecorder.noAudio")}
+                {t(
+                  item.ingestSource === "telegram"
+                    ? "meetingRecorder.audioNotRetained"
+                    : "meetingRecorder.noAudio",
+                )}
               </p>
             )}
           </Card>
@@ -220,15 +231,16 @@ function DetailContent() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="font-bold">{t("meetingRecorder.transcript")}</h2>
               <div className="flex gap-2">
-                {can("meeting_recorder.transcription.create") && (
-                  <Button
-                    variant="secondary"
-                    busy={transcribe.isPending}
-                    onClick={() => transcribe.mutate()}
-                  >
-                    {t("meetingRecorder.transcribe")}
-                  </Button>
-                )}
+                {can("meeting_recorder.transcription.create") &&
+                  hasTranscribableAudio && (
+                    <Button
+                      variant="secondary"
+                      busy={transcribe.isPending}
+                      onClick={() => transcribe.mutate()}
+                    >
+                      {t("meetingRecorder.transcribe")}
+                    </Button>
+                  )}
                 <Button
                   variant="ghost"
                   onClick={() => void downloadTranscript()}
@@ -251,7 +263,7 @@ function DetailContent() {
                 <dt className="text-slate-500">
                   {t("meetingRecorder.column.duration")}
                 </dt>
-                <dd>{Math.round(item.storedDurationMs / 1000)}s</dd>
+                <dd>{Math.round(item.timelineDurationMs / 1000)}s</dd>
               </div>
               <div className="flex justify-between gap-4">
                 <dt className="text-slate-500">
@@ -269,7 +281,7 @@ function DetailContent() {
                 <dt className="text-slate-500">
                   {t("meetingRecorder.segments")}
                 </dt>
-                <dd>{item.storedSegmentCount}</dd>
+                <dd>{segments.data?.items.length ?? 0}</dd>
               </div>
             </dl>
           </Card>

@@ -31,13 +31,15 @@ import {
 } from "./storage.js";
 import {
   configureTelegramWebhook,
+  deleteTelegramWebhook,
   downloadTelegramMedia,
   telegramSecretMatches,
   type TelegramUpdate,
+  validateTelegramBot,
 } from "./telegram.js";
 import { transcribeAudio } from "./transcription.js";
 
-const VERSION = "1.0.1";
+const VERSION = "1.1.0";
 const CONSENT_VERSION = "2026-08-28";
 const mutablePostKey = (c: Context<MeetingRecorderEnv>): string => {
   const key = (c.req.header("Idempotency-Key") ?? "").trim();
@@ -99,6 +101,16 @@ const settingsInput = z.object({
 
 const repository = (c: Context<MeetingRecorderEnv>) =>
   new MeetingRecorderRepository(c.get("db"));
+
+const requireStorage = (env: MeetingRecorderBindings): R2Bucket => {
+  if (!env.STORAGE)
+    throw new MeetingRecorderError(
+      409,
+      "R2_NOT_ENABLED",
+      "Enable R2 storage to record, upload, retain, or play audio.",
+    );
+  return env.STORAGE;
+};
 
 const bool = (value: string | undefined, fallback = false): boolean =>
   value === undefined ? fallback : value === "true" || value === "1";
@@ -169,7 +181,7 @@ async function transcribeStoredSegment(input: {
   const repo = new MeetingRecorderRepository(input.db);
   const lease = await repo.claimTranscription(input.segment);
   try {
-    const object = await input.env.STORAGE.get(input.segment.r2Key);
+    const object = await requireStorage(input.env).get(input.segment.r2Key);
     if (!object)
       throw new MeetingRecorderError(
         503,
@@ -201,6 +213,49 @@ async function transcribeStoredSegment(input: {
       requestId: input.requestId,
       logicalKey: `${input.recording.id}:${input.segment.sequence}:${input.segment.checksumSha256}`,
       metadata: { sequence: input.segment.sequence },
+    });
+  } catch (cause) {
+    const code =
+      cause instanceof MeetingRecorderError
+        ? cause.code
+        : "TRANSCRIPTION_FAILED";
+    await repo.failTranscription(input.segment, lease, code);
+    throw cause;
+  }
+}
+
+async function transcribeTransientSegment(input: {
+  env: MeetingRecorderBindings;
+  db: ReturnType<typeof repository>["db"];
+  recording: Recording;
+  segment: Segment;
+  bytes: ArrayBuffer;
+  actorUserId: string;
+  requestId: string;
+}): Promise<void> {
+  const repo = new MeetingRecorderRepository(input.db);
+  const lease = await repo.claimTransientTranscription(input.segment);
+  try {
+    const transcript = await transcribeAudio(
+      input.env,
+      input.bytes,
+      input.recording.language,
+    );
+    await repo.completeTranscription(
+      input.segment,
+      lease,
+      transcript.text,
+      transcript.vtt,
+    );
+    await pluginAudit({
+      db: input.db,
+      action: "meeting_recorder.transcription.completed",
+      resourceType: "meeting_recorder.recording",
+      resourceId: input.recording.id,
+      userId: input.actorUserId,
+      requestId: input.requestId,
+      logicalKey: `${input.recording.id}:${input.segment.sequence}:${input.segment.checksumSha256}`,
+      metadata: { sequence: input.segment.sequence, audioRetained: false },
     });
   } catch (cause) {
     const code =
@@ -254,21 +309,30 @@ app.post("/__installer/smoke", async (c) => {
     ],
   );
   try {
-    await c.env.STORAGE.put(objectKey, new Uint8Array([1, 2, 3]), {
-      httpMetadata: { contentType: "application/octet-stream" },
-    });
-    const object = await c.env.STORAGE.get(objectKey);
-    if (!object || object.size !== 3 || typeof c.env.AI?.run !== "function")
+    if (typeof c.env.AI?.run !== "function")
       throw new Error("smoke verification failed");
+    if (c.env.STORAGE) {
+      await c.env.STORAGE.put(objectKey, new Uint8Array([1, 2, 3]), {
+        httpMetadata: { contentType: "application/octet-stream" },
+      });
+      const object = await c.env.STORAGE.get(objectKey);
+      if (!object || object.size !== 3)
+        throw new Error("smoke verification failed");
+    }
   } finally {
     await Promise.all([
-      c.env.STORAGE.delete(objectKey),
+      c.env.STORAGE?.delete(objectKey),
       c
         .get("db")
         .execute("DELETE FROM meeting_recorder_recordings WHERE id = ?", [id]),
     ]);
   }
-  return c.json({ ok: true, database: true, storage: true, ai: true });
+  return c.json({
+    ok: true,
+    database: true,
+    storage: Boolean(c.env.STORAGE),
+    ai: true,
+  });
 });
 
 app.get("/overview", async (c) => {
@@ -335,6 +399,7 @@ app.get("/recordings", async (c) => {
 
 app.post("/recordings", async (c) => {
   const context = requirePermission(c, "meeting_recorder.recording.create");
+  requireStorage(c.env);
   mutablePostKey(c);
   const input = createRecordingInput.parse(await c.req.json());
   extensionForMime(input.mimeType);
@@ -369,6 +434,7 @@ app.post("/recordings", async (c) => {
 
 app.post("/imports", async (c) => {
   const context = requirePermission(c, "meeting_recorder.recording.create");
+  requireStorage(c.env);
   mutablePostKey(c);
   const input = importInput.parse(await c.req.json());
   extensionForMime(input.mimeType);
@@ -503,6 +569,7 @@ app.get("/recordings/:recordingId/recovery", async (c) => {
 });
 
 app.post("/recordings/:recordingId/reconcile", async (c) => {
+  const storage = requireStorage(c.env);
   const recording = await recordingFor(
     c,
     "meeting_recorder.recording.update",
@@ -521,7 +588,7 @@ app.post("/recordings/:recordingId/reconcile", async (c) => {
     .slice(0, 25);
   let reconciled = 0;
   for (const segment of candidates) {
-    const object = await c.env.STORAGE.head(segment.r2Key);
+    const object = await storage.head(segment.r2Key);
     if (
       object &&
       object.size === segment.sizeBytes &&
@@ -552,6 +619,7 @@ app.get("/recordings/:recordingId/segments", async (c) => {
 });
 
 app.put("/recordings/:recordingId/segments/:sequence", async (c) => {
+  const storageBucket = requireStorage(c.env);
   const recording = await recordingFor(
     c,
     "meeting_recorder.recording.update",
@@ -666,7 +734,7 @@ app.put("/recordings/:recordingId/segments/:sequence", async (c) => {
       "The audio request body is required.",
     );
   const stored = await putAudioStream({
-    storage: c.env.STORAGE,
+    storage: storageBucket,
     key,
     body: c.req.raw.body,
     mimeType,
@@ -716,6 +784,7 @@ app.on("HEAD", "/recordings/:recordingId/segments/:sequence", async (c) => {
 });
 
 app.get("/recordings/:recordingId/segments/:sequence/audio", async (c) => {
+  const storage = requireStorage(c.env);
   const recording = await recordingFor(
     c,
     "meeting_recorder.recording.read",
@@ -731,7 +800,7 @@ app.get("/recordings/:recordingId/segments/:sequence/audio", async (c) => {
   const segment = await repository(c).segment(recording.id, sequence);
   if (!segment || segment.storageStatus !== "stored")
     throw new MeetingRecorderError(404, "NOT_FOUND", "Segment not found.");
-  const head = await c.env.STORAGE.head(segment.r2Key);
+  const head = await storage.head(segment.r2Key);
   if (!head)
     throw new MeetingRecorderError(
       503,
@@ -748,7 +817,7 @@ app.get("/recordings/:recordingId/segments/:sequence/audio", async (c) => {
     }
     throw cause;
   }
-  const object = await c.env.STORAGE.get(
+  const object = await storage.get(
     segment.r2Key,
     range ? { range } : undefined,
   );
@@ -943,13 +1012,21 @@ app.post("/recordings/:recordingId/deletion-steps", async (c) => {
       "INVALID_CAPTURE_STATE",
       "Deletion has not been started.",
     );
-  const segments = await c.get("db").query<{ id: string; r2Key: string }>(
-    `SELECT id, r2_key AS "r2Key" FROM meeting_recorder_segments
+  const segments = await c.get("db").query<{
+    id: string;
+    r2Key: string;
+    storageStatus: string;
+  }>(
+    `SELECT id, r2_key AS "r2Key", storage_status AS "storageStatus"
+       FROM meeting_recorder_segments
       WHERE recording_id = ? ORDER BY sequence LIMIT 500`,
     [recording.id],
   );
   if (segments.length) {
-    await c.env.STORAGE.delete(segments.map((segment) => segment.r2Key));
+    const storedKeys = segments
+      .filter((segment) => segment.storageStatus === "stored")
+      .map((segment) => segment.r2Key);
+    if (storedKeys.length) await requireStorage(c.env).delete(storedKeys);
     const placeholders = segments.map(() => "?").join(",");
     await c.get("db").atomic([
       {
@@ -1016,11 +1093,36 @@ app.post("/recordings/:recordingId/deletion-steps", async (c) => {
 
 app.get("/settings", async (c) => {
   requirePermission(c, "meeting_recorder.settings.read");
+  const telegramConfiguration = await repository(c).telegramConfiguration();
+  const telegramSecretsConfigured = Boolean(
+    c.env.TELEGRAM_BOT_TOKEN && c.env.TELEGRAM_WEBHOOK_SECRET,
+  );
   return c.json({
     settings: await repository(c).settings(),
+    capabilities: {
+      storageEnabled: Boolean(c.env.STORAGE),
+      telegramTransientMode: !c.env.STORAGE,
+    },
     telegram: {
       botTokenConfigured: Boolean(c.env.TELEGRAM_BOT_TOKEN),
       webhookSecretConfigured: Boolean(c.env.TELEGRAM_WEBHOOK_SECRET),
+      configured: telegramSecretsConfigured && Boolean(telegramConfiguration),
+      bot:
+        telegramSecretsConfigured && telegramConfiguration
+          ? {
+              id: telegramConfiguration.botId,
+              username: telegramConfiguration.username,
+              name: telegramConfiguration.displayName,
+              link: `https://t.me/${telegramConfiguration.username}`,
+            }
+          : null,
+      webhook:
+        telegramSecretsConfigured && telegramConfiguration
+          ? {
+              url: telegramConfiguration.webhookUrl,
+              verifiedAt: telegramConfiguration.verifiedAt,
+            }
+          : null,
     },
   });
 });
@@ -1032,6 +1134,7 @@ app.get("/defaults", async (c) => {
     defaultLanguage: settings.defaultLanguage,
     autoTranscribe: settings.autoTranscribe,
     maximumMinutes: settings.maximumMinutes,
+    storageEnabled: Boolean(c.env.STORAGE),
   });
 });
 
@@ -1060,6 +1163,23 @@ app.get("/storage", async (c) => {
   return c.json(await repository(c).storageTotals());
 });
 
+app.post("/telegram/validate", async (c) => {
+  requirePermission(c, "meeting_recorder.settings.update");
+  mutablePostKey(c);
+  const input = z
+    .object({ token: z.string().trim().min(20).max(2_048) })
+    .parse(await c.req.json());
+  const bot = await validateTelegramBot(input.token);
+  return c.json({
+    bot: {
+      id: String(bot.id),
+      username: bot.username!,
+      name: bot.first_name,
+      link: `https://t.me/${bot.username}`,
+    },
+  });
+});
+
 app.post("/telegram/configure", async (c) => {
   const context = requirePermission(c, "meeting_recorder.settings.update");
   mutablePostKey(c);
@@ -1070,16 +1190,27 @@ app.post("/telegram/configure", async (c) => {
       "Configure both Telegram Worker secrets before enabling the webhook.",
     );
   const input = z.object({ webhookUrl: z.url() }).parse(await c.req.json());
-  if (new URL(input.webhookUrl).origin !== context.origin)
+  const canonicalWebhookUrl = new URL(
+    "/api/v1/public/p/meeting_recorder/telegram/webhook",
+    `${context.origin}/`,
+  ).toString();
+  if (new URL(input.webhookUrl).toString() !== canonicalWebhookUrl)
     throw new MeetingRecorderError(
       422,
       "TELEGRAM_WEBHOOK_URL_INVALID",
-      "The Telegram webhook must use this Nexus origin.",
+      "The Telegram webhook must use this Nexus installation's canonical endpoint.",
     );
-  await configureTelegramWebhook({
+  const configured = await configureTelegramWebhook({
     token: c.env.TELEGRAM_BOT_TOKEN,
     secret: c.env.TELEGRAM_WEBHOOK_SECRET,
-    webhookUrl: input.webhookUrl,
+    webhookUrl: canonicalWebhookUrl,
+  });
+  await repository(c).saveTelegramConfiguration({
+    botId: String(configured.bot.id),
+    username: configured.bot.username!,
+    displayName: configured.bot.first_name,
+    webhookUrl: configured.webhook.url,
+    userId: context.userId,
   });
   await pluginAudit({
     db: c.get("db"),
@@ -1089,9 +1220,45 @@ app.post("/telegram/configure", async (c) => {
     userId: context.userId,
     requestId: context.requestId,
     logicalKey: `telegram:${Date.now()}`,
-    metadata: { configured: true },
+    metadata: {
+      configured: true,
+      botId: String(configured.bot.id),
+      webhookChanged: configured.webhookChanged,
+    },
   });
-  return c.json({ configured: true });
+  return c.json({
+    configured: true,
+    webhookChanged: configured.webhookChanged,
+    bot: {
+      id: String(configured.bot.id),
+      username: configured.bot.username!,
+      name: configured.bot.first_name,
+      link: `https://t.me/${configured.bot.username}`,
+    },
+    webhook: {
+      url: configured.webhook.url,
+      verified: true,
+    },
+  });
+});
+
+app.delete("/telegram/configuration", async (c) => {
+  const context = requirePermission(c, "meeting_recorder.settings.update");
+  mutablePostKey(c);
+  if (c.env.TELEGRAM_BOT_TOKEN)
+    await deleteTelegramWebhook(c.env.TELEGRAM_BOT_TOKEN);
+  await repository(c).clearTelegramConfiguration();
+  await pluginAudit({
+    db: c.get("db"),
+    action: "meeting_recorder.settings.updated",
+    resourceType: "meeting_recorder.telegram",
+    resourceId: "webhook",
+    userId: context.userId,
+    requestId: context.requestId,
+    logicalKey: `telegram-disconnect:${Date.now()}`,
+    metadata: { configured: false },
+  });
+  return c.body(null, 204);
 });
 
 const deterministicTelegramRecordingId = async (
@@ -1218,10 +1385,8 @@ app.post("/public/telegram/webhook", async (c) => {
       );
     const file = await downloadTelegramMedia(c.env.TELEGRAM_BOT_TOKEN, media);
     extensionForMime(file.mimeType);
-    const [settings, storage] = await Promise.all([
-      repository(c).settings(),
-      repository(c).storageTotals(),
-    ]);
+    const settings = await repository(c).settings();
+    const storage = c.env.STORAGE ? await repository(c).storageTotals() : null;
     if (
       Math.max(1_000, media.duration * 1_000) >
       settings.maximumMinutes * 60_000
@@ -1231,7 +1396,10 @@ app.post("/public/telegram/webhook", async (c) => {
         "RECORDING_DURATION_LIMIT",
         "The Telegram audio exceeds the configured duration limit.",
       );
-    if (storage.totalBytes + file.bytes.byteLength > settings.storageLimitBytes)
+    if (
+      storage &&
+      storage.totalBytes + file.bytes.byteLength > settings.storageLimitBytes
+    )
       throw new MeetingRecorderError(
         413,
         "STORAGE_LIMIT_EXCEEDED",
@@ -1254,41 +1422,77 @@ app.post("/public/telegram/webhook", async (c) => {
       language: settings.defaultLanguage as "pt-BR" | "en" | "auto",
       mimeType: file.mimeType,
       segmentDurationMs: Math.max(1_000, media.duration * 1_000),
-      autoTranscribe: settings.autoTranscribe,
+      // When R2 is disabled, transcription is mandatory because the source
+      // bytes are intentionally discarded after this webhook request.
+      autoTranscribe: c.env.STORAGE ? settings.autoTranscribe : true,
       consentVersion: CONSENT_VERSION,
       captureStatus: "finalizing",
       startedAt: message.date * 1_000,
     });
-    const key = segmentObjectKey(recording.id, 0, file.mimeType);
-    const stored = await putAudioBuffer({
-      storage: c.env.STORAGE,
-      key,
-      bytes: file.bytes,
-      mimeType: file.mimeType,
-      metadata: {
+    const durationMs = Math.max(1_000, media.duration * 1_000);
+    let complete: Recording;
+    let segment: Segment;
+    if (c.env.STORAGE) {
+      const key = segmentObjectKey(recording.id, 0, file.mimeType);
+      const stored = await putAudioBuffer({
+        storage: c.env.STORAGE,
+        key,
+        bytes: file.bytes,
+        mimeType: file.mimeType,
+        metadata: {
+          recordingId: recording.id,
+          sequence: "0",
+          durationMs: String(durationMs),
+          source: "telegram",
+        },
+      });
+      const reserved = await repository(c).reserveSegment({
         recordingId: recording.id,
-        sequence: "0",
-        durationMs: String(media.duration * 1_000),
-        source: "telegram",
-      },
-    });
-    const reservedSegment = await repository(c).reserveSegment({
-      recordingId: recording.id,
-      sequence: 0,
-      startOffsetMs: 0,
-      durationMs: Math.max(1_000, media.duration * 1_000),
-      mimeType: file.mimeType,
-      sizeBytes: file.bytes.byteLength,
-      checksum: stored.checksumBase64,
-      r2Key: key,
-    });
-    await repository(c).markStored(reservedSegment.segment, stored.object);
-    const complete = await repository(c).finalize(recording.id, 0, []);
-    await c.get("db").execute(
-      `UPDATE meeting_recorder_ingest_events SET status = 'stored', updated_at = ?
-        WHERE source = 'telegram' AND external_event_id = ?`,
-      [repositoryTime(c.get("db")), externalEventId],
-    );
+        sequence: 0,
+        startOffsetMs: 0,
+        durationMs,
+        mimeType: file.mimeType,
+        sizeBytes: file.bytes.byteLength,
+        checksum: stored.checksumBase64,
+        r2Key: key,
+      });
+      segment = reserved.segment;
+      await repository(c).markStored(segment, stored.object);
+      complete = await repository(c).finalize(recording.id, 0, []);
+      await c.get("db").execute(
+        `UPDATE meeting_recorder_ingest_events SET status = 'stored', updated_at = ?
+          WHERE source = 'telegram' AND external_event_id = ?`,
+        [repositoryTime(c.get("db")), externalEventId],
+      );
+    } else {
+      const checksum = await base64Sha256(file.bytes);
+      const reserved = await repository(c).reserveTransientSegment({
+        recordingId: recording.id,
+        sequence: 0,
+        startOffsetMs: 0,
+        durationMs,
+        mimeType: file.mimeType,
+        sizeBytes: file.bytes.byteLength,
+        checksum,
+        transientKey: `transient/telegram/${recording.id}/0`,
+      });
+      segment = reserved.segment;
+      if (
+        !segmentMatches(segment, {
+          checksum,
+          sizeBytes: file.bytes.byteLength,
+          durationMs,
+          startOffsetMs: 0,
+          mimeType: file.mimeType,
+        })
+      )
+        throw new MeetingRecorderError(
+          409,
+          "SEGMENT_CONFLICT",
+          "This Telegram event already references different audio.",
+        );
+      complete = await repository(c).finalize(recording.id, 0, []);
+    }
     await pluginAudit({
       db: c.get("db"),
       action: "meeting_recorder.recording.created",
@@ -1297,8 +1501,35 @@ app.post("/public/telegram/webhook", async (c) => {
       userId: ownerId,
       requestId: requestId(c),
       logicalKey: `telegram:${externalEventId}`,
-      metadata: { ingestSource: "telegram" },
+      metadata: {
+        ingestSource: "telegram",
+        audioRetained: Boolean(c.env.STORAGE),
+      },
     });
+
+    if (!c.env.STORAGE) {
+      if (segment.transcriptionStatus !== "ready")
+        await transcribeTransientSegment({
+          env: c.env,
+          db: c.get("db"),
+          recording: complete,
+          segment,
+          bytes: file.bytes,
+          actorUserId: ownerId,
+          requestId: requestId(c),
+        });
+      await c.get("db").execute(
+        `UPDATE meeting_recorder_ingest_events
+            SET status = 'transcribed', error_code = NULL, updated_at = ?
+          WHERE source = 'telegram' AND external_event_id = ?`,
+        [repositoryTime(c.get("db")), externalEventId],
+      );
+      return c.json({
+        ok: true,
+        recordingId: recording.id,
+        audioRetained: false,
+      });
+    }
 
     if (!settings.autoTranscribe)
       return c.json({ ok: true, recordingId: recording.id });

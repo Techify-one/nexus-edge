@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   cloudflareAccountTokensUrl,
   cloudflarePluginTokenTemplateUrl,
+  cloudflareR2TokenTemplateUrl,
   cloudflareUserTokensUrl,
 } from "../frontend/src/lib/cloudflare-token.js";
 
@@ -34,5 +35,19 @@ describe("plugin runtime token link", () => {
     expect(url.origin).toBe("https://dash.cloudflare.com");
     expect(url.pathname).toBe("/profile/api-tokens");
     expect(url.search).toBe("");
+  });
+
+  it("prefills the modern least-privilege R2 token route", () => {
+    const accountId = "c".repeat(32);
+    const url = new URL(cloudflareR2TokenTemplateUrl(accountId));
+
+    expect(url.origin).toBe("https://dash.cloudflare.com");
+    expect(url.pathname).toBe("/profile/api-tokens");
+    expect(url.searchParams.get("accountId")).toBe(accountId);
+    expect(url.searchParams.get("zoneId")).toBe("all");
+    expect(
+      JSON.parse(url.searchParams.get("permissionGroupKeys") ?? "[]"),
+    ).toEqual([{ key: "workers_r2", type: "edit" }]);
+    expect(url.searchParams.get("name")).toBe("Nexus Edge Plugin R2");
   });
 });

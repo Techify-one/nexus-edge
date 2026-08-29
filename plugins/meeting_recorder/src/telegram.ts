@@ -28,6 +28,18 @@ type TelegramEnvelope<T> = {
   result?: T;
   description?: string;
 };
+export type TelegramBotIdentity = {
+  id: number;
+  is_bot: boolean;
+  first_name: string;
+  username?: string;
+};
+export type TelegramWebhookInfo = {
+  url: string;
+  pending_update_count?: number;
+  last_error_date?: number;
+  last_error_message?: string;
+};
 const MAX_TELEGRAM_AUDIO_BYTES = 20 * 1024 * 1024;
 
 const apiUrl = (token: string, method: string): URL => {
@@ -66,7 +78,11 @@ export async function configureTelegramWebhook(input: {
   token: string;
   secret: string;
   webhookUrl: string;
-}): Promise<void> {
+}): Promise<{
+  bot: TelegramBotIdentity;
+  webhook: TelegramWebhookInfo;
+  webhookChanged: boolean;
+}> {
   const url = new URL(input.webhookUrl);
   if (
     url.protocol !== "https:" ||
@@ -87,12 +103,68 @@ export async function configureTelegramWebhook(input: {
       "TELEGRAM_NOT_CONFIGURED",
       "The Telegram webhook secret is missing or invalid.",
     );
+  const [bot, currentWebhook] = await Promise.all([
+    telegramCall<TelegramBotIdentity>(input.token, "getMe", {}),
+    telegramCall<TelegramWebhookInfo>(input.token, "getWebhookInfo", {}),
+  ]);
+  if (
+    !bot.is_bot ||
+    !Number.isSafeInteger(bot.id) ||
+    !bot.first_name?.trim() ||
+    !bot.username ||
+    !/^[A-Za-z0-9_]{5,32}$/u.test(bot.username)
+  )
+    throw new MeetingRecorderError(
+      422,
+      "TELEGRAM_BOT_INVALID",
+      "Telegram did not return a valid bot identity.",
+    );
+  const webhookChanged = currentWebhook.url !== url.toString();
+  // Set the webhook even when the URL already matches so the secret token and
+  // allowed update policy are guaranteed to match this Nexus installation.
   await telegramCall<boolean>(input.token, "setWebhook", {
     url: url.toString(),
     secret_token: input.secret,
     allowed_updates: ["message"],
     drop_pending_updates: false,
     max_connections: 10,
+  });
+  const webhook = await telegramCall<TelegramWebhookInfo>(
+    input.token,
+    "getWebhookInfo",
+    {},
+  );
+  if (webhook.url !== url.toString())
+    throw new MeetingRecorderError(
+      503,
+      "TELEGRAM_WEBHOOK_VERIFICATION_FAILED",
+      "Telegram did not confirm the configured webhook URL.",
+    );
+  return { bot, webhook, webhookChanged };
+}
+
+export async function validateTelegramBot(
+  token: string,
+): Promise<TelegramBotIdentity> {
+  const bot = await telegramCall<TelegramBotIdentity>(token, "getMe", {});
+  if (
+    !bot.is_bot ||
+    !Number.isSafeInteger(bot.id) ||
+    !bot.first_name?.trim() ||
+    !bot.username ||
+    !/^[A-Za-z0-9_]{5,32}$/u.test(bot.username)
+  )
+    throw new MeetingRecorderError(
+      422,
+      "TELEGRAM_BOT_INVALID",
+      "Telegram did not return a valid bot identity.",
+    );
+  return bot;
+}
+
+export async function deleteTelegramWebhook(token: string): Promise<void> {
+  await telegramCall<boolean>(token, "deleteWebhook", {
+    drop_pending_updates: false,
   });
 }
 

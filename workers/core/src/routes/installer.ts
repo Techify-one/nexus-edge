@@ -5,6 +5,7 @@ import type { SqlStatement } from "@app/database";
 import semver from "semver";
 import type { HonoEnv } from "../env.js";
 import {
+  attachPluginR2Binding,
   deletePluginSecret,
   deletePluginWorker,
   configurePluginRuntimeCredential,
@@ -178,8 +179,47 @@ const safeFailureSummary = (
 };
 
 const bindingName = (id: string): string => `PLUGIN_${id.toUpperCase()}`;
-const workerName = (id: string): string =>
-  `app-plugin-${id.replaceAll("_", "-")}`;
+const installationNamespace = async (
+  installationId: string,
+): Promise<string> => {
+  const digest = new Uint8Array(
+    await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(installationId),
+    ),
+  );
+  return [...digest]
+    .slice(0, 6)
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+};
+
+export const pluginWorkerName = async (
+  installationId: string,
+  pluginId: string,
+): Promise<string> =>
+  `app-${await installationNamespace(installationId)}-plugin-${pluginId.replaceAll("_", "-")}`;
+
+const operationWorkerName = async (
+  c: Context<HonoEnv>,
+  operation: Operation,
+): Promise<string> => {
+  if (operation.type === "update") {
+    const existing = await c.get("db").first<{
+      workerName: string;
+      status: string;
+    }>(`SELECT worker_name AS "workerName", status FROM plugins WHERE id = ?`, [operation.pluginId]);
+    if (
+      existing?.status !== "installed" ||
+      !/^[a-z0-9][a-z0-9-]{1,62}$/u.test(existing.workerName)
+    )
+      throw new Error("PLUGIN_WORKER_TARGET_INVALID");
+    // Preserve legacy targets during updates so their Worker secrets and
+    // bindings survive without a disruptive migration.
+    return existing.workerName;
+  }
+  return pluginWorkerName(c.env.APP_INSTALLATION_ID, operation.pluginId);
+};
 const allowedRuntimeSecrets = new Map<
   string,
   { names: Set<string>; permissionResource: string }
@@ -250,19 +290,16 @@ const deterministicR2BucketName = async (
   installationId: string,
   pluginId: string,
 ) => {
-  const digest = new Uint8Array(
-    await crypto.subtle.digest(
-      "SHA-256",
-      new TextEncoder().encode(installationId),
-    ),
-  );
-  const prefix = [...digest]
-    .slice(0, 6)
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
+  const prefix = await installationNamespace(installationId);
   const pluginSlug = pluginId.replaceAll("_", "-").slice(0, 43);
   return `nexus-${prefix}-${pluginSlug}`;
 };
+
+const hasR2Capability = (manifest: PluginManifest): boolean =>
+  Boolean(
+    manifest.runtimeBindings?.includes("r2") ||
+    manifest.optionalRuntimeBindings?.includes("r2"),
+  );
 
 const runtimeBoundaryValues = async (
   c: Context<HonoEnv>,
@@ -1057,6 +1094,247 @@ installerRoutes.post(
   },
 );
 
+installerRoutes.post(
+  "/plugins/:pluginId/runtime-resources/r2",
+  requirePermission("core.plugin.update"),
+  async (c) => {
+    await validateRecentReauth(c);
+    if (!c.env.CF_ACCOUNT_ID || !c.env.APP_INSTALLATION_ID)
+      throw new AppError(
+        503,
+        "R2_PROVISIONING_TARGET_MISSING",
+        "The Cloudflare account or installation identifier is unavailable.",
+      );
+    const pluginId = c.req.param("pluginId");
+    const body = (await c.req.json().catch(() => null)) as {
+      token?: unknown;
+      mode?: unknown;
+      bucketName?: unknown;
+    } | null;
+    const token = typeof body?.token === "string" ? body.token.trim() : "";
+    const mode = body?.mode === "attach" ? "attach" : "create";
+    if (!validCloudflareTokenLength(token))
+      throw new AppError(
+        422,
+        "R2_TOKEN_INVALID",
+        "Enter a valid temporary Cloudflare R2 token.",
+      );
+    const plugin = await c.get("db").first<{
+      workerName: string;
+      status: string;
+      manifestJson: string;
+    }>(
+      `SELECT worker_name AS "workerName", status, manifest_json AS "manifestJson"
+         FROM plugins WHERE id = ?`,
+      [pluginId],
+    );
+    if (!plugin || plugin.status !== "installed")
+      throw new AppError(
+        404,
+        "PLUGIN_NOT_INSTALLED",
+        "Plugin is not installed.",
+      );
+    let manifest: PluginManifest;
+    try {
+      manifest = pluginManifestSchema.parse(JSON.parse(plugin.manifestJson));
+    } catch {
+      throw new AppError(
+        409,
+        "PLUGIN_MANIFEST_INVALID",
+        "The installed plugin manifest is invalid.",
+      );
+    }
+    if (!manifest.optionalRuntimeBindings?.includes("r2"))
+      throw new AppError(
+        409,
+        "PLUGIN_RUNTIME_R2_NOT_OPTIONAL",
+        "This plugin does not support optional R2 activation.",
+      );
+    const deterministicName = await deterministicR2BucketName(
+      c.env.APP_INSTALLATION_ID,
+      pluginId,
+    );
+    const requestedName =
+      mode === "attach" && typeof body?.bucketName === "string"
+        ? body.bucketName.trim()
+        : deterministicName;
+    if (!/^[a-z0-9][a-z0-9-]{2,62}$/u.test(requestedName))
+      throw new AppError(
+        422,
+        "R2_BUCKET_NAME_INVALID",
+        "The R2 bucket name is invalid.",
+      );
+    const idem = await idempotencyLookup(
+      c,
+      "plugin_runtime_resources.r2.activate",
+      { pluginId, mode, requestedName, token },
+      true,
+    );
+    if (idem?.replay)
+      return c.json(idem.replay.body as never, idem.replay.status as 200);
+
+    const db = c.get("db");
+    const existing = await db.first<{
+      externalName: string;
+      status: string;
+    }>(
+      `SELECT external_name AS "externalName", status
+         FROM plugin_runtime_resources
+        WHERE plugin_id = ? AND binding_name = 'STORAGE'`,
+      [pluginId],
+    );
+    if (existing && existing.externalName !== requestedName)
+      throw new AppError(
+        409,
+        "R2_BUCKET_CONFLICT",
+        "A different preserved bucket is already registered for this plugin.",
+      );
+
+    const activationId = createId("r2a");
+    const now = Date.now();
+    const lock = await db.execute(
+      `UPDATE installer_lock SET operation_id = ?, acquired_at = ?, expires_at = ?
+        WHERE id = 'global' AND (operation_id IS NULL OR expires_at < ?)`,
+      [
+        activationId,
+        dbTime(db, now),
+        dbTime(db, now + 300_000),
+        dbTime(db, now),
+      ],
+    );
+    if (!lock.rowsAffected)
+      throw new AppError(
+        409,
+        "INSTALLER_BUSY",
+        "Another installation is in progress.",
+      );
+    try {
+      const reservedAt = dbTime(db);
+      const reserved = await db.execute(
+        `INSERT INTO plugin_runtime_resources(
+           plugin_id, resource_type, binding_name, external_name, status,
+           created_by_operation_id, created_at, updated_at
+         ) VALUES (?, 'r2', 'STORAGE', ?, 'provisioning', ?, ?, ?)
+         ON CONFLICT(plugin_id, binding_name) DO UPDATE SET
+           status = 'provisioning', created_by_operation_id = excluded.created_by_operation_id,
+           updated_at = excluded.updated_at, last_error_code = NULL
+         WHERE plugin_runtime_resources.external_name = excluded.external_name`,
+        [pluginId, requestedName, activationId, reservedAt, reservedAt],
+      );
+      if (!reserved.rowsAffected)
+        throw new AppError(
+          409,
+          "R2_BUCKET_CONFLICT",
+          "The requested R2 bucket conflicts with a registered resource.",
+        );
+      const provisionMode =
+        existing &&
+        ["preserving", "preserved", "missing"].includes(existing.status)
+          ? "attach"
+          : mode;
+      const result = await provisionR2Bucket(
+        token,
+        c.env.CF_ACCOUNT_ID,
+        requestedName,
+        provisionMode,
+      );
+      if (provisionMode === "create" && !result.created && !existing)
+        throw new R2ProvisioningError("bucket_conflict");
+      await attachPluginR2Binding(c.env, plugin.workerName, requestedName);
+      const verifiedAt = dbTime(db);
+      await db.execute(
+        `UPDATE plugin_runtime_resources
+            SET status = 'ready', last_verified_at = ?, last_error_code = NULL,
+                updated_at = ?, preserved_at = NULL
+          WHERE plugin_id = ? AND binding_name = 'STORAGE' AND external_name = ?`,
+        [verifiedAt, verifiedAt, pluginId, requestedName],
+      );
+      const response = {
+        pluginId,
+        status: "ready",
+        resource: { type: "r2", binding: "STORAGE" },
+      };
+      await saveIdempotency(
+        c,
+        "plugin_runtime_resources.r2.activate",
+        idem,
+        200,
+        response,
+      );
+      await audit(
+        c,
+        "core.plugin.runtime_resource_ready",
+        "core.plugin",
+        pluginId,
+        { activationId, resourceType: "r2" },
+      );
+      return c.json(response, 200, noStore);
+    } catch (error) {
+      const code =
+        error instanceof R2ProvisioningError ? error.code : "unavailable";
+      await db.execute(
+        `UPDATE plugin_runtime_resources
+            SET status = ?, last_error_code = ?, updated_at = ?
+          WHERE plugin_id = ? AND binding_name = 'STORAGE'`,
+        [
+          code === "bucket_missing" ? "missing" : "error",
+          code,
+          dbTime(db),
+          pluginId,
+        ],
+      );
+      if (error instanceof AppError) throw error;
+      const mapped =
+        code === "too_broad"
+          ? [
+              422,
+              "R2_TOKEN_TOO_BROAD",
+              "Use a token limited to Workers R2 Storage Write.",
+            ]
+          : code === "invalid"
+            ? [
+                422,
+                "R2_TOKEN_INVALID",
+                "The temporary R2 token is invalid or belongs to another account.",
+              ]
+            : code === "not_entitled"
+              ? [
+                  409,
+                  "R2_NOT_ENTITLED",
+                  "Activate R2 on this Cloudflare account before enabling audio storage.",
+                ]
+              : code === "bucket_missing"
+                ? [
+                    404,
+                    "R2_BUCKET_MISSING",
+                    "The selected R2 bucket does not exist.",
+                  ]
+                : code === "bucket_conflict"
+                  ? [
+                      409,
+                      "R2_BUCKET_CONFLICT",
+                      "The deterministic bucket already exists outside this Nexus installation.",
+                    ]
+                  : [
+                      503,
+                      "R2_UNAVAILABLE",
+                      "Cloudflare could not enable the private R2 bucket.",
+                    ];
+      throw new AppError(
+        mapped[0] as 404 | 409 | 422 | 503,
+        mapped[1] as string,
+        mapped[2] as string,
+      );
+    } finally {
+      await db.execute(
+        `UPDATE installer_lock SET operation_id = NULL, acquired_at = NULL,
+            expires_at = NULL WHERE id = 'global' AND operation_id = ?`,
+        [activationId],
+      );
+    }
+  },
+);
+
 installerRoutes.post("/plugin-operations/:operationId/advance", async (c) => {
   const operation = await getOperation(c);
   requirePluginOperationPermission(c, operation.type);
@@ -1191,7 +1469,8 @@ installerRoutes.post("/plugin-operations/:operationId/advance", async (c) => {
     if (operation.state === "deploying") {
       const parts = await readPackage(c);
       await verifyPackage(operation, parts);
-      const resource = parts.manifest.runtimeBindings?.includes("r2")
+      const targetWorkerName = await operationWorkerName(c, operation);
+      const resource = hasR2Capability(parts.manifest)
         ? await db.first<{ externalName: string; status: string }>(
             `SELECT external_name AS "externalName", status
                FROM plugin_runtime_resources
@@ -1206,10 +1485,10 @@ installerRoutes.post("/plugin-operations/:operationId/advance", async (c) => {
         throw new Error("PLUGIN_RUNTIME_R2_REQUIRED");
       await uploadPluginWorker(
         c.env,
-        workerName(operation.pluginId),
+        targetWorkerName,
         parts.worker,
         parts.manifest,
-        resource ? { STORAGE: resource.externalName } : {},
+        resource?.status === "ready" ? { STORAGE: resource.externalName } : {},
       );
       await db.execute(
         "UPDATE plugin_operations SET state = 'hardening' WHERE operation_id = ?",
@@ -1221,7 +1500,8 @@ installerRoutes.post("/plugin-operations/:operationId/advance", async (c) => {
       });
     }
     if (operation.state === "hardening") {
-      await hardenPluginWorker(c.env, workerName(operation.pluginId));
+      const targetWorkerName = await operationWorkerName(c, operation);
+      await hardenPluginWorker(c.env, targetWorkerName);
       await db.execute(
         "UPDATE plugin_operations SET state = 'binding' WHERE operation_id = ?",
         [operation.operationId],
@@ -1229,10 +1509,11 @@ installerRoutes.post("/plugin-operations/:operationId/advance", async (c) => {
       return c.json({ operationId: operation.operationId, state: "binding" });
     }
     if (operation.state === "binding") {
+      const targetWorkerName = await operationWorkerName(c, operation);
       await mergeCoreServiceBinding(
         c.env,
         bindingName(operation.pluginId),
-        workerName(operation.pluginId),
+        targetWorkerName,
       );
       await db.execute(
         "UPDATE plugin_operations SET state = 'registering' WHERE operation_id = ?",
@@ -1246,6 +1527,7 @@ installerRoutes.post("/plugin-operations/:operationId/advance", async (c) => {
     if (operation.state === "registering") {
       const parts = await readPackage(c);
       await verifyPackage(operation, parts);
+      const targetWorkerName = await operationWorkerName(c, operation);
       const binding =
         c.env[bindingName(operation.pluginId) as `PLUGIN_${string}`];
       if (!binding || typeof (binding as Fetcher).fetch !== "function")
@@ -1276,7 +1558,7 @@ installerRoutes.post("/plugin-operations/:operationId/advance", async (c) => {
           {
             sql: `INSERT INTO plugins(id, name, installed_version, api_version, database_dialects_json, active_database_provider, worker_name, status, manifest_json, installed_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, 'installed', ?, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET name=excluded.name, installed_version=excluded.installed_version, api_version=excluded.api_version, status='installed', manifest_json=excluded.manifest_json, updated_at=excluded.updated_at`,
+                ON CONFLICT(id) DO UPDATE SET name=excluded.name, installed_version=excluded.installed_version, api_version=excluded.api_version, worker_name=excluded.worker_name, status='installed', manifest_json=excluded.manifest_json, updated_at=excluded.updated_at`,
             params: [
               parts.manifest.id,
               parts.manifest.name,
@@ -1284,7 +1566,7 @@ installerRoutes.post("/plugin-operations/:operationId/advance", async (c) => {
               parts.manifest.apiVersion,
               JSON.stringify(parts.manifest.databaseDialects),
               c.env.DATABASE_PROVIDER,
-              workerName(parts.manifest.id),
+              targetWorkerName,
               JSON.stringify(parts.manifest),
               now,
               now,
@@ -1310,7 +1592,7 @@ installerRoutes.post("/plugin-operations/:operationId/advance", async (c) => {
             sql: "UPDATE plugin_operations SET state = 'installed', finished_at = ? WHERE operation_id = ?",
             params: [now, operation.operationId],
           },
-          ...(parts.manifest.runtimeBindings?.includes("r2")
+          ...(hasR2Capability(parts.manifest)
             ? []
             : [
                 {
@@ -1332,7 +1614,7 @@ installerRoutes.post("/plugin-operations/:operationId/advance", async (c) => {
           resourceId: operation.pluginId,
           data: {
             version: operation.targetVersion,
-            workerName: workerName(operation.pluginId),
+            workerName: targetWorkerName,
           },
         },
       );

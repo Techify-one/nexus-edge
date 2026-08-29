@@ -94,9 +94,21 @@ export const recorderApi = {
         storageLimitBytes: number;
         version: number;
       };
+      capabilities: {
+        storageEnabled: boolean;
+        telegramTransientMode: boolean;
+      };
       telegram: {
         botTokenConfigured: boolean;
         webhookSecretConfigured: boolean;
+        configured: boolean;
+        bot: {
+          id: string;
+          username: string;
+          name: string;
+          link: string;
+        } | null;
+        webhook: { url: string; verifiedAt: string | number } | null;
       };
     }>(`${base}/settings`),
   defaults: () =>
@@ -104,14 +116,36 @@ export const recorderApi = {
       defaultLanguage: "pt-BR" | "en" | "auto";
       autoTranscribe: boolean;
       maximumMinutes: number;
+      storageEnabled: boolean;
     }>(`${base}/defaults`),
   saveSettings: (input: Record<string, unknown>) =>
     api(`${base}/settings`, { method: "PUT", body: JSON.stringify(input) }),
+  validateTelegram: (token: string) =>
+    api<{
+      bot: { id: string; username: string; name: string; link: string };
+    }>(`${base}/telegram/validate`, {
+      method: "POST",
+      headers: { "Idempotency-Key": idempotencyKey() },
+      body: JSON.stringify({ token }),
+    }),
   configureTelegram: (webhookUrl: string) =>
-    api(`${base}/telegram/configure`, {
+    api<{
+      configured: boolean;
+      webhookChanged: boolean;
+      bot: { id: string; username: string; name: string; link: string };
+      webhook: { url: string; verified: boolean };
+    }>(`${base}/telegram/configure`, {
       method: "POST",
       headers: { "Idempotency-Key": idempotencyKey() },
       body: JSON.stringify({ webhookUrl }),
+    }),
+  disconnectTelegram: (reauthHeaders: Record<string, string>) =>
+    api(`${base}/telegram/configuration`, {
+      method: "DELETE",
+      headers: {
+        ...reauthHeaders,
+        "Idempotency-Key": idempotencyKey(),
+      },
     }),
   deleteRecording: (
     recordingId: string,

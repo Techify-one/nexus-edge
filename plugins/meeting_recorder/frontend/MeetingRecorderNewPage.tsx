@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Mic, Upload } from "lucide-react";
+import { HardDrive, Mic, Upload } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -10,6 +10,7 @@ import {
   Label,
   PageHeader,
   Select,
+  Skeleton,
   ToggleSwitch,
 } from "../../../frontend/src/components/ui/index.js";
 import {
@@ -17,6 +18,7 @@ import {
   translate,
   useI18n,
 } from "../../../frontend/src/i18n/index.js";
+import { can } from "../../../frontend/src/lib/ability.js";
 import { recorderApi, sha256Base64, uploadSegment } from "./api-client.js";
 import { MeetingRecorderRouteGate } from "./MeetingRecorderRouteGate.js";
 import { useMeetingRecorderSession } from "./MeetingRecorderSessionProvider.js";
@@ -150,6 +152,38 @@ function NewContent() {
     },
     onError: (error: Error) => toast.error(localizedError(error)),
   });
+
+  if (defaults.isPending) return <Skeleton className="h-80" />;
+  if (defaults.data && !defaults.data.storageEnabled)
+    return (
+      <>
+        <PageHeader
+          title={t("meetingRecorder.new")}
+          description={t("meetingRecorder.newDescription")}
+        />
+        <Card className="max-w-2xl">
+          <div className="flex items-start gap-3">
+            <HardDrive className="mt-0.5 h-6 w-6 text-amber-600" />
+            <div className="space-y-3">
+              <h2 className="font-bold">
+                {t("meetingRecorder.r2RequiredTitle")}
+              </h2>
+              <p className="text-sm text-slate-600">
+                {t("meetingRecorder.r2RequiredDescription")}
+              </p>
+              {can("meeting_recorder.settings.read") && (
+                <Button
+                  onClick={() => navigate("/app/meeting-recorder/settings")}
+                >
+                  <HardDrive className="h-4 w-4" />
+                  {t("meetingRecorder.openSettings")}
+                </Button>
+              )}
+            </div>
+          </div>
+        </Card>
+      </>
+    );
 
   return (
     <>

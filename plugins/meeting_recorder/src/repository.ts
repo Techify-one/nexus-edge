@@ -231,7 +231,7 @@ export class MeetingRecorderRepository {
       ["title", "r.title"],
       ["status", "r.capture_status"],
       ["source", "r.ingest_source"],
-      ["duration", "r.stored_duration_ms"],
+      ["duration", "r.timeline_duration_ms"],
       ["size", "r.total_bytes"],
       ["transcription", "r.transcription_status"],
       ["owner", "COALESCE(u.name, '')"],
@@ -297,7 +297,7 @@ export class MeetingRecorderRepository {
       title: last?.title,
       status: last?.captureStatus,
       source: last?.ingestSource,
-      duration: last?.storedDurationMs,
+      duration: last?.timelineDurationMs,
       size: last?.totalBytes,
       transcription: last?.transcriptionStatus,
       owner: last?.ownerName ?? "",
@@ -320,7 +320,7 @@ export class MeetingRecorderRepository {
       ...(readAll ? [] : [userId]),
     ];
     const row = await this.db.first<Record<string, number | string>>(
-      `SELECT COALESCE(SUM(stored_duration_ms),0) AS "durationMs",
+      `SELECT COALESCE(SUM(timeline_duration_ms),0) AS "durationMs",
               COALESCE(SUM(total_bytes),0) AS "storageBytes",
               COALESCE(SUM(CASE WHEN transcription_status = 'ready' THEN 1 ELSE 0 END),0) AS "transcriptionsReady",
               COALESCE(SUM(CASE WHEN capture_status = 'interrupted' OR
@@ -498,6 +498,62 @@ export class MeetingRecorderRepository {
     return { segment, created: Boolean(result.rowsAffected) };
   }
 
+  async reserveTransientSegment(input: {
+    recordingId: string;
+    sequence: number;
+    startOffsetMs: number;
+    durationMs: number;
+    mimeType: string;
+    sizeBytes: number;
+    checksum: string;
+    transientKey: string;
+  }): Promise<{ segment: Segment; created: boolean }> {
+    const id = createId("mrs");
+    const insert =
+      this.db.provider === "d1"
+        ? `INSERT OR IGNORE INTO meeting_recorder_segments(
+             id, recording_id, sequence, start_offset_ms, duration_ms, mime_type,
+             size_bytes, checksum_sha256, r2_key, storage_status, transcription_status,
+             created_at, updated_at
+           ) VALUES (?,?,?,?,?,?,?,?,?,'missing','pending',?,?)`
+        : `INSERT INTO meeting_recorder_segments(
+             id, recording_id, sequence, start_offset_ms, duration_ms, mime_type,
+             size_bytes, checksum_sha256, r2_key, storage_status, transcription_status,
+             created_at, updated_at
+           ) VALUES (?,?,?,?,?,?,?,?,?,'missing','pending',?,?)
+           ON CONFLICT (recording_id, sequence) DO NOTHING`;
+    const now = time(this.db);
+    const result = await this.db.execute(insert, [
+      id,
+      input.recordingId,
+      input.sequence,
+      input.startOffsetMs,
+      input.durationMs,
+      input.mimeType,
+      input.sizeBytes,
+      input.checksum,
+      input.transientKey,
+      now,
+      now,
+    ]);
+    if (result.rowsAffected)
+      await this.db.execute(
+        `UPDATE meeting_recorder_recordings SET
+           timeline_duration_ms = CASE WHEN timeline_duration_ms < ? THEN ? ELSE timeline_duration_ms END,
+           last_segment_at = ?, updated_at = ? WHERE id = ?`,
+        [
+          input.startOffsetMs + input.durationMs,
+          input.startOffsetMs + input.durationMs,
+          now,
+          now,
+          input.recordingId,
+        ],
+      );
+    const segment = await this.segment(input.recordingId, input.sequence);
+    if (!segment) throw new Error("TRANSIENT_SEGMENT_RESERVATION_FAILED");
+    return { segment, created: Boolean(result.rowsAffected) };
+  }
+
   async markStored(segment: Segment, object: R2Object): Promise<void> {
     const storedAt = time(this.db);
     await this.db.atomic([
@@ -573,6 +629,33 @@ export class MeetingRecorderRepository {
           transcription_lease_token = ?, transcription_lease_expires_at = ?,
           transcription_attempts = transcription_attempts + 1, updated_at = ?
         WHERE id = ? AND storage_status = 'stored' AND
+          (transcription_status IN ('pending','failed','quota_wait') OR
+           (transcription_status = 'processing' AND transcription_lease_expires_at < ?))`,
+      [
+        token,
+        time(this.db, now + 120_000),
+        time(this.db, now),
+        segment.id,
+        time(this.db, now),
+      ],
+    );
+    if (!result.rowsAffected)
+      throw new MeetingRecorderError(
+        409,
+        "TRANSCRIPTION_BUSY",
+        "This segment is already being transcribed.",
+      );
+    return token;
+  }
+
+  async claimTransientTranscription(segment: Segment): Promise<string> {
+    const token = createId("lease");
+    const now = Date.now();
+    const result = await this.db.execute(
+      `UPDATE meeting_recorder_segments SET transcription_status = 'processing',
+          transcription_lease_token = ?, transcription_lease_expires_at = ?,
+          transcription_attempts = transcription_attempts + 1, updated_at = ?
+        WHERE id = ? AND storage_status = 'missing' AND r2_key LIKE 'transient/%' AND
           (transcription_status IN ('pending','failed','quota_wait') OR
            (transcription_status = 'processing' AND transcription_lease_expires_at < ?))`,
       [
@@ -685,6 +768,57 @@ export class MeetingRecorderRepository {
         text: segment.transcriptText,
       })),
     };
+  }
+
+  async telegramConfiguration() {
+    return this.db.first<{
+      botId: string;
+      username: string;
+      displayName: string;
+      webhookUrl: string;
+      verifiedAt: unknown;
+    }>(
+      `SELECT bot_id AS "botId", username, display_name AS "displayName",
+              webhook_url AS "webhookUrl", verified_at AS "verifiedAt"
+         FROM meeting_recorder_telegram_configuration WHERE id = 'bot'`,
+    );
+  }
+
+  async saveTelegramConfiguration(input: {
+    botId: string;
+    username: string;
+    displayName: string;
+    webhookUrl: string;
+    userId: string;
+  }): Promise<void> {
+    const now = time(this.db);
+    await this.db.execute(
+      `INSERT INTO meeting_recorder_telegram_configuration(
+         id, bot_id, username, display_name, webhook_url, verified_at,
+         updated_by_user_id, updated_at
+       ) VALUES ('bot',?,?,?,?,?,?,?)
+       ON CONFLICT(id) DO UPDATE SET
+         bot_id = excluded.bot_id, username = excluded.username,
+         display_name = excluded.display_name, webhook_url = excluded.webhook_url,
+         verified_at = excluded.verified_at,
+         updated_by_user_id = excluded.updated_by_user_id,
+         updated_at = excluded.updated_at`,
+      [
+        input.botId,
+        input.username,
+        input.displayName,
+        input.webhookUrl,
+        now,
+        input.userId,
+        now,
+      ],
+    );
+  }
+
+  async clearTelegramConfiguration(): Promise<void> {
+    await this.db.execute(
+      "DELETE FROM meeting_recorder_telegram_configuration WHERE id = 'bot'",
+    );
   }
 
   async settings() {

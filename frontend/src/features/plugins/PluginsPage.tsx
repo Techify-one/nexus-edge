@@ -32,7 +32,7 @@ import {
 import {
   cloudflareAccountTokensUrl,
   cloudflarePluginTokenTemplateUrl,
-  cloudflareUserTokensUrl,
+  cloudflareR2TokenTemplateUrl,
 } from "../../lib/cloudflare-token.js";
 import { translate, useI18n, type TranslationKey } from "../../i18n/index.js";
 import { can } from "../../lib/ability.js";
@@ -49,6 +49,7 @@ type Manifest = {
   permissions: string[];
   menu: { title: string; routeKey: string }[];
   runtimeBindings?: Array<"ai" | "r2">;
+  optionalRuntimeBindings?: Array<"ai" | "r2">;
 };
 type Plugin = {
   id: string;
@@ -904,7 +905,9 @@ export default function PluginsPage() {
                 {runtimeCredential.data?.accountId && (
                   <a
                     className="inline-flex items-center gap-1 font-medium text-indigo-700 underline"
-                    href={cloudflareUserTokensUrl()}
+                    href={cloudflareR2TokenTemplateUrl(
+                      runtimeCredential.data.accountId,
+                    )}
                     target="_blank"
                     rel="noreferrer noopener"
                   >

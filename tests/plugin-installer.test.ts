@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { sha256, stableJson } from "../packages/webhook-contract/src/index.js";
 import type { CoreEnv, HonoEnv } from "../workers/core/src/env.js";
 import {
+  attachPluginR2Binding,
   deletePluginSecret,
   pluginSecretConfigured,
   provisionR2Bucket,
@@ -16,8 +17,14 @@ import {
 } from "../workers/core/src/installer/cloudflare.js";
 import { AppError } from "../workers/core/src/lib/http.js";
 import { archivePackageStatements } from "../workers/core/src/installer/package-archive.js";
-import type { PluginManifest } from "../workers/core/src/installer/manifest.js";
-import { installerRoutes } from "../workers/core/src/routes/installer.js";
+import {
+  pluginManifestSchema,
+  type PluginManifest,
+} from "../workers/core/src/installer/manifest.js";
+import {
+  installerRoutes,
+  pluginWorkerName,
+} from "../workers/core/src/routes/installer.js";
 
 const crmPackageParts = () => {
   const pluginRoot = "plugins/crm";
@@ -57,10 +64,22 @@ const releasePackageBody = (pluginId: string) => {
     readFileSync(`plugins/${pluginId}/release/${pluginId}.plugin.zip`),
   );
   const manifest = strFromU8(archive["manifest.json"]!);
-  const d1Migration = strFromU8(archive["migrations/d1/0001_init.sql"]!);
-  const postgresMigration = strFromU8(
-    archive["migrations/postgres/0001_init.sql"]!,
-  );
+  const migrations = (dialect: "d1" | "postgres") =>
+    Object.fromEntries(
+      Object.entries(archive)
+        .filter(
+          ([path]) =>
+            path.startsWith(`migrations/${dialect}/`) && path.endsWith(".sql"),
+        )
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([path, value]) => [
+          path
+            .split("/")
+            .at(-1)!
+            .replace(/\.sql$/u, ""),
+          strFromU8(value),
+        ]),
+    );
   const body = new FormData();
   body.set("manifest", manifest);
   body.set(
@@ -69,11 +88,8 @@ const releasePackageBody = (pluginId: string) => {
       type: "application/javascript",
     }),
   );
-  body.set("d1Migrations", JSON.stringify({ "0001_init": d1Migration }));
-  body.set(
-    "postgresMigrations",
-    JSON.stringify({ "0001_init": postgresMigration }),
-  );
+  body.set("d1Migrations", JSON.stringify(migrations("d1")));
+  body.set("postgresMigrations", JSON.stringify(migrations("postgres")));
   return body;
 };
 
@@ -147,6 +163,21 @@ const installerApp = (options?: {
 };
 
 describe("CRM plugin installer", () => {
+  it("namespaces new plugin Workers per Nexus installation", async () => {
+    const first = await pluginWorkerName(
+      "install_11111111111111111111111111111111",
+      "meeting_recorder",
+    );
+    const second = await pluginWorkerName(
+      "install_22222222222222222222222222222222",
+      "meeting_recorder",
+    );
+
+    expect(first).toMatch(/^app-[a-f0-9]{12}-plugin-meeting-recorder$/u);
+    expect(second).toMatch(/^app-[a-f0-9]{12}-plugin-meeting-recorder$/u);
+    expect(first).not.toBe(second);
+  });
+
   it("accepts the CRM package sources without password confirmation", async () => {
     const executedSql: string[] = [];
     const response = await installerApp({ executedSql }).request(
@@ -664,11 +695,11 @@ describe("Meeting Recorder release installation contract", () => {
       "/plugin-operations",
       {
         method: "POST",
-        headers: { "Idempotency-Key": "meeting-recorder-install-beta-3" },
+        headers: { "Idempotency-Key": "meeting-recorder-install-beta-4" },
         body: releasePackageBody("meeting_recorder"),
       },
       {
-        APP_VERSION: "1.1.0-beta.3",
+        APP_VERSION: "1.1.0-beta.4",
         APP_INSTALLATION_ID: "install_meeting_recorder_test",
         CF_API_TOKEN: "configured-plugin-runtime-token",
         CF_ACCOUNT_ID: "a".repeat(32),
@@ -691,11 +722,11 @@ describe("Meeting Recorder release installation contract", () => {
       "/plugin-operations",
       {
         method: "POST",
-        headers: { "Idempotency-Key": "meeting-recorder-install-beta-2" },
+        headers: { "Idempotency-Key": "meeting-recorder-install-beta-3" },
         body: releasePackageBody("meeting_recorder"),
       },
       {
-        APP_VERSION: "1.1.0-beta.2",
+        APP_VERSION: "1.1.0-beta.3",
         APP_INSTALLATION_ID: "install_meeting_recorder_test",
         CF_API_TOKEN: "configured-plugin-runtime-token",
         CF_ACCOUNT_ID: "a".repeat(32),
@@ -822,6 +853,224 @@ describe("Cloudflare plugin bindings", () => {
       },
       { STORAGE: "nexus-private-recorder" },
     );
+  });
+
+  it("installs an optional R2 plugin without attaching STORAGE", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const metadata = (init?.body as FormData).get("metadata");
+        expect(metadata).toBeInstanceOf(Blob);
+        const parsed = JSON.parse(await (metadata as Blob).text());
+        expect(parsed.bindings).not.toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ name: "STORAGE" }),
+          ]),
+        );
+        expect(parsed.bindings).toEqual(
+          expect.arrayContaining([{ type: "ai", name: "AI" }]),
+        );
+        return Response.json({ success: true, result: {} });
+      }),
+    );
+
+    await uploadPluginWorker(
+      {
+        CF_API_TOKEN: "test-token",
+        CF_ACCOUNT_ID: "test-account",
+        DATABASE_PROVIDER: "d1",
+        D1_DATABASE_ID: "database-id",
+      } as CoreEnv,
+      "app-plugin-meeting-recorder",
+      "export default {};",
+      {
+        compatibilityDate: "2026-08-28",
+        compatibilityFlags: ["nodejs_compat"],
+        runtimeBindings: ["ai"],
+        optionalRuntimeBindings: ["r2"],
+      },
+    );
+  });
+
+  it("attaches optional R2 later while inheriting existing bindings", async () => {
+    const requests: RequestInit[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        requests.push(init ?? {});
+        if (init?.method === "PATCH") {
+          const settings = (init.body as FormData).get("settings");
+          expect(settings).toBeInstanceOf(Blob);
+          expect(JSON.parse(await (settings as Blob).text())).toEqual({
+            bindings: [
+              { type: "inherit", name: "DB" },
+              { type: "inherit", name: "AI" },
+              {
+                type: "r2_bucket",
+                name: "STORAGE",
+                bucket_name: "nexus-private-recorder",
+              },
+            ],
+          });
+          return Response.json({ success: true, result: {} });
+        }
+        const verification = requests.some(
+          (request) => request.method === "PATCH",
+        );
+        return Response.json({
+          success: true,
+          result: {
+            bindings: verification
+              ? [
+                  { type: "d1", name: "DB", id: "database-id" },
+                  { type: "ai", name: "AI" },
+                  { type: "r2_bucket", name: "STORAGE" },
+                ]
+              : [
+                  { type: "d1", name: "DB", id: "database-id" },
+                  { type: "ai", name: "AI" },
+                ],
+          },
+        });
+      }),
+    );
+
+    await attachPluginR2Binding(
+      {
+        CF_API_TOKEN: "test-token",
+        CF_ACCOUNT_ID: "a".repeat(32),
+      } as CoreEnv,
+      "app-plugin-meeting-recorder",
+      "nexus-private-recorder",
+    );
+    expect(requests.map((request) => request.method ?? "GET")).toEqual([
+      "GET",
+      "PATCH",
+      "GET",
+    ]);
+  });
+
+  it("rejects a binding declared as both required and optional", () => {
+    const manifest = JSON.parse(
+      readFileSync("plugins/meeting_recorder/manifest.json", "utf8"),
+    ) as Record<string, unknown>;
+    manifest.runtimeBindings = ["ai", "r2"];
+    manifest.optionalRuntimeBindings = ["r2"];
+    expect(pluginManifestSchema.safeParse(manifest).success).toBe(false);
+  });
+
+  it("activates optional R2 on an installed plugin without reinstalling it", async () => {
+    const accountId = "a".repeat(32);
+    const installationId = "install_optional_r2";
+    const digest = new Uint8Array(
+      await crypto.subtle.digest(
+        "SHA-256",
+        new TextEncoder().encode(installationId),
+      ),
+    );
+    const prefix = [...digest]
+      .slice(0, 6)
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("");
+    const bucketName = `nexus-${prefix}-meeting-recorder`;
+    let bindingAttached = false;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.endsWith(`/accounts/${accountId}/tokens/verify`))
+          return Response.json({ success: true, result: { status: "active" } });
+        if (
+          url.endsWith("/accounts?per_page=50") ||
+          url.endsWith(`/accounts/${accountId}/workers/scripts`) ||
+          url.includes("/d1/database")
+        )
+          return Response.json(
+            { success: false, result: null, errors: [{ code: 10000 }] },
+            { status: 403 },
+          );
+        if (url.endsWith(`/r2/buckets/${bucketName}`))
+          return Response.json(
+            { success: false, result: null, errors: [{ code: 10006 }] },
+            { status: 404 },
+          );
+        if (url.endsWith("/r2/buckets") && init?.method === "POST")
+          return Response.json({
+            success: true,
+            result: { name: bucketName },
+          });
+        if (
+          url.endsWith(
+            "/workers/scripts/nexus-plugin-meeting-recorder/settings",
+          )
+        ) {
+          if (init?.method === "PATCH") {
+            bindingAttached = true;
+            return Response.json({ success: true, result: {} });
+          }
+          return Response.json({
+            success: true,
+            result: {
+              bindings: bindingAttached
+                ? [
+                    { type: "d1", name: "DB" },
+                    { type: "ai", name: "AI" },
+                    { type: "r2_bucket", name: "STORAGE" },
+                  ]
+                : [
+                    { type: "d1", name: "DB" },
+                    { type: "ai", name: "AI" },
+                  ],
+            },
+          });
+        }
+        throw new Error(`Unexpected URL: ${url}`);
+      }),
+    );
+    const manifest = JSON.parse(
+      readFileSync("plugins/meeting_recorder/manifest.json", "utf8"),
+    );
+    const response = await installerApp({
+      plugin: {
+        workerName: "nexus-plugin-meeting-recorder",
+        status: "installed",
+        manifestJson: JSON.stringify(manifest),
+      },
+      reauth: {
+        userId: "usr_admin",
+        authMethod: "cookie",
+        credentialId: null,
+        expiresAt: Date.now() + 60_000,
+      },
+    }).request(
+      "/plugins/meeting_recorder/runtime-resources/r2",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": "activate-optional-r2-test",
+          "X-Reauth-Token": "reauth-test-token",
+        },
+        body: JSON.stringify({
+          token: `r2-${"x".repeat(48)}`,
+          mode: "create",
+        }),
+      },
+      {
+        APP_INSTALLATION_ID: installationId,
+        CF_ACCOUNT_ID: accountId,
+        CF_API_TOKEN: "core-workers-token",
+        DATABASE_PROVIDER: "d1",
+      } as CoreEnv,
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      pluginId: "meeting_recorder",
+      status: "ready",
+      resource: { type: "r2", binding: "STORAGE" },
+    });
+    expect(bindingAttached).toBe(true);
   });
 
   it("creates an R2 bucket only with a narrow temporary token", async () => {

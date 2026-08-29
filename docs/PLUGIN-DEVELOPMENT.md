@@ -47,6 +47,9 @@ The manifest is strict and accepts only these fields:
 - optional `runtimeBindings`, limited to `"ai"` and `"r2"` in canonical
   lexicographic order, when the plugin uses Workers AI or dedicated object
   storage;
+- optional `optionalRuntimeBindings`, with the same canonical ordering and no
+  overlap with `runtimeBindings`, for capabilities that may be attached after
+  installation without reinstalling the plugin;
 - optional localized metadata for `pt-BR` and `en`, with menu keys already
   declared by the manifest;
 - `tablePrefix` equal to `<id>_`;
@@ -69,6 +72,17 @@ The Installer supplies the production database binding and provider variable.
 For a manifest that declares `runtimeBindings: ["ai"]`, it also supplies a
 single `AI` binding without exposing Cloudflare credentials to the plugin. A
 plugin declaring `"r2"` receives a dedicated private `STORAGE` bucket binding.
+When `"r2"` is declared in `optionalRuntimeBindings`, installation proceeds
+without a bucket. An administrator can later call
+`POST /api/v1/plugins/:pluginId/runtime-resources/r2`; the Core provisions the
+bucket with the temporary R2-only token, patches the installed plugin Worker,
+verifies the binding, and records the resource as ready. Required bindings keep
+the blocking Installer behavior for backward compatibility.
+For new installations, the Core namespaces the deployed Worker name with a
+stable fingerprint of `APP_INSTALLATION_ID`. Two Nexus installations in the
+same Cloudflare account therefore cannot overwrite each other's plugin
+Workers. Updates retain an existing Worker name so legacy installations keep
+their secrets and bindings.
 The Installer asks for a narrowly scoped temporary user API token with only
 `Account > Workers R2 Storage > Edit` on the target account, provisions or
 reattaches the deterministic bucket, and discards the token. Do not use an

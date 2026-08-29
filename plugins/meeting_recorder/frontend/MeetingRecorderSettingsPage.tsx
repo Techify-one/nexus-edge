@@ -1,5 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, KeyRound, Save } from "lucide-react";
+import {
+  Bot,
+  ExternalLink,
+  HardDrive,
+  KeyRound,
+  RefreshCw,
+  Save,
+  Trash2,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -16,8 +24,10 @@ import {
 import {
   ApiError,
   api,
+  idempotencyKey,
   recentReauthHeaders,
 } from "../../../frontend/src/lib/api/core-client.js";
+import { cloudflareR2TokenTemplateUrl } from "../../../frontend/src/lib/cloudflare-token.js";
 import { useI18n } from "../../../frontend/src/i18n/index.js";
 import { can } from "../../../frontend/src/lib/ability.js";
 import { recorderApi } from "./api-client.js";
@@ -37,6 +47,7 @@ function SettingsContent() {
   const { t } = useI18n();
   const client = useQueryClient();
   const editable = can("meeting_recorder.settings.update");
+  const canActivateR2 = can("core.plugin.update") && can("core.plugin.read");
   const query = useQuery({
     queryKey: ["meeting-recorder", "settings"],
     queryFn: recorderApi.settings,
@@ -48,6 +59,18 @@ function SettingsContent() {
   const [maximumMinutes, setMaximumMinutes] = useState(120);
   const [storageLimitMb, setStorageLimitMb] = useState(1024);
   const [botToken, setBotToken] = useState("");
+  const [r2Token, setR2Token] = useState("");
+  const runtimeCredential = useQuery({
+    queryKey: ["plugin-runtime-credential"],
+    queryFn: () =>
+      api<{ configured: boolean; accountId: string }>(
+        "/api/v1/plugin-runtime-credential",
+      ),
+    enabled:
+      canActivateR2 &&
+      Boolean(query.data && !query.data.capabilities.storageEnabled),
+    staleTime: 30_000,
+  });
   useEffect(() => {
     if (!query.data) return;
     setDefaultLanguage(query.data.settings.defaultLanguage);
@@ -79,10 +102,16 @@ function SettingsContent() {
     mutationFn: async () => {
       if (botToken.trim().length < 20)
         throw new Error(t("meetingRecorder.telegramTokenInvalid"));
+      await recorderApi.validateTelegram(botToken.trim());
       const webhookSecret = randomSecret();
       const reauth = await recentReauthHeaders(
         t("meetingRecorder.telegramPassword"),
       );
+      if (
+        query.data?.telegram.botTokenConfigured ||
+        query.data?.telegram.webhookSecretConfigured
+      )
+        await recorderApi.disconnectTelegram(reauth);
       await api(
         "/api/v1/plugins/meeting_recorder/runtime-secrets/TELEGRAM_BOT_TOKEN",
         {
@@ -103,8 +132,7 @@ function SettingsContent() {
       const webhookUrl = `${window.location.origin}/api/v1/public/p/meeting_recorder/telegram/webhook`;
       for (let attempt = 0; attempt < 12; attempt += 1) {
         try {
-          await recorderApi.configureTelegram(webhookUrl);
-          return;
+          return await recorderApi.configureTelegram(webhookUrl);
         } catch (error) {
           if (
             !(error instanceof ApiError) ||
@@ -125,6 +153,89 @@ function SettingsContent() {
     onError: (error: Error) => {
       setBotToken("");
       toast.error(error.message);
+      void client.invalidateQueries({
+        queryKey: ["meeting-recorder", "settings"],
+      });
+    },
+  });
+  const verifyTelegram = useMutation({
+    mutationFn: () => {
+      const webhookUrl = `${window.location.origin}/api/v1/public/p/meeting_recorder/telegram/webhook`;
+      return recorderApi.configureTelegram(webhookUrl);
+    },
+    onSuccess: (result) => {
+      toast.success(
+        t(
+          result.webhookChanged
+            ? "meetingRecorder.telegramWebhookCorrected"
+            : "meetingRecorder.telegramWebhookVerified",
+        ),
+      );
+      void client.invalidateQueries({
+        queryKey: ["meeting-recorder", "settings"],
+      });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+  const disconnectTelegram = useMutation({
+    mutationFn: async () => {
+      const reauth = await recentReauthHeaders(
+        t("meetingRecorder.telegramDisconnectPassword"),
+      );
+      await recorderApi.disconnectTelegram(reauth);
+      await api(
+        "/api/v1/plugins/meeting_recorder/runtime-secrets/TELEGRAM_BOT_TOKEN",
+        { method: "DELETE", headers: reauth },
+      );
+      await api(
+        "/api/v1/plugins/meeting_recorder/runtime-secrets/TELEGRAM_WEBHOOK_SECRET",
+        { method: "DELETE", headers: reauth },
+      );
+    },
+    onSuccess: () => {
+      setBotToken("");
+      toast.success(t("meetingRecorder.telegramDisconnected"));
+      void client.invalidateQueries({
+        queryKey: ["meeting-recorder", "settings"],
+      });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+  const activateR2 = useMutation({
+    mutationFn: async () => {
+      const token = r2Token.trim();
+      if (token.length < 40)
+        throw new Error(t("meetingRecorder.r2TokenInvalid"));
+      const reauth = await recentReauthHeaders(
+        t("meetingRecorder.r2ReauthPassword"),
+      );
+      await api("/api/v1/plugins/meeting_recorder/runtime-resources/r2", {
+        method: "POST",
+        headers: { ...reauth, "Idempotency-Key": idempotencyKey() },
+        body: JSON.stringify({ token, mode: "create" }),
+      });
+      setR2Token("");
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        try {
+          const status = await recorderApi.settings();
+          if (status.capabilities.storageEnabled) return status;
+        } catch {
+          // Binding changes publish a Worker version; retry during propagation.
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 500));
+      }
+      throw new Error(t("meetingRecorder.r2ActivationPending"));
+    },
+    onSuccess: (status) => {
+      client.setQueryData(["meeting-recorder", "settings"], status);
+      void client.invalidateQueries({
+        queryKey: ["meeting-recorder", "defaults"],
+      });
+      toast.success(t("meetingRecorder.r2Activated"));
+    },
+    onError: (error: Error) => {
+      setR2Token("");
+      toast.error(error.message);
     },
   });
 
@@ -137,6 +248,70 @@ function SettingsContent() {
         description={t("meetingRecorder.settingsDescription")}
       />
       <div className="grid gap-5 lg:grid-cols-2">
+        <Card>
+          <div className="mb-5 flex items-center gap-3">
+            <HardDrive className="h-5 w-5 text-indigo-600" />
+            <div>
+              <h2 className="font-bold">{t("meetingRecorder.r2Title")}</h2>
+              <p className="text-sm text-slate-500">
+                {t("meetingRecorder.r2Description")}
+              </p>
+            </div>
+          </div>
+          {query.data.capabilities.storageEnabled ? (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+              {t("meetingRecorder.r2Enabled")}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+                {t("meetingRecorder.r2Disabled")}
+              </div>
+              {canActivateR2 && runtimeCredential.data && (
+                <>
+                  <a
+                    className="inline-flex items-center gap-1 font-medium text-indigo-700 underline"
+                    href={cloudflareR2TokenTemplateUrl(
+                      runtimeCredential.data.accountId,
+                    )}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                  >
+                    {t("meetingRecorder.r2CreateToken")}
+                    <ExternalLink className="h-4 w-4" />
+                  </a>
+                  <p className="text-xs text-slate-500">
+                    {t("meetingRecorder.r2TokenInstructions")}
+                  </p>
+                  <Label htmlFor="meeting-recorder-r2-token">
+                    {t("meetingRecorder.r2Token")}
+                  </Label>
+                  <PasswordInput
+                    id="meeting-recorder-r2-token"
+                    autoComplete="off"
+                    minLength={40}
+                    maxLength={2048}
+                    value={r2Token}
+                    onChange={(event) => setR2Token(event.target.value)}
+                  />
+                  <Button
+                    busy={activateR2.isPending}
+                    disabled={r2Token.trim().length < 40}
+                    onClick={() => activateR2.mutate()}
+                  >
+                    <HardDrive className="h-4 w-4" />
+                    {t("meetingRecorder.r2Activate")}
+                  </Button>
+                </>
+              )}
+              {!canActivateR2 && (
+                <p className="text-sm text-slate-500">
+                  {t("meetingRecorder.r2AdminRequired")}
+                </p>
+              )}
+            </div>
+          )}
+        </Card>
         <Card>
           <div className="mb-5 flex items-center gap-3">
             <Save className="h-5 w-5 text-indigo-600" />
@@ -186,6 +361,7 @@ function SettingsContent() {
                 min={100}
                 max={8192}
                 value={storageLimitMb}
+                disabled={!query.data.capabilities.storageEnabled}
                 onChange={(event) =>
                   setStorageLimitMb(Number(event.target.value))
                 }
@@ -218,11 +394,40 @@ function SettingsContent() {
             </div>
           </div>
           <div className="mb-4 rounded-xl bg-slate-50 p-3 text-sm">
-            {query.data.telegram.botTokenConfigured &&
-            query.data.telegram.webhookSecretConfigured
+            {query.data.telegram.configured
               ? t("meetingRecorder.telegramReady")
               : t("meetingRecorder.telegramNotConfigured")}
           </div>
+          <div className="mb-4 rounded-xl border border-slate-200 p-3 text-sm text-slate-700">
+            {query.data.capabilities.telegramTransientMode
+              ? t("meetingRecorder.telegramTransientMode")
+              : t("meetingRecorder.telegramStoredMode")}
+          </div>
+          {query.data.telegram.bot && query.data.telegram.webhook && (
+            <div className="mb-4 space-y-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-950">
+              <p className="font-semibold">
+                {query.data.telegram.bot.name} · @
+                {query.data.telegram.bot.username}
+              </p>
+              <p>
+                {t("meetingRecorder.telegramBotId")}:{" "}
+                {query.data.telegram.bot.id}
+              </p>
+              <p className="break-all text-xs">
+                {t("meetingRecorder.telegramWebhook")}:{" "}
+                {query.data.telegram.webhook.url}
+              </p>
+              <a
+                className="inline-flex items-center gap-1 font-semibold text-indigo-700 underline"
+                href={query.data.telegram.bot.link}
+                target="_blank"
+                rel="noreferrer noopener"
+              >
+                {t("meetingRecorder.openTelegramBot")}
+                <ExternalLink className="h-4 w-4" />
+              </a>
+            </div>
+          )}
           {editable && (
             <>
               <Label htmlFor="telegram-token">
@@ -248,8 +453,36 @@ function SettingsContent() {
                 onClick={() => telegram.mutate()}
               >
                 <KeyRound className="h-4 w-4" />
-                {t("meetingRecorder.configureTelegram")}
+                {t(
+                  query.data.telegram.configured
+                    ? "meetingRecorder.replaceTelegram"
+                    : "meetingRecorder.configureTelegram",
+                )}
               </Button>
+              {(query.data.telegram.botTokenConfigured ||
+                query.data.telegram.webhookSecretConfigured) && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    variant="secondary"
+                    busy={verifyTelegram.isPending}
+                    onClick={() => verifyTelegram.mutate()}
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    {t("meetingRecorder.verifyTelegramWebhook")}
+                  </Button>
+                  <Button
+                    variant="danger"
+                    busy={disconnectTelegram.isPending}
+                    onClick={() =>
+                      confirm(t("meetingRecorder.telegramDisconnectConfirm")) &&
+                      disconnectTelegram.mutate()
+                    }
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    {t("meetingRecorder.disconnectTelegram")}
+                  </Button>
+                </div>
+              )}
             </>
           )}
         </Card>

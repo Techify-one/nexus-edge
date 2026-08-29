@@ -40,7 +40,7 @@ export const meetingRecorderFrontendMessages = {
     "meetingRecorder.transcription.partial": "Parcial",
     "meetingRecorder.transcription.quota_wait": "Aguardando cota",
     "meetingRecorder.transcription.failed": "Falhou",
-    "meetingRecorder.metric.duration": "Áudio armazenado",
+    "meetingRecorder.metric.duration": "Duração processada",
     "meetingRecorder.metric.storage": "Espaço utilizado",
     "meetingRecorder.metric.transcribed": "Transcrições prontas",
     "meetingRecorder.metric.interrupted": "Interrompidas",
@@ -78,6 +78,8 @@ export const meetingRecorderFrontendMessages = {
     "meetingRecorder.download": "Baixar",
     "meetingRecorder.noTranscript": "A transcrição ainda não está disponível.",
     "meetingRecorder.noAudio": "Nenhum segmento de áudio disponível.",
+    "meetingRecorder.audioNotRetained":
+      "Este áudio veio do Telegram no modo sem R2 e não foi armazenado. A transcrição permanece disponível.",
     "meetingRecorder.segmentProgress": "Segmento {{current}} de {{total}}",
     "meetingRecorder.playSegment": "Reproduzir segmento {{number}}",
     "meetingRecorder.details": "Detalhes",
@@ -101,6 +103,30 @@ export const meetingRecorderFrontendMessages = {
     "meetingRecorder.maximumMinutes": "Duração máxima (minutos)",
     "meetingRecorder.storageLimit": "Limite de armazenamento (MiB)",
     "meetingRecorder.settingsSaved": "Configurações salvas.",
+    "meetingRecorder.r2Title": "Armazenamento de áudio (R2)",
+    "meetingRecorder.r2Description":
+      "O R2 é opcional e pode ser ativado a qualquer momento, sem reinstalar o plugin.",
+    "meetingRecorder.r2Enabled":
+      "R2 ativo: gravação, upload, armazenamento e reprodução de áudio estão liberados.",
+    "meetingRecorder.r2Disabled":
+      "R2 desativado: o bot do Telegram transcreve em memória e descarta o áudio; gravação, upload e reprodução ficam indisponíveis.",
+    "meetingRecorder.r2CreateToken": "Criar token R2 pré-configurado",
+    "meetingRecorder.r2TokenInstructions":
+      "Revise o token com somente Account → Workers R2 Storage → Edit, crie-o, cole abaixo e revogue-o após a ativação.",
+    "meetingRecorder.r2Token": "Token temporário do Cloudflare R2",
+    "meetingRecorder.r2TokenInvalid": "Informe um token R2 válido.",
+    "meetingRecorder.r2ReauthPassword":
+      "Confirme sua senha para ativar o armazenamento R2",
+    "meetingRecorder.r2Activate": "Ativar R2",
+    "meetingRecorder.r2Activated": "R2 ativado com sucesso.",
+    "meetingRecorder.r2ActivationPending":
+      "O R2 foi vinculado, mas o novo Worker ainda está propagando. Atualize a página em instantes.",
+    "meetingRecorder.r2AdminRequired":
+      "Um administrador com permissão para atualizar plugins pode ativar o R2.",
+    "meetingRecorder.r2RequiredTitle": "Ative o R2 para gravar ou enviar áudio",
+    "meetingRecorder.r2RequiredDescription":
+      "Sem R2, somente áudios recebidos pelo Telegram podem ser transcritos, sem retenção do arquivo original.",
+    "meetingRecorder.openSettings": "Abrir configurações",
     "meetingRecorder.telegram": "Bot do Telegram",
     "meetingRecorder.telegramDescription":
       "Áudios enviados ao bot aparecem na lista e são transcritos.",
@@ -112,12 +138,32 @@ export const meetingRecorderFrontendMessages = {
       "Informe um token válido do Telegram.",
     "meetingRecorder.telegramPassword":
       "Confirme sua senha para configurar o Telegram",
+    "meetingRecorder.telegramDisconnectPassword":
+      "Confirme sua senha para desconectar o bot do Telegram",
     "meetingRecorder.telegramPrivacy":
       "O token é enviado diretamente aos segredos do Worker; ele não é salvo no navegador nem no banco.",
     "meetingRecorder.telegramUserLink":
       "Para receber áudios, informe o ID numérico do Telegram no perfil do usuário e conceda a permissão de criar gravações.",
+    "meetingRecorder.telegramTransientMode":
+      "Modo sem R2: cada áudio é baixado do Telegram, transcrito imediatamente e descartado. Não será possível ouvi-lo depois no Nexus.",
+    "meetingRecorder.telegramStoredMode":
+      "Modo com R2: o áudio é armazenado de forma privada e poderá ser reproduzido junto da transcrição.",
     "meetingRecorder.configureTelegram": "Configurar bot e webhook",
+    "meetingRecorder.replaceTelegram": "Trocar bot e webhook",
     "meetingRecorder.telegramConfigured": "Bot do Telegram configurado.",
+    "meetingRecorder.telegramBotId": "ID do bot",
+    "meetingRecorder.telegramWebhook": "Webhook verificado",
+    "meetingRecorder.openTelegramBot": "Abrir conversa com o bot",
+    "meetingRecorder.verifyTelegramWebhook": "Verificar webhook",
+    "meetingRecorder.telegramWebhookVerified":
+      "O webhook já estava correto e foi verificado.",
+    "meetingRecorder.telegramWebhookCorrected":
+      "O webhook foi corrigido para esta instalação do Nexus.",
+    "meetingRecorder.disconnectTelegram": "Desconectar bot",
+    "meetingRecorder.telegramDisconnectConfirm":
+      "Remover o webhook, o token e o segredo deste bot? As transcrições existentes serão preservadas.",
+    "meetingRecorder.telegramDisconnected":
+      "Bot do Telegram desconectado e credenciais removidas.",
     "meetingRecorder.unavailable": "Plugin não instalado",
     "meetingRecorder.unavailableDescription":
       "Instale o pacote do Gravador de reuniões para acessar esta área.",
@@ -149,9 +195,31 @@ export const meetingRecorderFrontendMessages = {
       "O áudio excede a duração máxima configurada.",
     "errors.STORAGE_LIMIT_EXCEEDED":
       "O limite de armazenamento do gravador foi atingido.",
+    "errors.R2_NOT_ENABLED":
+      "Ative o R2 nas configurações do gravador para usar este recurso.",
+    "errors.R2_TOKEN_INVALID":
+      "O token R2 é inválido ou pertence a outra conta Cloudflare.",
+    "errors.R2_TOKEN_TOO_BROAD":
+      "Use um token limitado a Account → Workers R2 Storage → Edit.",
+    "errors.R2_NOT_ENTITLED":
+      "Ative o R2 nesta conta Cloudflare antes de continuar.",
+    "errors.R2_BUCKET_CONFLICT":
+      "O bucket reservado para este plugin já existe fora desta instalação.",
+    "errors.R2_BUCKET_MISSING": "O bucket R2 selecionado não existe.",
+    "errors.R2_UNAVAILABLE":
+      "A Cloudflare não conseguiu ativar o armazenamento R2 agora.",
+    "errors.R2_PROVISIONING_TARGET_MISSING":
+      "A conta Cloudflare desta instalação não está configurada para ativar R2.",
     "errors.TRANSCRIPTION_BUSY": "Este áudio já está sendo transcrito.",
     "errors.TELEGRAM_NOT_CONFIGURED":
       "Configure o token e o webhook do Telegram.",
+    "errors.TELEGRAM_BOT_INVALID": "O token não pertence a um bot válido.",
+    "errors.TELEGRAM_API_ERROR":
+      "O Telegram recusou a operação. Verifique o token e tente novamente.",
+    "errors.TELEGRAM_WEBHOOK_URL_INVALID":
+      "A URL precisa ser o endpoint oficial deste Nexus.",
+    "errors.TELEGRAM_WEBHOOK_VERIFICATION_FAILED":
+      "O Telegram não confirmou a URL de webhook desta instalação.",
     "permissions.meeting_recorder.recording.read":
       "Visualizar gravações próprias",
     "permissions.meeting_recorder.recording.create":
@@ -217,7 +285,7 @@ export const meetingRecorderFrontendMessages = {
     "meetingRecorder.transcription.partial": "Partial",
     "meetingRecorder.transcription.quota_wait": "Waiting for quota",
     "meetingRecorder.transcription.failed": "Failed",
-    "meetingRecorder.metric.duration": "Stored audio",
+    "meetingRecorder.metric.duration": "Processed duration",
     "meetingRecorder.metric.storage": "Storage used",
     "meetingRecorder.metric.transcribed": "Transcripts ready",
     "meetingRecorder.metric.interrupted": "Interrupted",
@@ -254,6 +322,8 @@ export const meetingRecorderFrontendMessages = {
     "meetingRecorder.download": "Download",
     "meetingRecorder.noTranscript": "The transcript is not available yet.",
     "meetingRecorder.noAudio": "No audio segment is available.",
+    "meetingRecorder.audioNotRetained":
+      "This audio came from Telegram while R2 was disabled and was not retained. Its transcript remains available.",
     "meetingRecorder.segmentProgress": "Segment {{current}} of {{total}}",
     "meetingRecorder.playSegment": "Play segment {{number}}",
     "meetingRecorder.details": "Details",
@@ -277,6 +347,30 @@ export const meetingRecorderFrontendMessages = {
     "meetingRecorder.maximumMinutes": "Maximum duration (minutes)",
     "meetingRecorder.storageLimit": "Storage limit (MiB)",
     "meetingRecorder.settingsSaved": "Settings saved.",
+    "meetingRecorder.r2Title": "Audio storage (R2)",
+    "meetingRecorder.r2Description":
+      "R2 is optional and can be enabled at any time without reinstalling the plugin.",
+    "meetingRecorder.r2Enabled":
+      "R2 enabled: recording, upload, audio storage, and playback are available.",
+    "meetingRecorder.r2Disabled":
+      "R2 disabled: the Telegram bot transcribes in memory and discards audio; recording, upload, and playback are unavailable.",
+    "meetingRecorder.r2CreateToken": "Create preconfigured R2 token",
+    "meetingRecorder.r2TokenInstructions":
+      "Review the token with only Account → Workers R2 Storage → Edit, create it, paste it below, and revoke it after activation.",
+    "meetingRecorder.r2Token": "Temporary Cloudflare R2 token",
+    "meetingRecorder.r2TokenInvalid": "Enter a valid R2 token.",
+    "meetingRecorder.r2ReauthPassword":
+      "Confirm your password to enable R2 storage",
+    "meetingRecorder.r2Activate": "Enable R2",
+    "meetingRecorder.r2Activated": "R2 enabled successfully.",
+    "meetingRecorder.r2ActivationPending":
+      "R2 was attached, but the new Worker is still propagating. Refresh the page shortly.",
+    "meetingRecorder.r2AdminRequired":
+      "An administrator with plugin update permission can enable R2.",
+    "meetingRecorder.r2RequiredTitle": "Enable R2 to record or upload audio",
+    "meetingRecorder.r2RequiredDescription":
+      "Without R2, only Telegram audio can be transcribed, and the original file is not retained.",
+    "meetingRecorder.openSettings": "Open settings",
     "meetingRecorder.telegram": "Telegram bot",
     "meetingRecorder.telegramDescription":
       "Audio sent to the bot appears in the list and is transcribed.",
@@ -286,12 +380,32 @@ export const meetingRecorderFrontendMessages = {
     "meetingRecorder.telegramTokenInvalid": "Enter a valid Telegram token.",
     "meetingRecorder.telegramPassword":
       "Confirm your password to configure Telegram",
+    "meetingRecorder.telegramDisconnectPassword":
+      "Confirm your password to disconnect the Telegram bot",
     "meetingRecorder.telegramPrivacy":
       "The token is sent directly to Worker secrets; it is not stored in the browser or database.",
     "meetingRecorder.telegramUserLink":
       "To receive audio, add the numeric Telegram ID to the user's profile and grant permission to create recordings.",
+    "meetingRecorder.telegramTransientMode":
+      "Without R2, each audio file is downloaded from Telegram, transcribed immediately, and discarded. It cannot be played later in Nexus.",
+    "meetingRecorder.telegramStoredMode":
+      "With R2, audio is stored privately and can be played alongside its transcript.",
     "meetingRecorder.configureTelegram": "Configure bot and webhook",
+    "meetingRecorder.replaceTelegram": "Replace bot and webhook",
     "meetingRecorder.telegramConfigured": "Telegram bot configured.",
+    "meetingRecorder.telegramBotId": "Bot ID",
+    "meetingRecorder.telegramWebhook": "Verified webhook",
+    "meetingRecorder.openTelegramBot": "Open chat with bot",
+    "meetingRecorder.verifyTelegramWebhook": "Verify webhook",
+    "meetingRecorder.telegramWebhookVerified":
+      "The webhook was already correct and has been verified.",
+    "meetingRecorder.telegramWebhookCorrected":
+      "The webhook was corrected for this Nexus installation.",
+    "meetingRecorder.disconnectTelegram": "Disconnect bot",
+    "meetingRecorder.telegramDisconnectConfirm":
+      "Remove this bot's webhook, token, and secret? Existing transcripts will be preserved.",
+    "meetingRecorder.telegramDisconnected":
+      "Telegram bot disconnected and credentials removed.",
     "meetingRecorder.unavailable": "Plugin not installed",
     "meetingRecorder.unavailableDescription":
       "Install the Meeting Recorder package to access this area.",
@@ -323,9 +437,31 @@ export const meetingRecorderFrontendMessages = {
       "The audio exceeds the configured duration limit.",
     "errors.STORAGE_LIMIT_EXCEEDED":
       "The recorder storage limit has been reached.",
+    "errors.R2_NOT_ENABLED":
+      "Enable R2 in recorder settings to use this feature.",
+    "errors.R2_TOKEN_INVALID":
+      "The R2 token is invalid or belongs to another Cloudflare account.",
+    "errors.R2_TOKEN_TOO_BROAD":
+      "Use a token limited to Account → Workers R2 Storage → Edit.",
+    "errors.R2_NOT_ENTITLED":
+      "Enable R2 on this Cloudflare account before continuing.",
+    "errors.R2_BUCKET_CONFLICT":
+      "The bucket reserved for this plugin already exists outside this installation.",
+    "errors.R2_BUCKET_MISSING": "The selected R2 bucket does not exist.",
+    "errors.R2_UNAVAILABLE":
+      "Cloudflare could not enable R2 storage right now.",
+    "errors.R2_PROVISIONING_TARGET_MISSING":
+      "This installation's Cloudflare account is not configured for R2 activation.",
     "errors.TRANSCRIPTION_BUSY": "This audio is already being transcribed.",
     "errors.TELEGRAM_NOT_CONFIGURED":
       "Configure the Telegram token and webhook.",
+    "errors.TELEGRAM_BOT_INVALID": "The token does not belong to a valid bot.",
+    "errors.TELEGRAM_API_ERROR":
+      "Telegram rejected the operation. Check the token and try again.",
+    "errors.TELEGRAM_WEBHOOK_URL_INVALID":
+      "The URL must be this Nexus installation's canonical endpoint.",
+    "errors.TELEGRAM_WEBHOOK_VERIFICATION_FAILED":
+      "Telegram did not confirm this installation's webhook URL.",
     "permissions.meeting_recorder.recording.read": "View own recordings",
     "permissions.meeting_recorder.recording.create":
       "Create recordings and upload audio",

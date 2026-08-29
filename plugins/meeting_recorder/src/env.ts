@@ -10,7 +10,7 @@ export type MeetingRecorderBindings = {
   DB?: D1Database;
   HYPERDRIVE?: Hyperdrive;
   DATABASE_URL?: string;
-  STORAGE: R2Bucket;
+  STORAGE?: R2Bucket;
   AI?: Ai;
   TELEGRAM_BOT_TOKEN?: string;
   TELEGRAM_WEBHOOK_SECRET?: string;

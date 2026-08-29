@@ -206,6 +206,14 @@ describe("Meeting Recorder Telegram ingest", () => {
         "utf8",
       ),
     );
+    sqlite.exec(
+      readFileSync(
+        resolve(
+          "plugins/meeting_recorder/migrations/d1/0002_telegram_configuration.sql",
+        ),
+        "utf8",
+      ),
+    );
     sqlite.exec(`
       INSERT INTO "user"(id,name,active) VALUES ('usr_telegram','Telegram User',1);
       INSERT INTO user_profiles(user_id,telegram_id,status)
@@ -364,6 +372,139 @@ describe("Meeting Recorder Telegram ingest", () => {
     expect(telegramFetch).toHaveBeenCalledTimes(2);
   });
 
+  it("verifies, exposes, and disconnects the configured Telegram bot", async () => {
+    let webhookConfigured = false;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const path = new URL(String(input)).pathname;
+        if (path.endsWith("/getMe"))
+          return Response.json({
+            ok: true,
+            result: {
+              id: 123456,
+              is_bot: true,
+              first_name: "Nexus Audio",
+              username: "nexus_audio_bot",
+            },
+          });
+        if (path.endsWith("/getWebhookInfo"))
+          return Response.json({
+            ok: true,
+            result: {
+              url: webhookConfigured
+                ? "https://nexus.example/api/v1/public/p/meeting_recorder/telegram/webhook"
+                : "https://old.example/webhook",
+            },
+          });
+        if (path.endsWith("/setWebhook")) {
+          expect(JSON.parse(String(init?.body))).toMatchObject({
+            url: "https://nexus.example/api/v1/public/p/meeting_recorder/telegram/webhook",
+          });
+          webhookConfigured = true;
+          return Response.json({ ok: true, result: true });
+        }
+        if (path.endsWith("/deleteWebhook")) {
+          webhookConfigured = false;
+          return Response.json({ ok: true, result: true });
+        }
+        throw new Error(`Unexpected Telegram URL: ${path}`);
+      }),
+    );
+    const pluginContext = encodeContext({
+      userId: "usr_telegram",
+      requestId: "req_telegram_configuration",
+      origin: "https://nexus.example",
+      permissions: [
+        "meeting_recorder.settings.read",
+        "meeting_recorder.settings.update",
+      ],
+    });
+    const headers = {
+      "Content-Type": "application/json",
+      "Idempotency-Key": "configure-telegram-test",
+      "X-Plugin-Context": pluginContext,
+    };
+    const wrongEndpoint = await app.request(
+      "/telegram/configure",
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          webhookUrl: "https://nexus.example/not-the-telegram-webhook",
+        }),
+      },
+      env,
+    );
+    expect(wrongEndpoint.status).toBe(422);
+    await expect(wrongEndpoint.json()).resolves.toMatchObject({
+      error: { code: "TELEGRAM_WEBHOOK_URL_INVALID" },
+    });
+
+    const configured = await app.request(
+      "/telegram/configure",
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          webhookUrl:
+            "https://nexus.example/api/v1/public/p/meeting_recorder/telegram/webhook",
+        }),
+      },
+      env,
+    );
+    expect(configured.status).toBe(200);
+    await expect(configured.json()).resolves.toMatchObject({
+      configured: true,
+      webhookChanged: true,
+      bot: {
+        id: "123456",
+        username: "nexus_audio_bot",
+        link: "https://t.me/nexus_audio_bot",
+      },
+      webhook: { verified: true },
+    });
+
+    const settings = await app.request(
+      "/settings",
+      { headers: { "X-Plugin-Context": pluginContext } },
+      env,
+    );
+    await expect(settings.json()).resolves.toMatchObject({
+      telegram: {
+        configured: true,
+        bot: {
+          name: "Nexus Audio",
+          link: "https://t.me/nexus_audio_bot",
+        },
+        webhook: {
+          url: "https://nexus.example/api/v1/public/p/meeting_recorder/telegram/webhook",
+        },
+      },
+    });
+
+    const disconnected = await app.request(
+      "/telegram/configuration",
+      {
+        method: "DELETE",
+        headers: {
+          "Idempotency-Key": "disconnect-telegram-test",
+          "X-Plugin-Context": pluginContext,
+        },
+      },
+      env,
+    );
+    expect(disconnected.status).toBe(204);
+    expect(webhookConfigured).toBe(false);
+    expect(
+      sqlite
+        .prepare(
+          "SELECT COUNT(*) AS count FROM meeting_recorder_telegram_configuration",
+        )
+        .get(),
+    ).toMatchObject({ count: 0 });
+  });
+
   it("rejects a webhook update with the wrong Telegram secret", async () => {
     const response = await app.request(
       "/public/telegram/webhook",
@@ -384,6 +525,114 @@ describe("Meeting Recorder Telegram ingest", () => {
     expect(response.status).toBe(401);
     await expect(response.json()).resolves.toMatchObject({
       error: { code: "TELEGRAM_WEBHOOK_UNAUTHORIZED" },
+    });
+  });
+
+  it("transcribes Telegram audio without R2 and retains only the transcript", async () => {
+    const audio = new Uint8Array([79, 103, 103, 83, 9, 8, 7, 6]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input));
+        if (url.pathname.endsWith("/getFile"))
+          return Response.json({
+            ok: true,
+            result: {
+              file_path: "voice/transient.ogg",
+              file_size: audio.byteLength,
+            },
+          });
+        if (url.pathname.includes("/file/bot"))
+          return new Response(audio, {
+            headers: {
+              "Content-Type": "audio/ogg",
+              "Content-Length": String(audio.byteLength),
+            },
+          });
+        throw new Error(`Unexpected Telegram URL: ${url.pathname}`);
+      }),
+    );
+    const transientEnv = { ...env };
+    delete transientEnv.STORAGE;
+    const response = await app.request(
+      "/public/telegram/webhook",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Plugin-Public-Context": encodeContext({
+            pluginId: "meeting_recorder",
+            requestId: "req_telegram_transient",
+          }),
+          "X-Telegram-Bot-Api-Secret-Token": "s".repeat(32),
+        },
+        body: JSON.stringify({
+          update_id: 9003,
+          message: {
+            message_id: 13,
+            date: 1_787_900_100,
+            caption: "Áudio sem R2",
+            from: { id: 424242, first_name: "Telegram" },
+            chat: { id: 424242 },
+            voice: {
+              file_id: "transient-file-id",
+              file_unique_id: "transient-unique-id",
+              duration: 3,
+              file_size: audio.byteLength,
+              mime_type: "audio/ogg",
+            },
+          },
+        }),
+      },
+      transientEnv,
+    );
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as {
+      recordingId: string;
+      audioRetained: boolean;
+    };
+    expect(payload.audioRetained).toBe(false);
+
+    const row = sqlite
+      .prepare(
+        `SELECT r.transcription_status AS transcriptionStatus,
+                r.total_bytes AS totalBytes,
+                r.timeline_duration_ms AS timelineDurationMs,
+                s.storage_status AS storageStatus,
+                s.transcript_text AS transcript,
+                e.status AS eventStatus
+           FROM meeting_recorder_recordings r
+           JOIN meeting_recorder_segments s ON s.recording_id = r.id
+           JOIN meeting_recorder_ingest_events e ON e.recording_id = r.id
+          WHERE r.id = ?`,
+      )
+      .get(payload.recordingId) as Record<string, unknown>;
+    expect(row).toMatchObject({
+      transcriptionStatus: "ready",
+      totalBytes: 0,
+      timelineDurationMs: 3000,
+      storageStatus: "missing",
+      transcript: "Audio recebido pelo Telegram e transcrito.",
+      eventStatus: "transcribed",
+    });
+
+    const audioResponse = await app.request(
+      `/recordings/${payload.recordingId}/segments/0/audio`,
+      {
+        headers: {
+          "X-Plugin-Context": encodeContext({
+            userId: "usr_telegram",
+            requestId: "req_transient_audio",
+            origin: "https://nexus.example",
+            permissions: ["meeting_recorder.recording.read"],
+          }),
+        },
+      },
+      transientEnv,
+    );
+    expect(audioResponse.status).toBe(409);
+    await expect(audioResponse.json()).resolves.toMatchObject({
+      error: { code: "R2_NOT_ENABLED" },
     });
   });
 });

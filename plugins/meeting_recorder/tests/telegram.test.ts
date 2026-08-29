@@ -17,25 +17,54 @@ describe("Meeting Recorder Telegram integration", () => {
 
   it("configures only the canonical HTTPS public gateway", async () => {
     const fetchMock = vi.fn(
-      async (_input: RequestInfo | URL, init?: RequestInit) => {
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const path = new URL(String(input)).pathname;
+        if (path.endsWith("/getMe"))
+          return Response.json({
+            ok: true,
+            result: {
+              id: 123456,
+              is_bot: true,
+              first_name: "Nexus Recorder",
+              username: "nexus_recorder_bot",
+            },
+          });
+        if (path.endsWith("/getWebhookInfo"))
+          return Response.json({
+            ok: true,
+            result: {
+              url:
+                fetchMock.mock.calls.length >= 4
+                  ? "https://nexus.example/api/v1/public/p/meeting_recorder/telegram/webhook"
+                  : "https://old.example/webhook",
+            },
+          });
+        expect(path).toMatch(/\/setWebhook$/u);
         expect(JSON.parse(String(init?.body))).toMatchObject({
           url: "https://nexus.example/api/v1/public/p/meeting_recorder/telegram/webhook",
           secret_token: "s".repeat(32),
           allowed_updates: ["message"],
         });
-        return Response.json({ success: true, ok: true, result: true });
+        return Response.json({ ok: true, result: true });
       },
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    await configureTelegramWebhook({
+    const configured = await configureTelegramWebhook({
       token: `123456:${"t".repeat(24)}`,
       secret: "s".repeat(32),
       webhookUrl:
         "https://nexus.example/api/v1/public/p/meeting_recorder/telegram/webhook",
     });
 
-    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(configured).toMatchObject({
+      bot: { id: 123456, username: "nexus_recorder_bot" },
+      webhook: {
+        url: "https://nexus.example/api/v1/public/p/meeting_recorder/telegram/webhook",
+      },
+      webhookChanged: true,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(4);
     await expect(
       configureTelegramWebhook({
         token: `123456:${"t".repeat(24)}`,

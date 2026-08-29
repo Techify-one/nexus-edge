@@ -530,7 +530,7 @@ export const OPENAPI_DOCUMENT = {
                   token: {
                     type: "string",
                     minLength: 40,
-                    maxLength: 200,
+                    maxLength: 2048,
                     writeOnly: true,
                   },
                 },
@@ -644,7 +644,7 @@ export const OPENAPI_DOCUMENT = {
                   token: {
                     type: "string",
                     minLength: 40,
-                    maxLength: 200,
+                    maxLength: 2048,
                     writeOnly: true,
                   },
                   mode: { type: "string", enum: ["create", "attach"] },
@@ -661,6 +661,53 @@ export const OPENAPI_DOCUMENT = {
             description: "Recent reauthentication or R2 permission required",
           },
           "409": { description: "Operation is not in the provisioning state" },
+          "422": {
+            description: "Temporary R2 token is invalid or over-privileged",
+          },
+        },
+      },
+    },
+    "/api/v1/plugins/{pluginId}/runtime-resources/r2": {
+      post: {
+        parameters: [
+          { name: "pluginId", in: "path", required: true },
+          { name: "Idempotency-Key", in: "header", required: true },
+          { name: "X-Reauth-Token", in: "header", required: true },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["token"],
+                properties: {
+                  token: {
+                    type: "string",
+                    minLength: 40,
+                    maxLength: 2048,
+                    writeOnly: true,
+                  },
+                  mode: { type: "string", enum: ["create", "attach"] },
+                  bucketName: { type: "string", minLength: 3, maxLength: 63 },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description:
+              "Optional private R2 bucket provisioned and attached to an installed plugin",
+          },
+          "403": {
+            description:
+              "Plugin update permission and recent reauthentication required",
+          },
+          "409": {
+            description:
+              "Plugin does not support optional R2, installer is busy, or R2 is unavailable",
+          },
           "422": {
             description: "Temporary R2 token is invalid or over-privileged",
           },
@@ -802,8 +849,31 @@ export const OPENAPI_DOCUMENT = {
       post: {
         parameters: [{ name: "Idempotency-Key", in: "header", required: true }],
         responses: {
-          "200": { description: "Telegram webhook registered" },
+          "200": {
+            description:
+              "Bot identity validated and canonical Telegram webhook verified or corrected",
+          },
           "503": { description: "Telegram Worker secrets are not active" },
+        },
+      },
+    },
+    "/api/v1/p/meeting_recorder/telegram/validate": {
+      post: {
+        parameters: [{ name: "Idempotency-Key", in: "header", required: true }],
+        responses: {
+          "200": { description: "Telegram bot token and identity validated" },
+          "422": { description: "Token does not identify a valid bot" },
+        },
+      },
+    },
+    "/api/v1/p/meeting_recorder/telegram/configuration": {
+      delete: {
+        parameters: [{ name: "Idempotency-Key", in: "header", required: true }],
+        responses: {
+          "204": {
+            description:
+              "Telegram webhook removed and public bot metadata cleared",
+          },
         },
       },
     },

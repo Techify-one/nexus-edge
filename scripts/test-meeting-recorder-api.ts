@@ -133,6 +133,22 @@ if (manifest.id !== "meeting_recorder")
   throw new Error("The selected package is not meeting_recorder.");
 
 const packageBody = (): FormData => {
+  const migrations = (dialect: "d1" | "postgres") =>
+    Object.fromEntries(
+      Object.entries(archive)
+        .filter(
+          ([path]) =>
+            path.startsWith(`migrations/${dialect}/`) && path.endsWith(".sql"),
+        )
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([path, value]) => [
+          path
+            .split("/")
+            .at(-1)!
+            .replace(/\.sql$/u, ""),
+          strFromU8(value),
+        ]),
+    );
   const form = new FormData();
   form.set("manifest", manifestText);
   form.set(
@@ -141,22 +157,8 @@ const packageBody = (): FormData => {
       type: "application/javascript+module",
     }),
   );
-  form.set(
-    "d1Migrations",
-    JSON.stringify({
-      "0001_init": strFromU8(
-        requiredArchiveFile("migrations/d1/0001_init.sql"),
-      ),
-    }),
-  );
-  form.set(
-    "postgresMigrations",
-    JSON.stringify({
-      "0001_init": strFromU8(
-        requiredArchiveFile("migrations/postgres/0001_init.sql"),
-      ),
-    }),
-  );
+  form.set("d1Migrations", JSON.stringify(migrations("d1")));
+  form.set("postgresMigrations", JSON.stringify(migrations("postgres")));
   return form;
 };
 
@@ -243,6 +245,45 @@ const health = await json<{ ok: boolean; plugin: string; version: string }>(
 );
 if (!health.ok || health.plugin !== "meeting_recorder")
   throw new Error("Installed plugin health check failed.");
+const plugins = await json<{
+  items: Array<{ id: string; workerName: string }>;
+}>("/api/v1/plugins");
+const installedPlugin = plugins.items.find(
+  (item) => item.id === "meeting_recorder",
+);
+if (
+  !installedPlugin ||
+  !/^app-[a-f0-9]{12}-plugin-meeting-recorder$/u.test(
+    installedPlugin.workerName,
+  )
+)
+  throw new Error("The plugin Worker is not scoped to this installation.");
+
+const settingsBeforeR2 = await json<{
+  capabilities: { storageEnabled: boolean; telegramTransientMode: boolean };
+}>("/api/v1/p/meeting_recorder/settings");
+if (
+  settingsBeforeR2.capabilities.storageEnabled ||
+  !settingsBeforeR2.capabilities.telegramTransientMode
+)
+  throw new Error(
+    "Fresh optional-R2 installation unexpectedly enabled storage.",
+  );
+let importBlockedWithoutR2 = false;
+try {
+  await json("/api/v1/p/meeting_recorder/imports", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Idempotency-Key": `no-r2-import-${randomUUID()}`,
+    },
+    body: JSON.stringify({}),
+  });
+} catch (error) {
+  if (!(error instanceof ApiFailure) || error.code !== "R2_NOT_ENABLED")
+    throw error;
+  importBlockedWithoutR2 = true;
+}
 
 const telegramSecret = randomBytes(32).toString("base64url");
 const telegramReauth = await json<{ token: string }>("/api/v1/auth/reauth", {
@@ -334,6 +375,42 @@ try {
 }
 if (!telegramWebhookValidated)
   throw new Error("Telegram webhook propagation did not complete.");
+
+const r2Reauth = await json<{ token: string }>("/api/v1/auth/reauth", {
+  method: "POST",
+  ...jsonBody({ password: adminPassword }),
+});
+const r2Activation = await json<{
+  pluginId: string;
+  status: string;
+  resource: { type: string; binding: string };
+}>("/api/v1/plugins/meeting_recorder/runtime-resources/r2", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "Idempotency-Key": `activate-r2-${randomUUID()}`,
+    "X-Reauth-Token": r2Reauth.token,
+  },
+  body: JSON.stringify({ token: r2Token, mode: "create" }),
+});
+if (
+  r2Activation.status !== "ready" ||
+  r2Activation.resource.binding !== "STORAGE"
+)
+  throw new Error("Optional R2 activation did not return a ready binding.");
+let storageEnabledAfterActivation = false;
+for (let attempt = 0; attempt < 30; attempt += 1) {
+  const current = await json<{
+    capabilities: { storageEnabled: boolean };
+  }>("/api/v1/p/meeting_recorder/settings").catch(() => null);
+  if (current?.capabilities.storageEnabled) {
+    storageEnabledAfterActivation = true;
+    break;
+  }
+  await new Promise((resolve) => setTimeout(resolve, 1_000));
+}
+if (!storageEnabledAfterActivation)
+  throw new Error("The plugin Worker did not expose R2 after activation.");
 
 let audioResult:
   | { recordingId: string; transcriptCharacters: number; rangeBytes: number }
@@ -437,12 +514,19 @@ process.stdout.write(
       pluginVersion: manifest.version,
       coreMinVersion: manifest.coreMinVersion,
       operationId: operation.operationId,
+      workerName: installedPlugin.workerName,
       states: visitedStates,
       health,
       telegramWebhook: {
         signedUpdateAccepted: true,
         invalidSecretRejected: true,
         disposableSecretsRemoved: true,
+      },
+      optionalR2: {
+        installedWithoutStorage: true,
+        browserImportBlockedWithoutR2: importBlockedWithoutR2,
+        activatedWithoutReinstall: true,
+        storageEnabledAfterActivation,
       },
       ...(audioResult ? { audio: audioResult } : {}),
     },

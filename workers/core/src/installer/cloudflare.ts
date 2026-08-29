@@ -353,6 +353,7 @@ export async function uploadPluginWorker(
     compatibilityDate: string;
     compatibilityFlags: string[];
     runtimeBindings?: Array<"ai" | "r2"> | undefined;
+    optionalRuntimeBindings?: Array<"ai" | "r2"> | undefined;
   },
   runtimeResources: { STORAGE?: string } = {},
 ): Promise<void> {
@@ -377,15 +378,19 @@ export async function uploadPluginWorker(
   }
   if (manifest.runtimeBindings?.includes("ai"))
     bindings.push({ type: "ai", name: "AI" });
-  if (manifest.runtimeBindings?.includes("r2")) {
+  const supportsR2 =
+    manifest.runtimeBindings?.includes("r2") ||
+    manifest.optionalRuntimeBindings?.includes("r2");
+  if (supportsR2 && runtimeResources.STORAGE) {
     const bucketName = runtimeResources.STORAGE;
-    if (!bucketName) throw new Error("PLUGIN_RUNTIME_R2_REQUIRED");
     bindings.push({
       type: "r2_bucket",
       name: "STORAGE",
       bucket_name: bucketName,
     });
   }
+  if (manifest.runtimeBindings?.includes("r2") && !runtimeResources.STORAGE)
+    throw new Error("PLUGIN_RUNTIME_R2_REQUIRED");
   const aiObservability = manifest.runtimeBindings?.includes("ai")
     ? {
         observability: {
@@ -429,6 +434,39 @@ export async function uploadPluginWorker(
     method: "PUT",
     body,
   });
+}
+
+export async function attachPluginR2Binding(
+  env: CoreEnv,
+  workerName: string,
+  bucketName: string,
+): Promise<void> {
+  if (!/^[a-z0-9][a-z0-9-]{2,62}$/u.test(bucketName))
+    throw new Error("PLUGIN_RUNTIME_R2_NAME_INVALID");
+  const path = `/workers/scripts/${encodeURIComponent(workerName)}/settings`;
+  const current = await cf<WorkerSettings>(env, path, { method: "GET" });
+  const bindings: Binding[] = (current.bindings ?? [])
+    .filter((binding) => binding.name !== "STORAGE")
+    .map((binding) => ({ type: "inherit", name: binding.name }));
+  bindings.push({
+    type: "r2_bucket",
+    name: "STORAGE",
+    bucket_name: bucketName,
+  });
+  const body = new FormData();
+  body.set(
+    "settings",
+    new Blob([JSON.stringify({ bindings })], { type: "application/json" }),
+    "settings",
+  );
+  await cf(env, path, { method: "PATCH", body });
+  const verified = await cf<WorkerSettings>(env, path, { method: "GET" });
+  if (
+    !(verified.bindings ?? []).some(
+      (binding) => binding.name === "STORAGE" && binding.type === "r2_bucket",
+    )
+  )
+    throw new Error("Plugin R2 binding verification failed");
 }
 
 async function uploadCoreAssets(

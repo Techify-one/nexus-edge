@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  base64Sha256,
-  putAudioStream,
-} from "../src/storage.js";
+import { base64Sha256, putAudioStream } from "../src/storage.js";
 
 const bytes = new TextEncoder().encode("meeting recorder stream");
 
@@ -25,11 +22,7 @@ function storageMock() {
   return {
     head: vi.fn(async () => null),
     put: vi.fn(
-      async (
-        key: string,
-        value: ReadableStream,
-        options: R2PutOptions,
-      ) => {
+      async (key: string, value: ReadableStream, options: R2PutOptions) => {
         const uploaded = new Uint8Array(
           await new Response(value as BodyInit).arrayBuffer(),
         );

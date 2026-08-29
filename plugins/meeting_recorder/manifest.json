@@ -1,13 +1,14 @@
 {
   "id": "meeting_recorder",
   "name": "Meeting Recorder",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "apiVersion": 1,
-  "coreMinVersion": "1.1.0-beta.3",
+  "coreMinVersion": "1.1.0-beta.4",
   "compatibilityDate": "2026-08-28",
   "compatibilityFlags": ["nodejs_compat"],
   "databaseDialects": ["d1", "postgres"],
-  "runtimeBindings": ["ai", "r2"],
+  "runtimeBindings": ["ai"],
+  "optionalRuntimeBindings": ["r2"],
   "tablePrefix": "meeting_recorder_",
   "localizedMetadata": {
     "pt-BR": {
