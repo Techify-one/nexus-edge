@@ -12,7 +12,7 @@
     "run_worker_first": ["/api/*", "/health"],
   },
   "vars": {
-    "APP_VERSION": "1.1.0-beta.6",
+    "APP_VERSION": "1.1.0-beta.7",
     "CORE_UPDATE_PUBLIC_KEY": "MCowBQYDK2VwAyEAxuOKnkDa5oHc4zGhCxV6GIUU6LhZ7bStR3CgoS9adGo=",
     "APP_INSTALLATION_ID": "set-by-provision-command",
     "DATABASE_PROVIDER": "postgres",

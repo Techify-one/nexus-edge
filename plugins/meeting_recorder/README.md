@@ -17,6 +17,10 @@ contrato de bindings opcionais nem a ativação de R2 após a instalação.
   pessoal de 15 minutos na tela de configurações, abre o bot e toca em
   **Iniciar**; o ID é associado sem precisar ser descoberto ou digitado.
 
+Durante cada ingestão o bot confirma o recebimento, avisa quando a transcrição
+começa e responde com o resultado e o link direto da gravação. Falhas também
+são informadas no chat com um código seguro e uma orientação de recuperação.
+
 O token do bot e o segredo do webhook são Worker secrets configurados pela
 tela do plugin. Eles não entram no banco, no manifesto ou no pacote portátil.
 A tela valida a identidade do bot, verifica e corrige a URL canônica do webhook,

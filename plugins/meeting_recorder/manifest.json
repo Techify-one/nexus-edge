@@ -1,7 +1,7 @@
 {
   "id": "meeting_recorder",
   "name": "Meeting Recorder",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "apiVersion": 1,
   "coreMinVersion": "1.1.0-beta.5",
   "compatibilityDate": "2026-08-28",

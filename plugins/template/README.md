@@ -40,8 +40,10 @@ For a manifest with `"id": "inventory"`:
    contrast hierarchy and both themes apply automatically.
 
 The authenticated Core header supplies a **Back** button automatically for
-every route registered in `frontend/src/plugins/registry.ts`. Keep all plugin
-routes registered there and do not create a second page-local back button.
+every route registered in `frontend/src/plugins/registry.ts`. Nested routes
+return to the plugin overview, and the plugin overview returns to the Core
+Overview. Keep all plugin routes registered there and do not create a second
+page-local back button.
 
 Do not add a second table component, raw `<table>`, plugin-specific layout, or local preference store.
 

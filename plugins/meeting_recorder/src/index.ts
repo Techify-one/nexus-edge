@@ -46,7 +46,7 @@ import {
 } from "./telegram-links.js";
 import { transcribeAudio } from "./transcription.js";
 
-const VERSION = "1.1.1";
+const VERSION = "1.1.2";
 const CONSENT_VERSION = "2026-08-28";
 const mutablePostKey = (c: Context<MeetingRecorderEnv>): string => {
   const key = (c.req.header("Idempotency-Key") ?? "").trim();
@@ -1333,6 +1333,26 @@ const notifyTelegram = async (
   }
 };
 
+const telegramRecordingUrl = (
+  webhookUrl: string | undefined,
+  recordingId: string,
+): string | null => {
+  if (!webhookUrl) return null;
+  try {
+    return new URL(
+      `/app/meeting-recorder/${encodeURIComponent(recordingId)}`,
+      webhookUrl,
+    ).toString();
+  } catch {
+    return null;
+  }
+};
+
+const telegramMessageWithLink = (
+  message: string,
+  recordingUrl: string | null,
+): string => (recordingUrl ? `${message}\n${recordingUrl}` : message);
+
 app.post("/public/telegram/webhook", async (c) => {
   if (!c.get("publicContext"))
     throw new MeetingRecorderError(
@@ -1424,6 +1444,7 @@ app.post("/public/telegram/webhook", async (c) => {
   const ownerId = message?.from
     ? await telegramOwner(c, String(message.from.id))
     : null;
+  const telegramConfiguration = await repository(c).telegramConfiguration();
   const now = repositoryTime(c.get("db"));
   let eventReserved = false;
   if (existing) {
@@ -1486,6 +1507,16 @@ app.post("/public/telegram/webhook", async (c) => {
     );
     return c.json({ ok: true, ignored: true });
   }
+  await notifyTelegram(
+    c.env.TELEGRAM_BOT_TOKEN,
+    message.chat.id,
+    existing
+      ? "Áudio recebido novamente. Retomando o processamento."
+      : "Áudio recebido.",
+  );
+  let recordingUrl: string | null = null;
+  let audioRetained = false;
+  let failureStage = "validating_media";
   try {
     if ((media.file_size ?? 0) > IMPORT_MAX_BYTES)
       throw new MeetingRecorderError(
@@ -1493,7 +1524,9 @@ app.post("/public/telegram/webhook", async (c) => {
         "AUDIO_IMPORT_TOO_LARGE",
         "Telegram audio exceeds 20 MiB.",
       );
+    failureStage = "downloading_audio";
     const file = await downloadTelegramMedia(c.env.TELEGRAM_BOT_TOKEN, media);
+    failureStage = "validating_audio";
     extensionForMime(file.mimeType);
     const settings = await repository(c).settings();
     const storage = c.env.STORAGE ? await repository(c).storageTotals() : null;
@@ -1520,6 +1553,7 @@ app.post("/public/telegram/webhook", async (c) => {
       media.title?.trim().slice(0, 200) ||
       file.fileName?.slice(0, 200) ||
       `Telegram ${new Date(message.date * 1_000).toISOString().slice(0, 16).replace("T", " ")}`;
+    failureStage = "creating_recording";
     const recording = await repository(c).create({
       id: recordingId,
       clientSessionId: `telegram-${update.update_id}`,
@@ -1539,10 +1573,15 @@ app.post("/public/telegram/webhook", async (c) => {
       captureStatus: "finalizing",
       startedAt: message.date * 1_000,
     });
+    recordingUrl = telegramRecordingUrl(
+      telegramConfiguration?.webhookUrl,
+      recording.id,
+    );
     const durationMs = Math.max(1_000, media.duration * 1_000);
     let complete: Recording;
     let segment: Segment;
     if (c.env.STORAGE) {
+      failureStage = "storing_audio";
       const key = segmentObjectKey(recording.id, 0, file.mimeType);
       const stored = await putAudioBuffer({
         storage: c.env.STORAGE,
@@ -1568,6 +1607,7 @@ app.post("/public/telegram/webhook", async (c) => {
       });
       segment = reserved.segment;
       await repository(c).markStored(segment, stored.object);
+      audioRetained = true;
       complete = await repository(c).finalize(recording.id, 0, []);
       await c.get("db").execute(
         `UPDATE meeting_recorder_ingest_events SET status = 'stored', updated_at = ?
@@ -1575,6 +1615,7 @@ app.post("/public/telegram/webhook", async (c) => {
         [repositoryTime(c.get("db")), externalEventId],
       );
     } else {
+      failureStage = "preparing_transcription";
       const checksum = await base64Sha256(file.bytes);
       const reserved = await repository(c).reserveTransientSegment({
         recordingId: recording.id,
@@ -1618,7 +1659,13 @@ app.post("/public/telegram/webhook", async (c) => {
     });
 
     if (!c.env.STORAGE) {
-      if (segment.transcriptionStatus !== "ready")
+      if (segment.transcriptionStatus !== "ready") {
+        await notifyTelegram(
+          c.env.TELEGRAM_BOT_TOKEN,
+          message.chat.id,
+          "Iniciando transcrição.",
+        );
+        failureStage = "transcribing_audio";
         await transcribeTransientSegment({
           env: c.env,
           db: c.get("db"),
@@ -1628,6 +1675,7 @@ app.post("/public/telegram/webhook", async (c) => {
           actorUserId: ownerId,
           requestId: requestId(c),
         });
+      }
       await c.get("db").execute(
         `UPDATE meeting_recorder_ingest_events
             SET status = 'transcribed', error_code = NULL, updated_at = ?
@@ -1637,7 +1685,10 @@ app.post("/public/telegram/webhook", async (c) => {
       await notifyTelegram(
         c.env.TELEGRAM_BOT_TOKEN,
         message.chat.id,
-        "Áudio recebido e transcrito. A transcrição já está disponível no Gravador de reuniões. Como o R2 está desativado, o áudio não foi armazenado.",
+        telegramMessageWithLink(
+          "Transcrição pronta. Como o R2 está desativado, o áudio não foi armazenado.",
+          recordingUrl,
+        ),
       );
       return c.json({
         ok: true,
@@ -1650,17 +1701,31 @@ app.post("/public/telegram/webhook", async (c) => {
       await notifyTelegram(
         c.env.TELEGRAM_BOT_TOKEN,
         message.chat.id,
-        "Áudio recebido e armazenado no Gravador de reuniões.",
+        telegramMessageWithLink(
+          "Áudio armazenado. A transcrição automática está desativada.",
+          recordingUrl,
+        ),
       );
       return c.json({ ok: true, recordingId: recording.id });
     }
+
+    await notifyTelegram(
+      c.env.TELEGRAM_BOT_TOKEN,
+      message.chat.id,
+      "Iniciando transcrição.",
+    );
 
     const task = (async () => {
       const db = await createDatabase(c.env);
       try {
         const repo = new MeetingRecorderRepository(db);
         const freshSegment = await repo.segment(recording.id, 0);
-        if (!freshSegment) return;
+        if (!freshSegment)
+          throw new MeetingRecorderError(
+            503,
+            "TRANSCRIPTION_SEGMENT_MISSING",
+            "The stored audio segment is unavailable.",
+          );
         await transcribeStoredSegment({
           env: c.env,
           db,
@@ -1670,15 +1735,32 @@ app.post("/public/telegram/webhook", async (c) => {
           requestId: requestId(c),
         });
         await db.execute(
-          `UPDATE meeting_recorder_ingest_events SET status = 'transcribed', updated_at = ?
+          `UPDATE meeting_recorder_ingest_events SET status = 'transcribed', error_code = NULL, updated_at = ?
             WHERE source = 'telegram' AND external_event_id = ?`,
           [repositoryTime(db), externalEventId],
         );
-      } catch {
+        await notifyTelegram(
+          c.env.TELEGRAM_BOT_TOKEN,
+          message.chat.id,
+          telegramMessageWithLink("Transcrição pronta.", recordingUrl),
+        );
+      } catch (cause) {
+        const code =
+          cause instanceof MeetingRecorderError
+            ? cause.code
+            : "TRANSCRIPTION_FAILED";
         await db.execute(
-          `UPDATE meeting_recorder_ingest_events SET status = 'stored', error_code = 'TRANSCRIPTION_DEFERRED', updated_at = ?
+          `UPDATE meeting_recorder_ingest_events SET status = 'stored', error_code = ?, updated_at = ?
             WHERE source = 'telegram' AND external_event_id = ?`,
-          [repositoryTime(db), externalEventId],
+          [code, repositoryTime(db), externalEventId],
+        );
+        await notifyTelegram(
+          c.env.TELEGRAM_BOT_TOKEN,
+          message.chat.id,
+          telegramMessageWithLink(
+            `Não foi possível concluir a transcrição (${code}). O áudio continua armazenado e você pode tentar novamente pelo painel.`,
+            recordingUrl,
+          ),
         );
       } finally {
         await db.close();
@@ -1689,17 +1771,12 @@ app.post("/public/telegram/webhook", async (c) => {
     } catch {
       await task;
     }
-    await notifyTelegram(
-      c.env.TELEGRAM_BOT_TOKEN,
-      message.chat.id,
-      "Áudio recebido e armazenado. A transcrição está sendo processada no Gravador de reuniões.",
-    );
     return c.json({ ok: true, recordingId: recording.id });
   } catch (cause) {
     const code =
       cause instanceof MeetingRecorderError
         ? cause.code
-        : "TELEGRAM_INGEST_FAILED";
+        : `TELEGRAM_${failureStage.toUpperCase()}_FAILED`;
     const permanent =
       cause instanceof MeetingRecorderError &&
       (cause.status === 413 || cause.status === 422);
@@ -1717,10 +1794,23 @@ app.post("/public/telegram/webhook", async (c) => {
       await notifyTelegram(
         c.env.TELEGRAM_BOT_TOKEN,
         message?.chat.id,
-        "Não foi possível importar este áudio. Verifique o formato, o tamanho e a duração e tente novamente.",
+        telegramMessageWithLink(
+          `Não foi possível processar este áudio (${code}). Verifique o formato, o tamanho e a duração e tente novamente.`,
+          recordingUrl,
+        ),
       );
       return c.json({ ok: true, ignored: true });
     }
+    await notifyTelegram(
+      c.env.TELEGRAM_BOT_TOKEN,
+      message?.chat.id,
+      telegramMessageWithLink(
+        audioRetained
+          ? `O processamento falhou (${code}), mas o áudio continua armazenado. Tente novamente pelo painel.`
+          : `O processamento falhou (${code}). O Telegram tentará entregar novamente; se não concluir, envie o áudio mais uma vez.`,
+        recordingUrl,
+      ),
+    );
     throw cause;
   }
 });

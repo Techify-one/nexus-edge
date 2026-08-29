@@ -204,7 +204,20 @@ export async function downloadTelegramMedia(
     `/file/bot${token}/${file.file_path}`,
     "https://api.telegram.org",
   );
-  const response = await fetch(fileUrl, { redirect: "error" });
+  let response: Response;
+  try {
+    // Telegram may move file delivery between its API and CDN. The URL is
+    // derived exclusively from Telegram's validated getFile response and no
+    // credentials are sent as headers, so following that provider redirect is
+    // both necessary and bounded to this download operation.
+    response = await fetch(fileUrl, { redirect: "follow" });
+  } catch {
+    throw new MeetingRecorderError(
+      503,
+      "TELEGRAM_FILE_UNAVAILABLE",
+      "Telegram could not provide the audio file.",
+    );
+  }
   if (!response.ok)
     throw new MeetingRecorderError(
       503,
@@ -227,19 +240,28 @@ export async function downloadTelegramMedia(
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
   let received = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    received += value.byteLength;
-    if (received > MAX_TELEGRAM_AUDIO_BYTES) {
-      await reader.cancel();
-      throw new MeetingRecorderError(
-        413,
-        "AUDIO_IMPORT_TOO_LARGE",
-        "Telegram audio exceeds 20 MiB.",
-      );
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      received += value.byteLength;
+      if (received > MAX_TELEGRAM_AUDIO_BYTES) {
+        await reader.cancel();
+        throw new MeetingRecorderError(
+          413,
+          "AUDIO_IMPORT_TOO_LARGE",
+          "Telegram audio exceeds 20 MiB.",
+        );
+      }
+      chunks.push(value);
     }
-    chunks.push(value);
+  } catch (cause) {
+    if (cause instanceof MeetingRecorderError) throw cause;
+    throw new MeetingRecorderError(
+      503,
+      "TELEGRAM_FILE_UNAVAILABLE",
+      "Telegram interrupted the audio download.",
+    );
   }
   const bytes = new Uint8Array(received);
   let offset = 0;

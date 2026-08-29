@@ -24,6 +24,7 @@ import { LanguageSwitcher } from "../i18n/LanguageSwitcher.js";
 import { ThemeToggle } from "../theme/ThemeToggle.js";
 import { useI18n, type TranslationKey } from "../../i18n/index.js";
 import { pluginRoutePaths } from "../../plugins/registry.js";
+import { resolvePluginBackTarget } from "../../plugins/navigation.js";
 
 const items = [
   { to: "/app", label: "nav.overview", icon: LayoutDashboard },
@@ -85,13 +86,10 @@ export function AppShell() {
   });
   const navigate = useNavigate();
   const location = useLocation();
-  const pluginPage = Object.values(pluginRoutePaths).some((path) => {
-    const [, app, pluginRoot] = path.split("/");
-    const prefix = `/${app}/${pluginRoot}`;
-    return (
-      location.pathname === prefix || location.pathname.startsWith(`${prefix}/`)
-    );
-  });
+  const pluginBackTarget = resolvePluginBackTarget(
+    location.pathname,
+    Object.values(pluginRoutePaths),
+  );
   useEffect(() => {
     try {
       window.localStorage.setItem(
@@ -184,11 +182,11 @@ export function AppShell() {
             >
               <Menu className="h-5 w-5" />
             </Button>
-            {pluginPage && (
+            {pluginBackTarget && (
               <Button
                 variant="ghost"
                 className="px-2"
-                onClick={() => navigate("/app")}
+                onClick={() => navigate(pluginBackTarget)}
                 aria-label={t("common.back")}
                 title={t("common.back")}
               >

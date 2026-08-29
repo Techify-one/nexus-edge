@@ -200,10 +200,11 @@ Do not add plugin routes, labels, permissions, or icons to
 `frontend/src/components/layout/AppShell.tsx`.
 
 Every route registered in `frontend/src/plugins/registry.ts` automatically gets
-the Core-owned **Back** button in the authenticated header. The button returns
-to Overview and therefore works for current and future plugins without a
-plugin-specific layout. Keep every plugin route in that registry and do not add
-a duplicate page-local back button.
+the Core-owned **Back** button in the authenticated header. From a nested route
+the button returns to that plugin's overview; from the plugin overview it
+returns to the Core Overview. This works for current and future plugins without
+a plugin-specific layout. Keep every plugin route in that registry and do not
+add a duplicate page-local back button.
 
 Read `docs/INTERNATIONALIZATION.md` and `docs/DATA-TABLE-STANDARD.md`. Every new
 record-list table must use `ConfigurableDataTable` with an immutable

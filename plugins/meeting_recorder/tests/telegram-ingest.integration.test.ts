@@ -233,6 +233,14 @@ describe("Meeting Recorder Telegram ingest", () => {
         VALUES ('grp_recorder','usr_telegram');
       INSERT INTO group_permissions(group_id,permission_id)
         VALUES ('grp_recorder','perm_recorder_create');
+      INSERT INTO meeting_recorder_telegram_configuration(
+        id,bot_id,username,display_name,webhook_url,verified_at,
+        updated_by_user_id,updated_at
+      ) VALUES (
+        'bot','123456','nexus_audio_bot','Nexus Audio',
+        'https://nexus.example/api/v1/public/p/meeting_recorder/telegram/webhook',
+        1787900000000,'usr_telegram',1787900000000
+      );
     `);
 
     const d1 = new SqliteD1Database(sqlite);
@@ -257,24 +265,36 @@ describe("Meeting Recorder Telegram ingest", () => {
 
   it("downloads, stores, transcribes and exposes Telegram audio idempotently", async () => {
     const audio = new Uint8Array([79, 103, 103, 83, 0, 1, 2, 3]);
-    const telegramFetch = vi.fn(async (input: RequestInfo | URL) => {
-      const url = new URL(String(input));
-      if (url.pathname.endsWith("/getFile"))
-        return Response.json({
-          ok: true,
-          result: { file_path: "voice/test.ogg", file_size: audio.byteLength },
-        });
-      if (url.pathname.includes("/file/bot"))
-        return new Response(audio, {
-          headers: {
-            "Content-Type": "audio/ogg",
-            "Content-Length": String(audio.byteLength),
-          },
-        });
-      if (url.pathname.endsWith("/sendMessage"))
-        return Response.json({ ok: true, result: { message_id: 99 } });
-      throw new Error(`Unexpected Telegram URL: ${url.origin}${url.pathname}`);
-    });
+    const sentMessages: string[] = [];
+    const telegramFetch = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input));
+        if (url.pathname.endsWith("/getFile"))
+          return Response.json({
+            ok: true,
+            result: {
+              file_path: "voice/test.ogg",
+              file_size: audio.byteLength,
+            },
+          });
+        if (url.pathname.includes("/file/bot"))
+          return new Response(audio, {
+            headers: {
+              "Content-Type": "audio/ogg",
+              "Content-Length": String(audio.byteLength),
+            },
+          });
+        if (url.pathname.endsWith("/sendMessage")) {
+          sentMessages.push(
+            (JSON.parse(String(init?.body)) as { text: string }).text,
+          );
+          return Response.json({ ok: true, result: { message_id: 99 } });
+        }
+        throw new Error(
+          `Unexpected Telegram URL: ${url.origin}${url.pathname}`,
+        );
+      },
+    );
     vi.stubGlobal("fetch", telegramFetch);
 
     const publicContext = encodeContext({
@@ -320,7 +340,21 @@ describe("Meeting Recorder Telegram ingest", () => {
       recordingId: string;
     };
     expect(payload).toMatchObject({ ok: true });
-    expect(telegramFetch).toHaveBeenCalledTimes(3);
+    expect(telegramFetch).toHaveBeenCalledTimes(5);
+    expect(
+      telegramFetch.mock.calls.some(
+        ([input, init]) =>
+          new URL(String(input)).pathname.includes("/file/bot") &&
+          init?.redirect === "follow",
+      ),
+    ).toBe(true);
+    expect(sentMessages).toEqual([
+      "Áudio recebido.",
+      "Iniciando transcrição.",
+      expect.stringMatching(
+        /^Transcrição pronta\.\nhttps:\/\/nexus\.example\/app\/meeting-recorder\/mrr_tg_/u,
+      ),
+    ]);
     expect(storage.objects.size).toBe(1);
 
     const database = new SqliteD1Database(sqlite) as unknown as D1Database;
@@ -379,7 +413,7 @@ describe("Meeting Recorder Telegram ingest", () => {
       ok: true,
       replay: true,
     });
-    expect(telegramFetch).toHaveBeenCalledTimes(3);
+    expect(telegramFetch).toHaveBeenCalledTimes(5);
   });
 
   it("verifies, exposes, and disconnects the configured Telegram bot", async () => {
@@ -695,9 +729,10 @@ describe("Meeting Recorder Telegram ingest", () => {
 
   it("transcribes Telegram audio without R2 and retains only the transcript", async () => {
     const audio = new Uint8Array([79, 103, 103, 83, 9, 8, 7, 6]);
+    const sentMessages: string[] = [];
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = new URL(String(input));
         if (url.pathname.endsWith("/getFile"))
           return Response.json({
@@ -714,8 +749,12 @@ describe("Meeting Recorder Telegram ingest", () => {
               "Content-Length": String(audio.byteLength),
             },
           });
-        if (url.pathname.endsWith("/sendMessage"))
+        if (url.pathname.endsWith("/sendMessage")) {
+          sentMessages.push(
+            (JSON.parse(String(init?.body)) as { text: string }).text,
+          );
           return Response.json({ ok: true, result: { message_id: 100 } });
+        }
         throw new Error(`Unexpected Telegram URL: ${url.pathname}`);
       }),
     );
@@ -759,6 +798,13 @@ describe("Meeting Recorder Telegram ingest", () => {
       audioRetained: boolean;
     };
     expect(payload.audioRetained).toBe(false);
+    expect(sentMessages).toEqual([
+      "Áudio recebido.",
+      "Iniciando transcrição.",
+      expect.stringMatching(
+        /^Transcrição pronta\. Como o R2 está desativado, o áudio não foi armazenado\.\nhttps:\/\/nexus\.example\/app\/meeting-recorder\/mrr_tg_/u,
+      ),
+    ]);
 
     const row = sqlite
       .prepare(
@@ -800,6 +846,173 @@ describe("Meeting Recorder Telegram ingest", () => {
     expect(audioResponse.status).toBe(409);
     await expect(audioResponse.json()).resolves.toMatchObject({
       error: { code: "R2_NOT_ENABLED" },
+    });
+  });
+
+  it("reports transient transcription failures to Telegram", async () => {
+    const audio = new Uint8Array([79, 103, 103, 83, 4, 3, 2, 1]);
+    const sentMessages: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input));
+        if (url.pathname.endsWith("/getFile"))
+          return Response.json({
+            ok: true,
+            result: {
+              file_path: "voice/failure.ogg",
+              file_size: audio.byteLength,
+            },
+          });
+        if (url.pathname.includes("/file/bot"))
+          return new Response(audio, {
+            headers: {
+              "Content-Type": "audio/ogg",
+              "Content-Length": String(audio.byteLength),
+            },
+          });
+        if (url.pathname.endsWith("/sendMessage")) {
+          sentMessages.push(
+            (JSON.parse(String(init?.body)) as { text: string }).text,
+          );
+          return Response.json({ ok: true, result: { message_id: 102 } });
+        }
+        throw new Error(`Unexpected Telegram URL: ${url.pathname}`);
+      }),
+    );
+    const transientEnv = {
+      ...env,
+      AI: {
+        run: vi.fn(async () => {
+          throw new Error("inference timeout");
+        }),
+      } as unknown as Ai,
+    };
+    delete transientEnv.STORAGE;
+    const response = await app.request(
+      "/public/telegram/webhook",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Plugin-Public-Context": encodeContext({
+            pluginId: "meeting_recorder",
+            requestId: "req_telegram_failure",
+          }),
+          "X-Telegram-Bot-Api-Secret-Token": "s".repeat(32),
+        },
+        body: JSON.stringify({
+          update_id: 9004,
+          message: {
+            message_id: 14,
+            date: 1_787_900_110,
+            from: { id: 424242, first_name: "Telegram" },
+            chat: { id: 424242 },
+            voice: {
+              file_id: "failure-file-id",
+              file_unique_id: "failure-unique-id",
+              duration: 2,
+              file_size: audio.byteLength,
+              mime_type: "audio/ogg",
+            },
+          },
+        }),
+      },
+      transientEnv,
+    );
+
+    expect(response.status).toBe(503);
+    expect(sentMessages).toEqual([
+      "Áudio recebido.",
+      "Iniciando transcrição.",
+      expect.stringMatching(
+        /^O processamento falhou \(AI_TIMEOUT\)\. O Telegram tentará entregar novamente; se não concluir, envie o áudio mais uma vez\.\nhttps:\/\/nexus\.example\/app\/meeting-recorder\/mrr_tg_/u,
+      ),
+    ]);
+    expect(
+      sqlite
+        .prepare(
+          `SELECT status, error_code AS errorCode
+             FROM meeting_recorder_ingest_events
+            WHERE external_event_id = '9004'`,
+        )
+        .get(),
+    ).toMatchObject({ status: "failed", errorCode: "AI_TIMEOUT" });
+  });
+
+  it("reports a Telegram media download failure without exposing the token", async () => {
+    const sentMessages: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input));
+        if (url.pathname.endsWith("/getFile"))
+          return Response.json({
+            ok: true,
+            result: { file_path: "voice/unavailable.ogg", file_size: 8 },
+          });
+        if (url.pathname.includes("/file/bot"))
+          throw new TypeError("provider redirect failed with a sensitive URL");
+        if (url.pathname.endsWith("/sendMessage")) {
+          sentMessages.push(
+            (JSON.parse(String(init?.body)) as { text: string }).text,
+          );
+          return Response.json({ ok: true, result: { message_id: 103 } });
+        }
+        throw new Error(`Unexpected Telegram URL: ${url.pathname}`);
+      }),
+    );
+    const transientEnv = { ...env };
+    delete transientEnv.STORAGE;
+    const response = await app.request(
+      "/public/telegram/webhook",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Plugin-Public-Context": encodeContext({
+            pluginId: "meeting_recorder",
+            requestId: "req_telegram_download_failure",
+          }),
+          "X-Telegram-Bot-Api-Secret-Token": "s".repeat(32),
+        },
+        body: JSON.stringify({
+          update_id: 9005,
+          message: {
+            message_id: 15,
+            date: 1_787_900_120,
+            from: { id: 424242, first_name: "Telegram" },
+            chat: { id: 424242 },
+            voice: {
+              file_id: "unavailable-file-id",
+              file_unique_id: "unavailable-unique-id",
+              duration: 2,
+              file_size: 8,
+              mime_type: "audio/ogg",
+            },
+          },
+        }),
+      },
+      transientEnv,
+    );
+
+    expect(response.status).toBe(503);
+    expect(sentMessages).toEqual([
+      "Áudio recebido.",
+      "O processamento falhou (TELEGRAM_FILE_UNAVAILABLE). O Telegram tentará entregar novamente; se não concluir, envie o áudio mais uma vez.",
+    ]);
+    expect(sentMessages.join(" ")).not.toContain("sensitive URL");
+    expect(
+      sqlite
+        .prepare(
+          `SELECT status, error_code AS errorCode
+             FROM meeting_recorder_ingest_events
+            WHERE external_event_id = '9005'`,
+        )
+        .get(),
+    ).toMatchObject({
+      status: "failed",
+      errorCode: "TELEGRAM_FILE_UNAVAILABLE",
     });
   });
 });
