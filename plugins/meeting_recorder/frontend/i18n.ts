@@ -143,7 +143,19 @@ export const meetingRecorderFrontendMessages = {
     "meetingRecorder.telegramPrivacy":
       "O token é enviado diretamente aos segredos do Worker; ele não é salvo no navegador nem no banco.",
     "meetingRecorder.telegramUserLink":
-      "Para receber áudios, informe o ID numérico do Telegram no perfil do usuário e conceda a permissão de criar gravações.",
+      "Cada usuário vincula a própria conta pelo botão abaixo; não é necessário descobrir ou digitar o ID numérico.",
+    "meetingRecorder.telegramUserLinked": "Seu Telegram está vinculado.",
+    "meetingRecorder.telegramUserNotLinked":
+      "Seu Telegram ainda não está vinculado.",
+    "meetingRecorder.telegramLinkedId": "Conta vinculada",
+    "meetingRecorder.telegramLink": "Vincular meu Telegram",
+    "meetingRecorder.telegramRelink": "Trocar conta do Telegram",
+    "meetingRecorder.telegramCheckLink": "Verificar vínculo",
+    "meetingRecorder.telegramLinkReady":
+      "Link seguro criado. Abra o bot e toque em Iniciar.",
+    "meetingRecorder.telegramLinkInstructions":
+      "Este link é pessoal e expira em 15 minutos. Abra o bot e toque em Iniciar para concluir o vínculo.",
+    "meetingRecorder.telegramOpenLink": "Abrir bot e vincular",
     "meetingRecorder.telegramTransientMode":
       "Modo sem R2: cada áudio é baixado do Telegram, transcrito imediatamente e descartado. Não será possível ouvi-lo depois no Nexus.",
     "meetingRecorder.telegramStoredMode":
@@ -385,7 +397,18 @@ export const meetingRecorderFrontendMessages = {
     "meetingRecorder.telegramPrivacy":
       "The token is sent directly to Worker secrets; it is not stored in the browser or database.",
     "meetingRecorder.telegramUserLink":
-      "To receive audio, add the numeric Telegram ID to the user's profile and grant permission to create recordings.",
+      "Each user links their own account with the button below; there is no numeric ID to find or enter.",
+    "meetingRecorder.telegramUserLinked": "Your Telegram is linked.",
+    "meetingRecorder.telegramUserNotLinked": "Your Telegram is not linked yet.",
+    "meetingRecorder.telegramLinkedId": "Linked account",
+    "meetingRecorder.telegramLink": "Link my Telegram",
+    "meetingRecorder.telegramRelink": "Change Telegram account",
+    "meetingRecorder.telegramCheckLink": "Check link",
+    "meetingRecorder.telegramLinkReady":
+      "Secure link created. Open the bot and tap Start.",
+    "meetingRecorder.telegramLinkInstructions":
+      "This personal link expires in 15 minutes. Open the bot and tap Start to finish linking.",
+    "meetingRecorder.telegramOpenLink": "Open bot and link",
     "meetingRecorder.telegramTransientMode":
       "Without R2, each audio file is downloaded from Telegram, transcribed immediately, and discarded. It cannot be played later in Nexus.",
     "meetingRecorder.telegramStoredMode":

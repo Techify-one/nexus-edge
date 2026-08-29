@@ -44,4 +44,24 @@ describe("application shell", () => {
 
     expect(shell).not.toContain("{location.pathname}");
   });
+
+  it("shows a Core-owned back button on every registered plugin route", () => {
+    const shell = readFileSync(
+      "frontend/src/components/layout/AppShell.tsx",
+      "utf8",
+    );
+    const guide = readFileSync("docs/PLUGIN-DEVELOPMENT.md", "utf8");
+    const template = readFileSync("plugins/template/README.md", "utf8");
+
+    expect(shell).toContain(
+      'import { pluginRoutePaths } from "../../plugins/registry.js"',
+    );
+    expect(shell).toContain("Object.values(pluginRoutePaths).some");
+    expect(shell).toContain('const [, app, pluginRoot] = path.split("/")');
+    expect(shell).toContain("location.pathname.startsWith(`${prefix}/`)");
+    expect(shell).toContain('onClick={() => navigate("/app")}');
+    expect(shell).toContain('aria-label={t("common.back")}');
+    expect(guide).toContain("Core-owned **Back** button");
+    expect(template).toContain("Core header supplies a **Back** button");
+  });
 });

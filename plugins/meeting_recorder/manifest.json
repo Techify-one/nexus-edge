@@ -1,9 +1,9 @@
 {
   "id": "meeting_recorder",
   "name": "Meeting Recorder",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "apiVersion": 1,
-  "coreMinVersion": "1.1.0-beta.4",
+  "coreMinVersion": "1.1.0-beta.5",
   "compatibilityDate": "2026-08-28",
   "compatibilityFlags": ["nodejs_compat"],
   "databaseDialects": ["d1", "postgres"],

@@ -214,6 +214,14 @@ describe("Meeting Recorder Telegram ingest", () => {
         "utf8",
       ),
     );
+    sqlite.exec(
+      readFileSync(
+        resolve(
+          "plugins/meeting_recorder/migrations/d1/0003_telegram_user_links.sql",
+        ),
+        "utf8",
+      ),
+    );
     sqlite.exec(`
       INSERT INTO "user"(id,name,active) VALUES ('usr_telegram','Telegram User',1);
       INSERT INTO user_profiles(user_id,telegram_id,status)
@@ -263,6 +271,8 @@ describe("Meeting Recorder Telegram ingest", () => {
             "Content-Length": String(audio.byteLength),
           },
         });
+      if (url.pathname.endsWith("/sendMessage"))
+        return Response.json({ ok: true, result: { message_id: 99 } });
       throw new Error(`Unexpected Telegram URL: ${url.origin}${url.pathname}`);
     });
     vi.stubGlobal("fetch", telegramFetch);
@@ -310,7 +320,7 @@ describe("Meeting Recorder Telegram ingest", () => {
       recordingId: string;
     };
     expect(payload).toMatchObject({ ok: true });
-    expect(telegramFetch).toHaveBeenCalledTimes(2);
+    expect(telegramFetch).toHaveBeenCalledTimes(3);
     expect(storage.objects.size).toBe(1);
 
     const database = new SqliteD1Database(sqlite) as unknown as D1Database;
@@ -369,7 +379,7 @@ describe("Meeting Recorder Telegram ingest", () => {
       ok: true,
       replay: true,
     });
-    expect(telegramFetch).toHaveBeenCalledTimes(2);
+    expect(telegramFetch).toHaveBeenCalledTimes(3);
   });
 
   it("verifies, exposes, and disconnects the configured Telegram bot", async () => {
@@ -505,6 +515,161 @@ describe("Meeting Recorder Telegram ingest", () => {
     ).toMatchObject({ count: 0 });
   });
 
+  it("links the authenticated user through a short-lived Telegram deep link", async () => {
+    sqlite.exec(`
+      INSERT OR IGNORE INTO "user"(id,name,active)
+        VALUES ('usr_link','Link User',1);
+      INSERT OR IGNORE INTO group_members(group_id,user_id)
+        VALUES ('grp_recorder','usr_link');
+      INSERT OR REPLACE INTO meeting_recorder_telegram_configuration(
+        id,bot_id,username,display_name,webhook_url,verified_at,
+        updated_by_user_id,updated_at
+      ) VALUES (
+        'bot','123456','nexus_audio_bot','Nexus Audio',
+        'https://nexus.example/api/v1/public/p/meeting_recorder/telegram/webhook',
+        1787900000000,'usr_telegram',1787900000000
+      );
+    `);
+    const sentMessages: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const path = new URL(String(input)).pathname;
+        if (path.endsWith("/sendMessage")) {
+          const body = JSON.parse(String(init?.body)) as { text: string };
+          sentMessages.push(body.text);
+          return Response.json({ ok: true, result: { message_id: 101 } });
+        }
+        throw new Error(`Unexpected Telegram URL: ${path}`);
+      }),
+    );
+    const userContext = encodeContext({
+      userId: "usr_link",
+      requestId: "req_telegram_link",
+      origin: "https://nexus.example",
+      permissions: [
+        "meeting_recorder.recording.create",
+        "meeting_recorder.settings.read",
+      ],
+    });
+    const requested = await app.request(
+      "/telegram/link-requests",
+      {
+        method: "POST",
+        headers: {
+          "Idempotency-Key": "telegram-link-request-test",
+          "X-Plugin-Context": userContext,
+        },
+      },
+      env,
+    );
+    expect(requested.status).toBe(201);
+    const link = (await requested.json()) as {
+      url: string;
+      expiresAt: number;
+    };
+    const start = new URL(link.url).searchParams.get("start");
+    expect(link.url).toMatch(
+      /^https:\/\/t\.me\/nexus_audio_bot\?start=nexus_/u,
+    );
+    expect(link.expiresAt).toBeGreaterThan(Date.now());
+    expect(start).toMatch(/^nexus_[A-Za-z0-9_-]{43}$/u);
+
+    const publicContext = encodeContext({
+      pluginId: "meeting_recorder",
+      requestId: "req_telegram_link_webhook",
+    });
+    const linked = await app.request(
+      "/public/telegram/webhook",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Plugin-Public-Context": publicContext,
+          "X-Telegram-Bot-Api-Secret-Token": "s".repeat(32),
+        },
+        body: JSON.stringify({
+          update_id: 9010,
+          message: {
+            message_id: 20,
+            date: 1_787_900_200,
+            text: `/start ${start}`,
+            from: { id: 777777, first_name: "Linked", username: "linked_user" },
+            chat: { id: 777777, type: "private" },
+          },
+        }),
+      },
+      env,
+    );
+    expect(linked.status).toBe(200);
+    await expect(linked.json()).resolves.toEqual({ ok: true, linked: true });
+    expect(sentMessages.at(-1)).toContain("Conta vinculada com sucesso");
+    expect(
+      sqlite
+        .prepare(
+          `SELECT user_id AS userId, telegram_id AS telegramId,
+                  telegram_username AS username
+             FROM meeting_recorder_telegram_user_links WHERE user_id = ?`,
+        )
+        .get("usr_link"),
+    ).toMatchObject({
+      userId: "usr_link",
+      telegramId: "777777",
+      username: "linked_user",
+    });
+
+    const settings = await app.request(
+      "/settings",
+      { headers: { "X-Plugin-Context": userContext } },
+      env,
+    );
+    await expect(settings.json()).resolves.toMatchObject({
+      telegram: {
+        userLink: {
+          linked: true,
+          telegramId: "777777",
+          username: "linked_user",
+        },
+      },
+    });
+
+    const textUpdate = await app.request(
+      "/public/telegram/webhook",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Plugin-Public-Context": publicContext,
+          "X-Telegram-Bot-Api-Secret-Token": "s".repeat(32),
+        },
+        body: JSON.stringify({
+          update_id: 9011,
+          message: {
+            message_id: 21,
+            date: 1_787_900_201,
+            text: "Olá",
+            from: { id: 777777, first_name: "Linked" },
+            chat: { id: 777777, type: "private" },
+          },
+        }),
+      },
+      env,
+    );
+    expect(textUpdate.status).toBe(200);
+    expect(
+      sqlite
+        .prepare(
+          `SELECT owner_user_id AS ownerUserId, error_code AS errorCode
+             FROM meeting_recorder_ingest_events
+            WHERE external_event_id = '9011'`,
+        )
+        .get(),
+    ).toMatchObject({
+      ownerUserId: "usr_link",
+      errorCode: "TELEGRAM_AUDIO_REQUIRED",
+    });
+  });
+
   it("rejects a webhook update with the wrong Telegram secret", async () => {
     const response = await app.request(
       "/public/telegram/webhook",
@@ -549,6 +714,8 @@ describe("Meeting Recorder Telegram ingest", () => {
               "Content-Length": String(audio.byteLength),
             },
           });
+        if (url.pathname.endsWith("/sendMessage"))
+          return Response.json({ ok: true, result: { message_id: 100 } });
         throw new Error(`Unexpected Telegram URL: ${url.pathname}`);
       }),
     );

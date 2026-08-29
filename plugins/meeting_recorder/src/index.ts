@@ -33,13 +33,20 @@ import {
   configureTelegramWebhook,
   deleteTelegramWebhook,
   downloadTelegramMedia,
+  sendTelegramMessage,
   telegramSecretMatches,
   type TelegramUpdate,
   validateTelegramBot,
 } from "./telegram.js";
+import {
+  consumeTelegramLinkRequest,
+  createTelegramLinkRequest,
+  telegramStartToken,
+  telegramUserLink,
+} from "./telegram-links.js";
 import { transcribeAudio } from "./transcription.js";
 
-const VERSION = "1.1.0";
+const VERSION = "1.1.1";
 const CONSENT_VERSION = "2026-08-28";
 const mutablePostKey = (c: Context<MeetingRecorderEnv>): string => {
   const key = (c.req.header("Idempotency-Key") ?? "").trim();
@@ -1092,11 +1099,12 @@ app.post("/recordings/:recordingId/deletion-steps", async (c) => {
 });
 
 app.get("/settings", async (c) => {
-  requirePermission(c, "meeting_recorder.settings.read");
+  const context = requirePermission(c, "meeting_recorder.settings.read");
   const telegramConfiguration = await repository(c).telegramConfiguration();
   const telegramSecretsConfigured = Boolean(
     c.env.TELEGRAM_BOT_TOKEN && c.env.TELEGRAM_WEBHOOK_SECRET,
   );
+  const userLink = await telegramUserLink(c.get("db"), context.userId);
   return c.json({
     settings: await repository(c).settings(),
     capabilities: {
@@ -1123,6 +1131,7 @@ app.get("/settings", async (c) => {
               verifiedAt: telegramConfiguration.verifiedAt,
             }
           : null,
+      userLink,
     },
   });
 });
@@ -1242,6 +1251,40 @@ app.post("/telegram/configure", async (c) => {
   });
 });
 
+app.post("/telegram/link-requests", async (c) => {
+  const context = requirePermission(c, "meeting_recorder.recording.create");
+  mutablePostKey(c);
+  if (!c.env.TELEGRAM_BOT_TOKEN || !c.env.TELEGRAM_WEBHOOK_SECRET)
+    throw new MeetingRecorderError(
+      503,
+      "TELEGRAM_NOT_CONFIGURED",
+      "Configure the Telegram bot before linking a user.",
+    );
+  const configuration = await repository(c).telegramConfiguration();
+  if (!configuration)
+    throw new MeetingRecorderError(
+      503,
+      "TELEGRAM_NOT_CONFIGURED",
+      "Verify the Telegram webhook before linking a user.",
+    );
+  const link = await createTelegramLinkRequest({
+    db: c.get("db"),
+    userId: context.userId,
+    botUsername: configuration.username,
+  });
+  await pluginAudit({
+    db: c.get("db"),
+    action: "meeting_recorder.telegram.link_requested",
+    resourceType: "meeting_recorder.telegram_user_link",
+    resourceId: context.userId,
+    userId: context.userId,
+    requestId: context.requestId,
+    logicalKey: `telegram-link:${context.userId}:${link.expiresAt}`,
+    metadata: { expiresAt: link.expiresAt },
+  });
+  return c.json(link, 201);
+});
+
 app.delete("/telegram/configuration", async (c) => {
   const context = requirePermission(c, "meeting_recorder.settings.update");
   mutablePostKey(c);
@@ -1276,6 +1319,20 @@ const deterministicTelegramRecordingId = async (
     .join("")}`;
 };
 
+const notifyTelegram = async (
+  token: string | undefined,
+  chatId: number | undefined,
+  message: string,
+): Promise<void> => {
+  if (!token || !Number.isSafeInteger(chatId)) return;
+  try {
+    await sendTelegramMessage(token, chatId!, message);
+  } catch {
+    // Telegram delivery feedback must never make the webhook retry an update
+    // whose database work has already completed.
+  }
+};
+
 app.post("/public/telegram/webhook", async (c) => {
   if (!c.get("publicContext"))
     throw new MeetingRecorderError(
@@ -1308,6 +1365,51 @@ app.post("/public/telegram/webhook", async (c) => {
       "TELEGRAM_UPDATE_INVALID",
       "Telegram update is invalid.",
     );
+  const message = update.message;
+  const startCommand = Boolean(
+    message?.text?.trim().match(/^\/start(?:@[A-Za-z0-9_]{5,32})?(?:\s|$)/u),
+  );
+  if (startCommand && message?.from) {
+    const startToken = telegramStartToken(message.text);
+    const privateChat = message.chat.id === message.from.id;
+    const linked =
+      startToken && privateChat
+        ? await consumeTelegramLinkRequest({
+            db: c.get("db"),
+            token: startToken,
+            telegramId: String(message.from.id),
+            ...(message.from.username
+              ? { telegramUsername: message.from.username }
+              : {}),
+          })
+        : null;
+    if (linked) {
+      await pluginAudit({
+        db: c.get("db"),
+        action: "meeting_recorder.telegram.user_linked",
+        resourceType: "meeting_recorder.telegram_user_link",
+        resourceId: linked.userId,
+        userId: linked.userId,
+        requestId: requestId(c),
+        logicalKey: `telegram-user:${message.from.id}`,
+        metadata: { linked: true },
+      });
+      await notifyTelegram(
+        c.env.TELEGRAM_BOT_TOKEN,
+        message.chat.id,
+        "Conta vinculada com sucesso. Agora envie um áudio ou uma mensagem de voz para transcrever.",
+      );
+      return c.json({ ok: true, linked: true });
+    }
+    await notifyTelegram(
+      c.env.TELEGRAM_BOT_TOKEN,
+      message.chat.id,
+      privateChat
+        ? "Este link expirou ou já foi usado. Gere um novo link nas configurações do Gravador de reuniões."
+        : "Abra este bot em uma conversa privada para vincular sua conta.",
+    );
+    return c.json({ ok: true, linked: false });
+  }
   const externalEventId = String(update.update_id);
   const recordingId = await deterministicTelegramRecordingId(update.update_id);
   const existing = await c.get("db").first<{
@@ -1318,7 +1420,6 @@ app.post("/public/telegram/webhook", async (c) => {
       WHERE source = 'telegram' AND external_event_id = ?`,
     [externalEventId],
   );
-  const message = update.message;
   const media = message?.voice ?? message?.audio;
   const ownerId = message?.from
     ? await telegramOwner(c, String(message.from.id))
@@ -1373,6 +1474,15 @@ app.post("/public/telegram/webhook", async (c) => {
       `UPDATE meeting_recorder_ingest_events SET status = 'ignored',
          error_code = ?, updated_at = ? WHERE source = 'telegram' AND external_event_id = ?`,
       [ignoreCode, repositoryTime(c.get("db")), externalEventId],
+    );
+    await notifyTelegram(
+      c.env.TELEGRAM_BOT_TOKEN,
+      message?.chat.id,
+      !ownerId
+        ? "Seu Telegram ainda não está vinculado ao Nexus. Abra o Gravador de reuniões, entre em Configurações e use Vincular meu Telegram."
+        : !media
+          ? "Envie uma mensagem de voz ou um arquivo de áudio para transcrever."
+          : "O bot ainda não está completamente configurado no Nexus.",
     );
     return c.json({ ok: true, ignored: true });
   }
@@ -1524,6 +1634,11 @@ app.post("/public/telegram/webhook", async (c) => {
           WHERE source = 'telegram' AND external_event_id = ?`,
         [repositoryTime(c.get("db")), externalEventId],
       );
+      await notifyTelegram(
+        c.env.TELEGRAM_BOT_TOKEN,
+        message.chat.id,
+        "Áudio recebido e transcrito. A transcrição já está disponível no Gravador de reuniões. Como o R2 está desativado, o áudio não foi armazenado.",
+      );
       return c.json({
         ok: true,
         recordingId: recording.id,
@@ -1531,8 +1646,14 @@ app.post("/public/telegram/webhook", async (c) => {
       });
     }
 
-    if (!settings.autoTranscribe)
+    if (!settings.autoTranscribe) {
+      await notifyTelegram(
+        c.env.TELEGRAM_BOT_TOKEN,
+        message.chat.id,
+        "Áudio recebido e armazenado no Gravador de reuniões.",
+      );
       return c.json({ ok: true, recordingId: recording.id });
+    }
 
     const task = (async () => {
       const db = await createDatabase(c.env);
@@ -1568,6 +1689,11 @@ app.post("/public/telegram/webhook", async (c) => {
     } catch {
       await task;
     }
+    await notifyTelegram(
+      c.env.TELEGRAM_BOT_TOKEN,
+      message.chat.id,
+      "Áudio recebido e armazenado. A transcrição está sendo processada no Gravador de reuniões.",
+    );
     return c.json({ ok: true, recordingId: recording.id });
   } catch (cause) {
     const code =
@@ -1587,7 +1713,14 @@ app.post("/public/telegram/webhook", async (c) => {
         externalEventId,
       ],
     );
-    if (permanent) return c.json({ ok: true, ignored: true });
+    if (permanent) {
+      await notifyTelegram(
+        c.env.TELEGRAM_BOT_TOKEN,
+        message?.chat.id,
+        "Não foi possível importar este áudio. Verifique o formato, o tamanho e a duração e tente novamente.",
+      );
+      return c.json({ ok: true, ignored: true });
+    }
     throw cause;
   }
 });

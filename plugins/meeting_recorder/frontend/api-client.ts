@@ -109,6 +109,11 @@ export const recorderApi = {
           link: string;
         } | null;
         webhook: { url: string; verifiedAt: string | number } | null;
+        userLink?: {
+          linked: boolean;
+          telegramId: string | null;
+          username: string | null;
+        };
       };
     }>(`${base}/settings`),
   defaults: () =>
@@ -138,6 +143,11 @@ export const recorderApi = {
       method: "POST",
       headers: { "Idempotency-Key": idempotencyKey() },
       body: JSON.stringify({ webhookUrl }),
+    }),
+  createTelegramLinkRequest: () =>
+    api<{ url: string; expiresAt: number }>(`${base}/telegram/link-requests`, {
+      method: "POST",
+      headers: { "Idempotency-Key": idempotencyKey() },
     }),
   disconnectTelegram: (reauthHeaders: Record<string, string>) =>
     api(`${base}/telegram/configuration`, {

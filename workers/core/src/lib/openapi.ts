@@ -866,6 +866,18 @@ export const OPENAPI_DOCUMENT = {
         },
       },
     },
+    "/api/v1/p/meeting_recorder/telegram/link-requests": {
+      post: {
+        parameters: [{ name: "Idempotency-Key", in: "header", required: true }],
+        responses: {
+          "201": {
+            description:
+              "Short-lived personal Telegram deep link created for the authenticated user",
+          },
+          "503": { description: "Telegram bot or webhook is not configured" },
+        },
+      },
+    },
     "/api/v1/p/meeting_recorder/telegram/configuration": {
       delete: {
         parameters: [{ name: "Idempotency-Key", in: "header", required: true }],

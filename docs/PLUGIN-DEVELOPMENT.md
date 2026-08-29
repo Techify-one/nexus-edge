@@ -199,6 +199,12 @@ For every manifest menu route:
 Do not add plugin routes, labels, permissions, or icons to
 `frontend/src/components/layout/AppShell.tsx`.
 
+Every route registered in `frontend/src/plugins/registry.ts` automatically gets
+the Core-owned **Back** button in the authenticated header. The button returns
+to Overview and therefore works for current and future plugins without a
+plugin-specific layout. Keep every plugin route in that registry and do not add
+a duplicate page-local back button.
+
 Read `docs/INTERNATIONALIZATION.md` and `docs/DATA-TABLE-STANDARD.md`. Every new
 record-list table must use `ConfigurableDataTable` with an immutable
 `plugin.<plugin-id>.<resource>` ID, stable data-column keys, explicit sizes,

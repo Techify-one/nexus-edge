@@ -48,18 +48,22 @@ export async function telegramOwner(
   telegramId: string,
 ): Promise<string | null> {
   const rows = await c.get("db").query<{ userId: string }>(
-    `SELECT p.user_id AS "userId"
-       FROM user_profiles p JOIN "user" u ON u.id = p.user_id
-      WHERE p.telegram_id = ? AND p.status = 'active' AND u.active = ?
+    `SELECT u.id AS "userId"
+       FROM "user" u LEFT JOIN user_profiles p ON p.user_id = u.id
+      WHERE (p.telegram_id = ? OR EXISTS (
+              SELECT 1 FROM meeting_recorder_telegram_user_links link
+               WHERE link.user_id = u.id AND link.telegram_id = ?
+            ))
+        AND (p.status IS NULL OR p.status = 'active') AND u.active = ?
         AND EXISTS (
           SELECT 1 FROM group_members gm
           JOIN group_permissions gp ON gp.group_id = gm.group_id
           JOIN permissions perm ON perm.id = gp.permission_id
-          WHERE gm.user_id = p.user_id
+          WHERE gm.user_id = u.id
             AND perm.key = 'meeting_recorder.recording.create'
         )
       LIMIT 2`,
-    [telegramId, c.get("db").provider === "d1" ? 1 : true],
+    [telegramId, telegramId, c.get("db").provider === "d1" ? 1 : true],
   );
   return rows.length === 1 ? rows[0]!.userId : null;
 }

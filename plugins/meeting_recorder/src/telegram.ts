@@ -15,9 +15,10 @@ export type TelegramUpdate = {
   message?: {
     message_id: number;
     date: number;
+    text?: string;
     caption?: string;
     from?: { id: number; first_name?: string; username?: string };
-    chat: { id: number };
+    chat: { id: number; type?: string };
     voice?: TelegramMedia;
     audio?: TelegramMedia;
   };
@@ -165,6 +166,18 @@ export async function validateTelegramBot(
 export async function deleteTelegramWebhook(token: string): Promise<void> {
   await telegramCall<boolean>(token, "deleteWebhook", {
     drop_pending_updates: false,
+  });
+}
+
+export async function sendTelegramMessage(
+  token: string,
+  chatId: number,
+  text: string,
+): Promise<void> {
+  await telegramCall<{ message_id: number }>(token, "sendMessage", {
+    chat_id: chatId,
+    text: text.slice(0, 4_096),
+    disable_web_page_preview: true,
   });
 }
 

@@ -85,23 +85,23 @@ for (const dialect of ["d1", "postgres"]) {
       throw new Error(
         `Soletrando migration is missing ${table} for ${dialect}`,
       );
-  const meetingRecorder = readFileSync(
-    `plugins/meeting_recorder/migrations/${dialect}/0001_init.sql`,
-    "utf8",
-  );
+  const meetingRecorder = pluginMigrationSql("meeting_recorder", dialect);
   for (const table of [
     "meeting_recorder_recordings",
     "meeting_recorder_segments",
     "meeting_recorder_settings",
     "meeting_recorder_deletion_tombstones",
     "meeting_recorder_ingest_events",
+    "meeting_recorder_telegram_configuration",
+    "meeting_recorder_telegram_user_links",
+    "meeting_recorder_telegram_link_requests",
   ])
     if (!meetingRecorder.includes(table))
       throw new Error(
         `Meeting Recorder migration is missing ${table} for ${dialect}`,
       );
 }
-for (const plugin of ["crm", "meta_ads", "soletrando"]) {
+for (const plugin of ["crm", "meta_ads", "soletrando", "meeting_recorder"]) {
   const d1PluginMigrations = pluginMigrationNames(plugin, "d1");
   const postgresPluginMigrations = pluginMigrationNames(plugin, "postgres");
   if (

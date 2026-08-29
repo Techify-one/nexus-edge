@@ -4,6 +4,7 @@ import {
   ExternalLink,
   HardDrive,
   KeyRound,
+  Link2,
   RefreshCw,
   Save,
   Trash2,
@@ -47,6 +48,7 @@ function SettingsContent() {
   const { t } = useI18n();
   const client = useQueryClient();
   const editable = can("meeting_recorder.settings.update");
+  const canLinkTelegram = can("meeting_recorder.recording.create");
   const canActivateR2 = can("core.plugin.update") && can("core.plugin.read");
   const query = useQuery({
     queryKey: ["meeting-recorder", "settings"],
@@ -60,6 +62,10 @@ function SettingsContent() {
   const [storageLimitMb, setStorageLimitMb] = useState(1024);
   const [botToken, setBotToken] = useState("");
   const [r2Token, setR2Token] = useState("");
+  const [telegramLinkRequest, setTelegramLinkRequest] = useState<{
+    url: string;
+    expiresAt: number;
+  } | null>(null);
   const runtimeCredential = useQuery({
     queryKey: ["plugin-runtime-credential"],
     queryFn: () =>
@@ -95,6 +101,14 @@ function SettingsContent() {
       void client.invalidateQueries({
         queryKey: ["meeting-recorder", "settings"],
       });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+  const linkTelegram = useMutation({
+    mutationFn: recorderApi.createTelegramLinkRequest,
+    onSuccess: (link) => {
+      setTelegramLinkRequest(link);
+      toast.success(t("meetingRecorder.telegramLinkReady"));
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -149,6 +163,7 @@ function SettingsContent() {
       void client.invalidateQueries({
         queryKey: ["meeting-recorder", "settings"],
       });
+      if (canLinkTelegram) linkTelegram.mutate();
     },
     onError: (error: Error) => {
       setBotToken("");
@@ -194,6 +209,7 @@ function SettingsContent() {
     },
     onSuccess: () => {
       setBotToken("");
+      setTelegramLinkRequest(null);
       toast.success(t("meetingRecorder.telegramDisconnected"));
       void client.invalidateQueries({
         queryKey: ["meeting-recorder", "settings"],
@@ -241,6 +257,11 @@ function SettingsContent() {
 
   if (query.isPending) return <Skeleton className="h-96" />;
   if (!query.data) return null;
+  const telegramUserLink = query.data.telegram.userLink ?? {
+    linked: false,
+    telegramId: null,
+    username: null,
+  };
   return (
     <>
       <PageHeader
@@ -426,6 +447,64 @@ function SettingsContent() {
                 {t("meetingRecorder.openTelegramBot")}
                 <ExternalLink className="h-4 w-4" />
               </a>
+            </div>
+          )}
+          {query.data.telegram.configured && canLinkTelegram && (
+            <div className="mb-4 space-y-3 rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-sm text-indigo-950">
+              <div>
+                <p className="font-semibold">
+                  {telegramUserLink.linked
+                    ? t("meetingRecorder.telegramUserLinked")
+                    : t("meetingRecorder.telegramUserNotLinked")}
+                </p>
+                {telegramUserLink.telegramId && (
+                  <p className="mt-1 text-xs">
+                    {t("meetingRecorder.telegramLinkedId")}:{" "}
+                    {telegramUserLink.telegramId}
+                    {telegramUserLink.username
+                      ? ` · @${telegramUserLink.username}`
+                      : ""}
+                  </p>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="secondary"
+                  busy={linkTelegram.isPending}
+                  onClick={() => linkTelegram.mutate()}
+                >
+                  <Link2 className="h-4 w-4" />
+                  {t(
+                    telegramUserLink.linked
+                      ? "meetingRecorder.telegramRelink"
+                      : "meetingRecorder.telegramLink",
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  busy={query.isFetching}
+                  onClick={() => void query.refetch()}
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  {t("meetingRecorder.telegramCheckLink")}
+                </Button>
+              </div>
+              {telegramLinkRequest && (
+                <div className="rounded-lg border border-indigo-200 p-3">
+                  <p className="mb-2 text-xs">
+                    {t("meetingRecorder.telegramLinkInstructions")}
+                  </p>
+                  <a
+                    className="inline-flex items-center gap-1 font-semibold text-indigo-700 underline"
+                    href={telegramLinkRequest.url}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                  >
+                    {t("meetingRecorder.telegramOpenLink")}
+                    <ExternalLink className="h-4 w-4" />
+                  </a>
+                </div>
+              )}
             </div>
           )}
           {editable && (

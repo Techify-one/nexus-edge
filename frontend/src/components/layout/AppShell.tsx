@@ -1,4 +1,5 @@
 import {
+  ArrowLeft,
   ChevronLeft,
   ChevronRight,
   KeyRound,
@@ -22,6 +23,7 @@ import { Button } from "../ui/index.js";
 import { LanguageSwitcher } from "../i18n/LanguageSwitcher.js";
 import { ThemeToggle } from "../theme/ThemeToggle.js";
 import { useI18n, type TranslationKey } from "../../i18n/index.js";
+import { pluginRoutePaths } from "../../plugins/registry.js";
 
 const items = [
   { to: "/app", label: "nav.overview", icon: LayoutDashboard },
@@ -83,6 +85,13 @@ export function AppShell() {
   });
   const navigate = useNavigate();
   const location = useLocation();
+  const pluginPage = Object.values(pluginRoutePaths).some((path) => {
+    const [, app, pluginRoot] = path.split("/");
+    const prefix = `/${app}/${pluginRoot}`;
+    return (
+      location.pathname === prefix || location.pathname.startsWith(`${prefix}/`)
+    );
+  });
   useEffect(() => {
     try {
       window.localStorage.setItem(
@@ -175,6 +184,18 @@ export function AppShell() {
             >
               <Menu className="h-5 w-5" />
             </Button>
+            {pluginPage && (
+              <Button
+                variant="ghost"
+                className="px-2"
+                onClick={() => navigate("/app")}
+                aria-label={t("common.back")}
+                title={t("common.back")}
+              >
+                <ArrowLeft className="h-4 w-4" />
+                {t("common.back")}
+              </Button>
+            )}
             <p className="text-sm font-semibold text-slate-700">
               {t("nav.panel")}
             </p>

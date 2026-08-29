@@ -695,11 +695,11 @@ describe("Meeting Recorder release installation contract", () => {
       "/plugin-operations",
       {
         method: "POST",
-        headers: { "Idempotency-Key": "meeting-recorder-install-beta-4" },
+        headers: { "Idempotency-Key": "meeting-recorder-install-beta-5" },
         body: releasePackageBody("meeting_recorder"),
       },
       {
-        APP_VERSION: "1.1.0-beta.4",
+        APP_VERSION: "1.1.0-beta.5",
         APP_INSTALLATION_ID: "install_meeting_recorder_test",
         CF_API_TOKEN: "configured-plugin-runtime-token",
         CF_ACCOUNT_ID: "a".repeat(32),
@@ -722,11 +722,11 @@ describe("Meeting Recorder release installation contract", () => {
       "/plugin-operations",
       {
         method: "POST",
-        headers: { "Idempotency-Key": "meeting-recorder-install-beta-3" },
+        headers: { "Idempotency-Key": "meeting-recorder-install-beta-4" },
         body: releasePackageBody("meeting_recorder"),
       },
       {
-        APP_VERSION: "1.1.0-beta.3",
+        APP_VERSION: "1.1.0-beta.4",
         APP_INSTALLATION_ID: "install_meeting_recorder_test",
         CF_API_TOKEN: "configured-plugin-runtime-token",
         CF_ACCOUNT_ID: "a".repeat(32),
