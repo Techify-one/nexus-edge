@@ -95,6 +95,8 @@ for (const dialect of ["d1", "postgres"]) {
     "meeting_recorder_telegram_configuration",
     "meeting_recorder_telegram_user_links",
     "meeting_recorder_telegram_link_requests",
+    "meeting_recorder_telegram_invitations",
+    "meeting_recorder_telegram_members",
   ])
     if (!meetingRecorder.includes(table))
       throw new Error(

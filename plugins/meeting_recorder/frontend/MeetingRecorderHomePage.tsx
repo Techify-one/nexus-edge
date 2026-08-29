@@ -66,6 +66,14 @@ function HomeContent() {
   const { t, formatDateTime } = useI18n();
   const navigate = useNavigate();
   const session = useMeetingRecorderSession();
+  const canOpenSettings = [
+    "meeting_recorder.settings.read",
+    "meeting_recorder.telegram_member.read",
+    "meeting_recorder.telegram_member.invite",
+    "meeting_recorder.telegram_member.delete",
+    "meeting_recorder.telegram_member.read_all",
+    "meeting_recorder.telegram_member.manage_all",
+  ].some(can);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [source, setSource] = useState("");
@@ -202,7 +210,7 @@ function HomeContent() {
         description={t("meetingRecorder.description")}
         action={
           <div className="flex gap-2">
-            {can("meeting_recorder.settings.read") && (
+            {canOpenSettings && (
               <Button
                 variant="secondary"
                 onClick={() => navigate("/app/meeting-recorder/settings")}

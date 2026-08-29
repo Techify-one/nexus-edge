@@ -17,7 +17,12 @@ export type TelegramUpdate = {
     date: number;
     text?: string;
     caption?: string;
-    from?: { id: number; first_name?: string; username?: string };
+    from?: {
+      id: number;
+      first_name?: string;
+      last_name?: string;
+      username?: string;
+    };
     chat: { id: number; type?: string };
     voice?: TelegramMedia;
     audio?: TelegramMedia;

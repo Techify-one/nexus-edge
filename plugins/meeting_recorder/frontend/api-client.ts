@@ -3,7 +3,13 @@ import {
   idempotencyKey,
 } from "../../../frontend/src/lib/api/core-client.js";
 import { getAppLocale } from "../../../frontend/src/i18n/index.js";
-import type { LocalSegment, Recording, Segment, Transcript } from "./types.js";
+import type {
+  LocalSegment,
+  Recording,
+  Segment,
+  TelegramAccessItem,
+  Transcript,
+} from "./types.js";
 
 const base = "/api/v1/p/meeting_recorder";
 
@@ -147,6 +153,27 @@ export const recorderApi = {
   createTelegramLinkRequest: () =>
     api<{ url: string; expiresAt: number }>(`${base}/telegram/link-requests`, {
       method: "POST",
+      headers: { "Idempotency-Key": idempotencyKey() },
+    }),
+  telegramAccess: () =>
+    api<{ items: TelegramAccessItem[] }>(`${base}/telegram/access`),
+  createTelegramInvitation: (label: string) =>
+    api<{ id: string; label: string; url: string; expiresAt: number }>(
+      `${base}/telegram/invitations`,
+      {
+        method: "POST",
+        headers: { "Idempotency-Key": idempotencyKey() },
+        body: JSON.stringify({ label }),
+      },
+    ),
+  revokeTelegramMember: (id: string) =>
+    api(`${base}/telegram/members/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      headers: { "Idempotency-Key": idempotencyKey() },
+    }),
+  revokeTelegramInvitation: (id: string) =>
+    api(`${base}/telegram/invitations/${encodeURIComponent(id)}`, {
+      method: "DELETE",
       headers: { "Idempotency-Key": idempotencyKey() },
     }),
   disconnectTelegram: (reauthHeaders: Record<string, string>) =>

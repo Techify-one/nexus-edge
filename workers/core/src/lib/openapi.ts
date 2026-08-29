@@ -878,6 +878,64 @@ export const OPENAPI_DOCUMENT = {
         },
       },
     },
+    "/api/v1/p/meeting_recorder/telegram/access": {
+      get: {
+        responses: {
+          "200": {
+            description:
+              "Active Telegram members and pending invitations visible to the authenticated user",
+          },
+          "403": { description: "Telegram member read permission required" },
+        },
+      },
+    },
+    "/api/v1/p/meeting_recorder/telegram/invitations": {
+      post: {
+        parameters: [{ name: "Idempotency-Key", in: "header", required: true }],
+        responses: {
+          "201": {
+            description:
+              "One-time Telegram member invitation created; the raw link is returned only once",
+          },
+          "403": {
+            description:
+              "Telegram member invitation and recording creation permissions required",
+          },
+          "503": { description: "Telegram bot or webhook is not configured" },
+        },
+      },
+    },
+    "/api/v1/p/meeting_recorder/telegram/invitations/{invitationId}": {
+      delete: {
+        parameters: [
+          { name: "invitationId", in: "path", required: true },
+          { name: "Idempotency-Key", in: "header", required: true },
+        ],
+        responses: {
+          "204": { description: "Pending Telegram invitation revoked" },
+          "404": {
+            description: "Invitation not found in the permitted owner scope",
+          },
+        },
+      },
+    },
+    "/api/v1/p/meeting_recorder/telegram/members/{memberId}": {
+      delete: {
+        parameters: [
+          { name: "memberId", in: "path", required: true },
+          { name: "Idempotency-Key", in: "header", required: true },
+        ],
+        responses: {
+          "204": {
+            description:
+              "Telegram member access revoked while prior recordings remain preserved",
+          },
+          "404": {
+            description: "Member not found in the permitted owner scope",
+          },
+        },
+      },
+    },
     "/api/v1/p/meeting_recorder/telegram/configuration": {
       delete: {
         parameters: [{ name: "Idempotency-Key", in: "header", required: true }],

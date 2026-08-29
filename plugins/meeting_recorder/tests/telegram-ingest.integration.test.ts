@@ -222,6 +222,14 @@ describe("Meeting Recorder Telegram ingest", () => {
         "utf8",
       ),
     );
+    sqlite.exec(
+      readFileSync(
+        resolve(
+          "plugins/meeting_recorder/migrations/d1/0004_telegram_members.sql",
+        ),
+        "utf8",
+      ),
+    );
     sqlite.exec(`
       INSERT INTO "user"(id,name,active) VALUES ('usr_telegram','Telegram User',1);
       INSERT INTO user_profiles(user_id,telegram_id,status)
@@ -701,6 +709,402 @@ describe("Meeting Recorder Telegram ingest", () => {
     ).toMatchObject({
       ownerUserId: "usr_link",
       errorCode: "TELEGRAM_AUDIO_REQUIRED",
+    });
+  });
+
+  it("invites, scopes, uses, and revokes an external Telegram member", async () => {
+    sqlite.exec(`
+      INSERT OR IGNORE INTO "user"(id,name,active)
+        VALUES ('usr_inviter','Invitation Owner',1);
+      INSERT OR IGNORE INTO "user"(id,name,active)
+        VALUES ('usr_other','Other Owner',1);
+      INSERT OR IGNORE INTO group_members(group_id,user_id)
+        VALUES ('grp_recorder','usr_inviter');
+      INSERT OR IGNORE INTO group_members(group_id,user_id)
+        VALUES ('grp_recorder','usr_other');
+      INSERT OR REPLACE INTO meeting_recorder_telegram_configuration(
+        id,bot_id,username,display_name,webhook_url,verified_at,
+        updated_by_user_id,updated_at
+      ) VALUES (
+        'bot','123456','nexus_audio_bot','Nexus Audio',
+        'https://nexus.example/api/v1/public/p/meeting_recorder/telegram/webhook',
+        1787900000000,'usr_inviter',1787900000000
+      );
+    `);
+    const sentMessages: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const path = new URL(String(input)).pathname;
+        if (path.endsWith("/sendMessage")) {
+          const body = JSON.parse(String(init?.body)) as { text: string };
+          sentMessages.push(body.text);
+          return Response.json({ ok: true, result: { message_id: 102 } });
+        }
+        throw new Error(`Unexpected Telegram URL: ${path}`);
+      }),
+    );
+    const ownerContext = encodeContext({
+      userId: "usr_inviter",
+      requestId: "req_telegram_invitation",
+      origin: "https://nexus.example",
+      permissions: [
+        "meeting_recorder.recording.create",
+        "meeting_recorder.telegram_member.read",
+        "meeting_recorder.telegram_member.invite",
+        "meeting_recorder.telegram_member.delete",
+      ],
+    });
+    const deniedContext = encodeContext({
+      userId: "usr_other",
+      requestId: "req_telegram_invitation_denied",
+      origin: "https://nexus.example",
+      permissions: ["meeting_recorder.recording.create"],
+    });
+    const invitationSettings = await app.request(
+      "/settings",
+      { headers: { "X-Plugin-Context": ownerContext } },
+      env,
+    );
+    expect(invitationSettings.status).toBe(200);
+    const deniedSettings = await app.request(
+      "/settings",
+      { headers: { "X-Plugin-Context": deniedContext } },
+      env,
+    );
+    expect(deniedSettings.status).toBe(403);
+    const denied = await app.request(
+      "/telegram/invitations",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": "telegram-invitation-denied",
+          "X-Plugin-Context": deniedContext,
+        },
+        body: JSON.stringify({ label: "Should not exist" }),
+      },
+      env,
+    );
+    expect(denied.status).toBe(403);
+
+    const created = await app.request(
+      "/telegram/invitations",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": "telegram-invitation-create",
+          "X-Plugin-Context": ownerContext,
+        },
+        body: JSON.stringify({ label: "Guest Speaker" }),
+      },
+      env,
+    );
+    expect(created.status).toBe(201);
+    const invitation = (await created.json()) as {
+      id: string;
+      label: string;
+      url: string;
+      expiresAt: number;
+    };
+    expect(invitation.id).toMatch(/^tgi_[a-f0-9]{32}$/u);
+    expect(invitation.label).toBe("Guest Speaker");
+    expect(invitation.expiresAt).toBeGreaterThan(
+      Date.now() + 6 * 24 * 60 * 60 * 1_000,
+    );
+    const start = new URL(invitation.url).searchParams.get("start");
+    expect(start).toMatch(/^nexus_inv_[A-Za-z0-9_-]{43}$/u);
+    const rawToken = start!.replace(/^nexus_inv_/u, "");
+    expect(
+      sqlite
+        .prepare(
+          `SELECT token_hash AS tokenHash
+             FROM meeting_recorder_telegram_invitations WHERE id = ?`,
+        )
+        .get(invitation.id),
+    ).not.toMatchObject({ tokenHash: rawToken });
+
+    const pending = await app.request(
+      "/telegram/access",
+      { headers: { "X-Plugin-Context": ownerContext } },
+      env,
+    );
+    await expect(pending.json()).resolves.toMatchObject({
+      items: [
+        {
+          id: invitation.id,
+          kind: "invitation",
+          label: "Guest Speaker",
+          ownerUserId: "usr_inviter",
+          status: "pending",
+          telegramId: null,
+        },
+      ],
+    });
+    const otherReadContext = encodeContext({
+      userId: "usr_other",
+      requestId: "req_telegram_invitation_other_read",
+      origin: "https://nexus.example",
+      permissions: [
+        "meeting_recorder.telegram_member.read",
+        "meeting_recorder.telegram_member.delete",
+      ],
+    });
+    const otherPending = await app.request(
+      "/telegram/access",
+      { headers: { "X-Plugin-Context": otherReadContext } },
+      env,
+    );
+    await expect(otherPending.json()).resolves.toEqual({ items: [] });
+
+    const publicContext = encodeContext({
+      pluginId: "meeting_recorder",
+      requestId: "req_telegram_invitation_accept",
+    });
+    const accepted = await app.request(
+      "/public/telegram/webhook",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Plugin-Public-Context": publicContext,
+          "X-Telegram-Bot-Api-Secret-Token": "s".repeat(32),
+        },
+        body: JSON.stringify({
+          update_id: 9020,
+          message: {
+            message_id: 30,
+            date: 1_787_900_300,
+            text: `/start ${start}`,
+            from: {
+              id: 888888,
+              first_name: "Guest",
+              last_name: "Speaker",
+              username: "guest_speaker",
+            },
+            chat: { id: 888888, type: "private" },
+          },
+        }),
+      },
+      env,
+    );
+    expect(accepted.status).toBe(200);
+    await expect(accepted.json()).resolves.toEqual({ ok: true, linked: true });
+    expect(sentMessages.at(-1)).toContain(
+      "Seus áudios serão transcritos e enviados para Invitation Owner",
+    );
+    const member = sqlite
+      .prepare(
+        `SELECT id,owner_user_id AS ownerUserId,telegram_id AS telegramId,
+                telegram_username AS username,
+                telegram_display_name AS displayName,label,revoked_at AS revokedAt
+           FROM meeting_recorder_telegram_members WHERE telegram_id = ?`,
+      )
+      .get("888888") as Record<string, unknown>;
+    expect(member).toMatchObject({
+      ownerUserId: "usr_inviter",
+      telegramId: "888888",
+      username: "guest_speaker",
+      displayName: "Guest Speaker",
+      label: "Guest Speaker",
+      revokedAt: null,
+    });
+
+    const active = await app.request(
+      "/telegram/access",
+      { headers: { "X-Plugin-Context": ownerContext } },
+      env,
+    );
+    await expect(active.json()).resolves.toMatchObject({
+      items: [
+        {
+          id: member.id,
+          kind: "member",
+          status: "active",
+          ownerUserId: "usr_inviter",
+          telegramId: "888888",
+        },
+      ],
+    });
+
+    const textUpdate = await app.request(
+      "/public/telegram/webhook",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Plugin-Public-Context": encodeContext({
+            pluginId: "meeting_recorder",
+            requestId: "req_telegram_invited_text",
+          }),
+          "X-Telegram-Bot-Api-Secret-Token": "s".repeat(32),
+        },
+        body: JSON.stringify({
+          update_id: 9021,
+          message: {
+            message_id: 31,
+            date: 1_787_900_301,
+            text: "Olá",
+            from: { id: 888888, first_name: "Guest" },
+            chat: { id: 888888, type: "private" },
+          },
+        }),
+      },
+      env,
+    );
+    expect(textUpdate.status).toBe(200);
+    expect(
+      sqlite
+        .prepare(
+          `SELECT owner_user_id AS ownerUserId,error_code AS errorCode
+             FROM meeting_recorder_ingest_events WHERE external_event_id = '9021'`,
+        )
+        .get(),
+    ).toMatchObject({
+      ownerUserId: "usr_inviter",
+      errorCode: "TELEGRAM_AUDIO_REQUIRED",
+    });
+    expect(
+      sqlite
+        .prepare(
+          "SELECT last_used_at AS lastUsedAt FROM meeting_recorder_telegram_members WHERE id = ?",
+        )
+        .get(member.id as string),
+    ).toMatchObject({ lastUsedAt: expect.any(Number) });
+
+    const forbiddenRemoval = await app.request(
+      `/telegram/members/${String(member.id)}`,
+      {
+        method: "DELETE",
+        headers: {
+          "Idempotency-Key": "telegram-member-remove-other",
+          "X-Plugin-Context": otherReadContext,
+        },
+      },
+      env,
+    );
+    expect(forbiddenRemoval.status).toBe(404);
+    const removed = await app.request(
+      `/telegram/members/${String(member.id)}`,
+      {
+        method: "DELETE",
+        headers: {
+          "Idempotency-Key": "telegram-member-remove-owner",
+          "X-Plugin-Context": ownerContext,
+        },
+      },
+      env,
+    );
+    expect(removed.status).toBe(204);
+    const afterRemoval = await app.request(
+      "/telegram/access",
+      { headers: { "X-Plugin-Context": ownerContext } },
+      env,
+    );
+    await expect(afterRemoval.json()).resolves.toEqual({ items: [] });
+
+    const blocked = await app.request(
+      "/public/telegram/webhook",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Plugin-Public-Context": encodeContext({
+            pluginId: "meeting_recorder",
+            requestId: "req_telegram_invited_blocked",
+          }),
+          "X-Telegram-Bot-Api-Secret-Token": "s".repeat(32),
+        },
+        body: JSON.stringify({
+          update_id: 9022,
+          message: {
+            message_id: 32,
+            date: 1_787_900_302,
+            text: "Ainda autorizado?",
+            from: { id: 888888, first_name: "Guest" },
+            chat: { id: 888888, type: "private" },
+          },
+        }),
+      },
+      env,
+    );
+    expect(blocked.status).toBe(200);
+    expect(
+      sqlite
+        .prepare(
+          `SELECT owner_user_id AS ownerUserId,error_code AS errorCode
+             FROM meeting_recorder_ingest_events WHERE external_event_id = '9022'`,
+        )
+        .get(),
+    ).toMatchObject({
+      ownerUserId: null,
+      errorCode: "TELEGRAM_USER_NOT_LINKED",
+    });
+
+    const reinvitedResponse = await app.request(
+      "/telegram/invitations",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": "telegram-invitation-reinvite",
+          "X-Plugin-Context": ownerContext,
+        },
+        body: JSON.stringify({ label: "Guest Speaker Again" }),
+      },
+      env,
+    );
+    const reinvitation = (await reinvitedResponse.json()) as {
+      url: string;
+    };
+    const restart = new URL(reinvitation.url).searchParams.get("start");
+    const reaccepted = await app.request(
+      "/public/telegram/webhook",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Plugin-Public-Context": encodeContext({
+            pluginId: "meeting_recorder",
+            requestId: "req_telegram_invitation_reaccept",
+          }),
+          "X-Telegram-Bot-Api-Secret-Token": "s".repeat(32),
+        },
+        body: JSON.stringify({
+          update_id: 9023,
+          message: {
+            message_id: 33,
+            date: 1_787_900_303,
+            text: `/start ${restart}`,
+            from: {
+              id: 888888,
+              first_name: "Guest",
+              last_name: "Speaker",
+              username: "guest_speaker",
+            },
+            chat: { id: 888888, type: "private" },
+          },
+        }),
+      },
+      env,
+    );
+    expect(reaccepted.status).toBe(200);
+    await expect(reaccepted.json()).resolves.toEqual({
+      ok: true,
+      linked: true,
+    });
+    expect(
+      sqlite
+        .prepare(
+          `SELECT owner_user_id AS ownerUserId,label,revoked_at AS revokedAt
+             FROM meeting_recorder_telegram_members WHERE telegram_id = ?`,
+        )
+        .get("888888"),
+    ).toMatchObject({
+      ownerUserId: "usr_inviter",
+      label: "Guest Speaker Again",
+      revokedAt: null,
     });
   });
 

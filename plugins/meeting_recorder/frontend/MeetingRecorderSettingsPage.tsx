@@ -33,6 +33,7 @@ import { useI18n } from "../../../frontend/src/i18n/index.js";
 import { can } from "../../../frontend/src/lib/ability.js";
 import { recorderApi } from "./api-client.js";
 import { MeetingRecorderRouteGate } from "./MeetingRecorderRouteGate.js";
+import { TelegramAccessCard } from "./TelegramAccessCard.js";
 
 const randomSecret = () => {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
@@ -47,6 +48,7 @@ const randomSecret = () => {
 function SettingsContent() {
   const { t } = useI18n();
   const client = useQueryClient();
+  const canReadSettings = can("meeting_recorder.settings.read");
   const editable = can("meeting_recorder.settings.update");
   const canLinkTelegram = can("meeting_recorder.recording.create");
   const canActivateR2 = can("core.plugin.update") && can("core.plugin.read");
@@ -269,141 +271,145 @@ function SettingsContent() {
         description={t("meetingRecorder.settingsDescription")}
       />
       <div className="grid gap-5 lg:grid-cols-2">
-        <Card>
-          <div className="mb-5 flex items-center gap-3">
-            <HardDrive className="h-5 w-5 text-indigo-600" />
-            <div>
-              <h2 className="font-bold">{t("meetingRecorder.r2Title")}</h2>
-              <p className="text-sm text-slate-500">
-                {t("meetingRecorder.r2Description")}
-              </p>
-            </div>
-          </div>
-          {query.data.capabilities.storageEnabled ? (
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
-              {t("meetingRecorder.r2Enabled")}
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
-                {t("meetingRecorder.r2Disabled")}
-              </div>
-              {canActivateR2 && runtimeCredential.data && (
-                <>
-                  <a
-                    className="inline-flex items-center gap-1 font-medium text-indigo-700 underline"
-                    href={cloudflareR2TokenTemplateUrl(
-                      runtimeCredential.data.accountId,
-                    )}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                  >
-                    {t("meetingRecorder.r2CreateToken")}
-                    <ExternalLink className="h-4 w-4" />
-                  </a>
-                  <p className="text-xs text-slate-500">
-                    {t("meetingRecorder.r2TokenInstructions")}
-                  </p>
-                  <Label htmlFor="meeting-recorder-r2-token">
-                    {t("meetingRecorder.r2Token")}
-                  </Label>
-                  <PasswordInput
-                    id="meeting-recorder-r2-token"
-                    autoComplete="off"
-                    minLength={40}
-                    maxLength={2048}
-                    value={r2Token}
-                    onChange={(event) => setR2Token(event.target.value)}
-                  />
-                  <Button
-                    busy={activateR2.isPending}
-                    disabled={r2Token.trim().length < 40}
-                    onClick={() => activateR2.mutate()}
-                  >
-                    <HardDrive className="h-4 w-4" />
-                    {t("meetingRecorder.r2Activate")}
-                  </Button>
-                </>
-              )}
-              {!canActivateR2 && (
+        {canReadSettings && (
+          <Card>
+            <div className="mb-5 flex items-center gap-3">
+              <HardDrive className="h-5 w-5 text-indigo-600" />
+              <div>
+                <h2 className="font-bold">{t("meetingRecorder.r2Title")}</h2>
                 <p className="text-sm text-slate-500">
-                  {t("meetingRecorder.r2AdminRequired")}
+                  {t("meetingRecorder.r2Description")}
                 </p>
+              </div>
+            </div>
+            {query.data.capabilities.storageEnabled ? (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+                {t("meetingRecorder.r2Enabled")}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+                  {t("meetingRecorder.r2Disabled")}
+                </div>
+                {canActivateR2 && runtimeCredential.data && (
+                  <>
+                    <a
+                      className="inline-flex items-center gap-1 font-medium text-indigo-700 underline"
+                      href={cloudflareR2TokenTemplateUrl(
+                        runtimeCredential.data.accountId,
+                      )}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                    >
+                      {t("meetingRecorder.r2CreateToken")}
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                    <p className="text-xs text-slate-500">
+                      {t("meetingRecorder.r2TokenInstructions")}
+                    </p>
+                    <Label htmlFor="meeting-recorder-r2-token">
+                      {t("meetingRecorder.r2Token")}
+                    </Label>
+                    <PasswordInput
+                      id="meeting-recorder-r2-token"
+                      autoComplete="off"
+                      minLength={40}
+                      maxLength={2048}
+                      value={r2Token}
+                      onChange={(event) => setR2Token(event.target.value)}
+                    />
+                    <Button
+                      busy={activateR2.isPending}
+                      disabled={r2Token.trim().length < 40}
+                      onClick={() => activateR2.mutate()}
+                    >
+                      <HardDrive className="h-4 w-4" />
+                      {t("meetingRecorder.r2Activate")}
+                    </Button>
+                  </>
+                )}
+                {!canActivateR2 && (
+                  <p className="text-sm text-slate-500">
+                    {t("meetingRecorder.r2AdminRequired")}
+                  </p>
+                )}
+              </div>
+            )}
+          </Card>
+        )}
+        {canReadSettings && (
+          <Card>
+            <div className="mb-5 flex items-center gap-3">
+              <Save className="h-5 w-5 text-indigo-600" />
+              <h2 className="font-bold">{t("meetingRecorder.defaults")}</h2>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="default-language">{t("common.language")}</Label>
+                <Select
+                  id="default-language"
+                  value={defaultLanguage}
+                  onChange={(event) =>
+                    setDefaultLanguage(
+                      event.target.value as typeof defaultLanguage,
+                    )
+                  }
+                >
+                  <option value="pt-BR">Português</option>
+                  <option value="en">English</option>
+                  <option value="auto">
+                    {t("meetingRecorder.autoLanguage")}
+                  </option>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="maximum-minutes">
+                  {t("meetingRecorder.maximumMinutes")}
+                </Label>
+                <Input
+                  id="maximum-minutes"
+                  type="number"
+                  min={1}
+                  max={240}
+                  value={maximumMinutes}
+                  onChange={(event) =>
+                    setMaximumMinutes(Number(event.target.value))
+                  }
+                />
+              </div>
+              <div>
+                <Label htmlFor="storage-limit">
+                  {t("meetingRecorder.storageLimit")}
+                </Label>
+                <Input
+                  id="storage-limit"
+                  type="number"
+                  min={100}
+                  max={8192}
+                  value={storageLimitMb}
+                  disabled={!query.data.capabilities.storageEnabled}
+                  onChange={(event) =>
+                    setStorageLimitMb(Number(event.target.value))
+                  }
+                />
+              </div>
+              <label className="flex items-center justify-between gap-4 rounded-xl border p-3 text-sm">
+                <span>{t("meetingRecorder.autoTranscribe")}</span>
+                <ToggleSwitch
+                  checked={autoTranscribe}
+                  onClick={() => setAutoTranscribe((value) => !value)}
+                  aria-label={t("meetingRecorder.autoTranscribe")}
+                />
+              </label>
+              {editable && (
+                <Button busy={save.isPending} onClick={() => save.mutate()}>
+                  <Save className="h-4 w-4" />
+                  {t("common.save")}
+                </Button>
               )}
             </div>
-          )}
-        </Card>
-        <Card>
-          <div className="mb-5 flex items-center gap-3">
-            <Save className="h-5 w-5 text-indigo-600" />
-            <h2 className="font-bold">{t("meetingRecorder.defaults")}</h2>
-          </div>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="default-language">{t("common.language")}</Label>
-              <Select
-                id="default-language"
-                value={defaultLanguage}
-                onChange={(event) =>
-                  setDefaultLanguage(
-                    event.target.value as typeof defaultLanguage,
-                  )
-                }
-              >
-                <option value="pt-BR">Português</option>
-                <option value="en">English</option>
-                <option value="auto">
-                  {t("meetingRecorder.autoLanguage")}
-                </option>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="maximum-minutes">
-                {t("meetingRecorder.maximumMinutes")}
-              </Label>
-              <Input
-                id="maximum-minutes"
-                type="number"
-                min={1}
-                max={240}
-                value={maximumMinutes}
-                onChange={(event) =>
-                  setMaximumMinutes(Number(event.target.value))
-                }
-              />
-            </div>
-            <div>
-              <Label htmlFor="storage-limit">
-                {t("meetingRecorder.storageLimit")}
-              </Label>
-              <Input
-                id="storage-limit"
-                type="number"
-                min={100}
-                max={8192}
-                value={storageLimitMb}
-                disabled={!query.data.capabilities.storageEnabled}
-                onChange={(event) =>
-                  setStorageLimitMb(Number(event.target.value))
-                }
-              />
-            </div>
-            <label className="flex items-center justify-between gap-4 rounded-xl border p-3 text-sm">
-              <span>{t("meetingRecorder.autoTranscribe")}</span>
-              <ToggleSwitch
-                checked={autoTranscribe}
-                onClick={() => setAutoTranscribe((value) => !value)}
-                aria-label={t("meetingRecorder.autoTranscribe")}
-              />
-            </label>
-            {editable && (
-              <Button busy={save.isPending} onClick={() => save.mutate()}>
-                <Save className="h-4 w-4" />
-                {t("common.save")}
-              </Button>
-            )}
-          </div>
-        </Card>
+          </Card>
+        )}
         <Card>
           <div className="mb-5 flex items-center gap-3">
             <Bot className="h-5 w-5 text-indigo-600" />
@@ -565,6 +571,7 @@ function SettingsContent() {
             </>
           )}
         </Card>
+        <TelegramAccessCard configured={query.data.telegram.configured} />
       </div>
     </>
   );

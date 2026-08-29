@@ -39,14 +39,19 @@ import {
   validateTelegramBot,
 } from "./telegram.js";
 import {
+  consumeTelegramInvitation,
   consumeTelegramLinkRequest,
+  createTelegramInvitation,
   createTelegramLinkRequest,
-  telegramStartToken,
+  listTelegramAccess,
+  revokeTelegramInvitation,
+  revokeTelegramMember,
+  telegramStartPayload,
   telegramUserLink,
 } from "./telegram-links.js";
 import { transcribeAudio } from "./transcription.js";
 
-const VERSION = "1.1.2";
+const VERSION = "1.2.0";
 const CONSENT_VERSION = "2026-08-28";
 const mutablePostKey = (c: Context<MeetingRecorderEnv>): string => {
   const key = (c.req.header("Idempotency-Key") ?? "").trim();
@@ -105,6 +110,15 @@ const settingsInput = z.object({
     .max(8 * 1024 * 1024 * 1024),
   version: z.number().int().nonnegative(),
 });
+
+const telegramInvitationInput = z.object({
+  label: z.string().trim().min(1).max(100),
+});
+
+const telegramAccessId = z
+  .string()
+  .regex(/^tg[im]_[a-f0-9]{32}$/u)
+  .max(40);
 
 const repository = (c: Context<MeetingRecorderEnv>) =>
   new MeetingRecorderRepository(c.get("db"));
@@ -1099,7 +1113,18 @@ app.post("/recordings/:recordingId/deletion-steps", async (c) => {
 });
 
 app.get("/settings", async (c) => {
-  const context = requirePermission(c, "meeting_recorder.settings.read");
+  const context = userContext(c);
+  if (
+    ![
+      "meeting_recorder.settings.read",
+      "meeting_recorder.telegram_member.read",
+      "meeting_recorder.telegram_member.invite",
+      "meeting_recorder.telegram_member.delete",
+      "meeting_recorder.telegram_member.read_all",
+      "meeting_recorder.telegram_member.manage_all",
+    ].some((permission) => context.permissions.includes(permission))
+  )
+    throw new MeetingRecorderError(403, "FORBIDDEN", "Permission denied.");
   const telegramConfiguration = await repository(c).telegramConfiguration();
   const telegramSecretsConfigured = Boolean(
     c.env.TELEGRAM_BOT_TOKEN && c.env.TELEGRAM_WEBHOOK_SECRET,
@@ -1285,6 +1310,132 @@ app.post("/telegram/link-requests", async (c) => {
   return c.json(link, 201);
 });
 
+app.get("/telegram/access", async (c) => {
+  const context = userContext(c);
+  const readAll = [
+    "meeting_recorder.telegram_member.read_all",
+    "meeting_recorder.telegram_member.manage_all",
+  ].some((permission) => context.permissions.includes(permission));
+  if (
+    !readAll &&
+    !context.permissions.includes("meeting_recorder.telegram_member.read")
+  )
+    throw new MeetingRecorderError(403, "FORBIDDEN", "Permission denied.");
+  return c.json({
+    items: await listTelegramAccess({
+      db: c.get("db"),
+      viewerUserId: context.userId,
+      readAll,
+    }),
+  });
+});
+
+app.post("/telegram/invitations", async (c) => {
+  const context = requirePermission(
+    c,
+    "meeting_recorder.telegram_member.invite",
+  );
+  if (!context.permissions.includes("meeting_recorder.recording.create"))
+    throw new MeetingRecorderError(403, "FORBIDDEN", "Permission denied.");
+  mutablePostKey(c);
+  if (!c.env.TELEGRAM_BOT_TOKEN || !c.env.TELEGRAM_WEBHOOK_SECRET)
+    throw new MeetingRecorderError(
+      503,
+      "TELEGRAM_NOT_CONFIGURED",
+      "Configure the Telegram bot before inviting a person.",
+    );
+  const configuration = await repository(c).telegramConfiguration();
+  if (!configuration)
+    throw new MeetingRecorderError(
+      503,
+      "TELEGRAM_NOT_CONFIGURED",
+      "Verify the Telegram webhook before inviting a person.",
+    );
+  const input = telegramInvitationInput.parse(await c.req.json());
+  const invitation = await createTelegramInvitation({
+    db: c.get("db"),
+    ownerUserId: context.userId,
+    createdByUserId: context.userId,
+    botUsername: configuration.username,
+    label: input.label,
+  });
+  await pluginAudit({
+    db: c.get("db"),
+    action: "meeting_recorder.telegram.invitation_created",
+    resourceType: "meeting_recorder.telegram_invitation",
+    resourceId: invitation.id,
+    userId: context.userId,
+    requestId: context.requestId,
+    logicalKey: `telegram-invitation:${invitation.id}`,
+    metadata: { expiresAt: invitation.expiresAt },
+  });
+  return c.json(invitation, 201);
+});
+
+app.delete("/telegram/members/:memberId", async (c) => {
+  const context = userContext(c);
+  const manageAll = context.permissions.includes(
+    "meeting_recorder.telegram_member.manage_all",
+  );
+  if (
+    !manageAll &&
+    !context.permissions.includes("meeting_recorder.telegram_member.delete")
+  )
+    throw new MeetingRecorderError(403, "FORBIDDEN", "Permission denied.");
+  mutablePostKey(c);
+  const memberId = telegramAccessId.parse(c.req.param("memberId"));
+  const revoked = await revokeTelegramMember({
+    db: c.get("db"),
+    id: memberId,
+    viewerUserId: context.userId,
+    manageAll,
+  });
+  if (!revoked)
+    throw new MeetingRecorderError(404, "NOT_FOUND", "Member not found.");
+  await pluginAudit({
+    db: c.get("db"),
+    action: "meeting_recorder.telegram.member_revoked",
+    resourceType: "meeting_recorder.telegram_member",
+    resourceId: memberId,
+    userId: context.userId,
+    requestId: context.requestId,
+    logicalKey: `telegram-member-revoked:${memberId}`,
+  });
+  return c.body(null, 204);
+});
+
+app.delete("/telegram/invitations/:invitationId", async (c) => {
+  const context = userContext(c);
+  const manageAll = context.permissions.includes(
+    "meeting_recorder.telegram_member.manage_all",
+  );
+  if (
+    !manageAll &&
+    !context.permissions.includes("meeting_recorder.telegram_member.delete")
+  )
+    throw new MeetingRecorderError(403, "FORBIDDEN", "Permission denied.");
+  mutablePostKey(c);
+  const invitationId = telegramAccessId.parse(c.req.param("invitationId"));
+  const revoked = await revokeTelegramInvitation({
+    db: c.get("db"),
+    id: invitationId,
+    viewerUserId: context.userId,
+    manageAll,
+  });
+  if (!revoked)
+    throw new MeetingRecorderError(404, "NOT_FOUND", "Invitation not found.");
+  await pluginAudit({
+    db: c.get("db"),
+    action: "meeting_recorder.telegram.invitation_revoked",
+    resourceType: "meeting_recorder.telegram_invitation",
+    resourceId: invitationId,
+    userId: context.userId,
+    requestId: context.requestId,
+    logicalKey: `telegram-invitation-revoked:${invitationId}`,
+  });
+  return c.body(null, 204);
+});
+
 app.delete("/telegram/configuration", async (c) => {
   const context = requirePermission(c, "meeting_recorder.settings.update");
   mutablePostKey(c);
@@ -1390,34 +1541,64 @@ app.post("/public/telegram/webhook", async (c) => {
     message?.text?.trim().match(/^\/start(?:@[A-Za-z0-9_]{5,32})?(?:\s|$)/u),
   );
   if (startCommand && message?.from) {
-    const startToken = telegramStartToken(message.text);
+    const start = telegramStartPayload(message.text);
     const privateChat = message.chat.id === message.from.id;
     const linked =
-      startToken && privateChat
-        ? await consumeTelegramLinkRequest({
-            db: c.get("db"),
-            token: startToken,
-            telegramId: String(message.from.id),
-            ...(message.from.username
-              ? { telegramUsername: message.from.username }
-              : {}),
-          })
+      start && privateChat
+        ? start.kind === "invitation"
+          ? await consumeTelegramInvitation({
+              db: c.get("db"),
+              token: start.token,
+              telegramId: String(message.from.id),
+              ...(message.from.username
+                ? { telegramUsername: message.from.username }
+                : {}),
+              ...(message.from.first_name
+                ? { firstName: message.from.first_name }
+                : {}),
+              ...(message.from.last_name
+                ? { lastName: message.from.last_name }
+                : {}),
+            })
+          : await consumeTelegramLinkRequest({
+              db: c.get("db"),
+              token: start.token,
+              telegramId: String(message.from.id),
+              ...(message.from.username
+                ? { telegramUsername: message.from.username }
+                : {}),
+            })
         : null;
     if (linked) {
       await pluginAudit({
         db: c.get("db"),
-        action: "meeting_recorder.telegram.user_linked",
-        resourceType: "meeting_recorder.telegram_user_link",
-        resourceId: linked.userId,
+        action:
+          linked.kind === "invitation"
+            ? "meeting_recorder.telegram.invitation_accepted"
+            : "meeting_recorder.telegram.user_linked",
+        resourceType:
+          linked.kind === "invitation"
+            ? "meeting_recorder.telegram_member"
+            : "meeting_recorder.telegram_user_link",
+        resourceId:
+          linked.kind === "invitation" ? linked.memberId : linked.userId,
         userId: linked.userId,
         requestId: requestId(c),
-        logicalKey: `telegram-user:${message.from.id}`,
-        metadata: { linked: true },
+        logicalKey:
+          linked.kind === "invitation"
+            ? `telegram-member:${linked.memberId}`
+            : `telegram-user:${message.from.id}`,
+        metadata: {
+          linked: true,
+          invited: linked.kind === "invitation",
+        },
       });
       await notifyTelegram(
         c.env.TELEGRAM_BOT_TOKEN,
         message.chat.id,
-        "Conta vinculada com sucesso. Agora envie um áudio ou uma mensagem de voz para transcrever.",
+        linked.kind === "invitation"
+          ? `Convite aceito. Seus áudios serão transcritos e enviados para ${linked.ownerName} no Nexus. Agora envie um áudio ou uma mensagem de voz.`
+          : "Conta vinculada com sucesso. Agora envie um áudio ou uma mensagem de voz para transcrever.",
       );
       return c.json({ ok: true, linked: true });
     }
@@ -1425,7 +1606,9 @@ app.post("/public/telegram/webhook", async (c) => {
       c.env.TELEGRAM_BOT_TOKEN,
       message.chat.id,
       privateChat
-        ? "Este link expirou ou já foi usado. Gere um novo link nas configurações do Gravador de reuniões."
+        ? start?.kind === "invitation"
+          ? "Este convite expirou, foi cancelado, já foi usado ou este Telegram já possui acesso. Peça um novo convite."
+          : "Este link expirou ou já foi usado. Gere um novo link nas configurações do Gravador de reuniões."
         : "Abra este bot em uma conversa privada para vincular sua conta.",
     );
     return c.json({ ok: true, linked: false });
@@ -1500,7 +1683,7 @@ app.post("/public/telegram/webhook", async (c) => {
       c.env.TELEGRAM_BOT_TOKEN,
       message?.chat.id,
       !ownerId
-        ? "Seu Telegram ainda não está vinculado ao Nexus. Abra o Gravador de reuniões, entre em Configurações e use Vincular meu Telegram."
+        ? "Este Telegram não está autorizado. Vincule sua conta nas configurações do Gravador de reuniões ou peça um novo convite à pessoa responsável."
         : !media
           ? "Envie uma mensagem de voz ou um arquivo de áudio para transcrever."
           : "O bot ainda não está completamente configurado no Nexus.",

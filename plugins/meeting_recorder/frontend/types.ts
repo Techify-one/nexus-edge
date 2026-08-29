@@ -82,3 +82,19 @@ export type Transcript = {
     text: string | null;
   }>;
 };
+
+export type TelegramAccessItem = {
+  id: string;
+  kind: "member" | "invitation";
+  label: string;
+  ownerUserId: string;
+  ownerName: string;
+  telegramId: string | null;
+  username: string | null;
+  displayName: string | null;
+  status: "active" | "pending";
+  createdAt: number;
+  linkedAt: number | null;
+  lastUsedAt: number | null;
+  expiresAt: number | null;
+};

@@ -6,8 +6,9 @@ Telegram são transcritos em memória e descartados; com ele, gravação, upload
 retenção e reprodução de áudio ficam disponíveis em um bucket privado. O banco
 ativo guarda metadados, estados e transcrições.
 
-Requer Nexus Core `1.1.0-beta.5` ou superior. Versões anteriores não possuem o
-contrato de bindings opcionais nem a ativação de R2 após a instalação.
+Requer Nexus Core `1.1.0-beta.8` ou superior. Essa versão inclui a interface de
+gestão de convidados e as traduções de suas permissões; versões anteriores não
+possuem essa superfície no frontend.
 
 ## Origens suportadas
 
@@ -15,7 +16,17 @@ contrato de bindings opcionais nem a ativação de R2 após a instalação.
 - upload manual de WebM/Opus, Ogg/Opus, MP3, MP4/M4A e WAV de até 20 MiB;
 - mensagens `voice` e `audio` de um bot do Telegram. Cada usuário cria um link
   pessoal de 15 minutos na tela de configurações, abre o bot e toca em
-  **Iniciar**; o ID é associado sem precisar ser descoberto ou digitado.
+  **Iniciar**; o ID é associado sem precisar ser descoberto ou digitado. Um
+  usuário autorizado também pode criar convites individuais para outras
+  pessoas; os áudios delas entram na biblioteca de quem convidou.
+
+Convites valem uma única vez e expiram em sete dias. O link completo é exibido
+somente na criação e apenas seu hash SHA-256 fica no banco. A tela lista
+convites pendentes e pessoas ativas, registra a última atividade e permite
+revogar o acesso sem apagar gravações anteriores. As permissões
+`meeting_recorder.telegram_member.*` separam leitura, criação de convites,
+remoção e administração global para que o Core controle quais usuários podem
+convidar ou gerenciar terceiros.
 
 Durante cada ingestão o bot confirma o recebimento, avisa quando a transcrição
 começa e responde com o resultado e o link direto da gravação. Falhas também

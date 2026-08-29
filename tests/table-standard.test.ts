@@ -146,6 +146,34 @@ describe("repository data-table standard", () => {
     }
   });
 
+  it("keeps Telegram member access on the configurable table standard", () => {
+    const source = readFileSync(
+      resolve(
+        repositoryRoot,
+        "plugins/meeting_recorder/frontend/TelegramAccessCard.tsx",
+      ),
+      "utf8",
+    );
+
+    expect(source).toContain("<ConfigurableDataTable");
+    expect(source).toContain(
+      'tableId="plugin.meeting_recorder.telegram_members"',
+    );
+    for (const key of ["person", "telegram", "owner", "status", "activity"]) {
+      const columnStart = source.indexOf(`key: "${key}"`);
+      const nextColumn = source.indexOf("key:", columnStart + 1);
+      const column = source.slice(
+        columnStart,
+        nextColumn === -1 ? undefined : nextColumn,
+      );
+      expect(columnStart).toBeGreaterThan(-1);
+      expect(column).toContain("sortValue:");
+      expect(column).toContain("size:");
+      expect(column).toContain("minSize:");
+      expect(column).toContain("maxSize:");
+    }
+  });
+
   it("keeps Installer operation history out of the Plugins page", () => {
     const source = readFileSync(
       resolve(repositoryRoot, "frontend/src/features/plugins/PluginsPage.tsx"),

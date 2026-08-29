@@ -19,6 +19,10 @@ const required = [
   "/api/v1/p/meeting_recorder/recordings/{recordingId}/deletion-steps",
   "/api/v1/plugins/meeting_recorder/runtime-secrets/{secretName}",
   "/api/v1/p/meeting_recorder/telegram/link-requests",
+  "/api/v1/p/meeting_recorder/telegram/access",
+  "/api/v1/p/meeting_recorder/telegram/invitations",
+  "/api/v1/p/meeting_recorder/telegram/invitations/{invitationId}",
+  "/api/v1/p/meeting_recorder/telegram/members/{memberId}",
   "/api/v1/public/p/meeting_recorder/telegram/webhook",
   "/api/v1/audit",
 ];

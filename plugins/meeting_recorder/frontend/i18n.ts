@@ -156,6 +156,46 @@ export const meetingRecorderFrontendMessages = {
     "meetingRecorder.telegramLinkInstructions":
       "Este link é pessoal e expira em 15 minutos. Abra o bot e toque em Iniciar para concluir o vínculo.",
     "meetingRecorder.telegramOpenLink": "Abrir bot e vincular",
+    "meetingRecorder.telegramAccessTitle": "Pessoas autorizadas no Telegram",
+    "meetingRecorder.telegramAccessDescription":
+      "Convide outras pessoas para enviar áudios ao bot e remova o acesso quando quiser.",
+    "meetingRecorder.telegramAccessRequiresBot":
+      "Configure e verifique o bot antes de criar convites.",
+    "meetingRecorder.telegramInvitationName": "Nome da pessoa",
+    "meetingRecorder.telegramInvitationNamePlaceholder":
+      "Ex.: Maria — Equipe comercial",
+    "meetingRecorder.telegramCreateInvitation": "Criar convite",
+    "meetingRecorder.telegramInvitationSecurity":
+      "Cada convite funciona uma única vez, expira em sete dias e envia os novos áudios para a sua biblioteca.",
+    "meetingRecorder.telegramInvitationCreated": "Convite seguro criado.",
+    "meetingRecorder.telegramInvitationReady":
+      "Convite para {{name}} pronto para compartilhar",
+    "meetingRecorder.telegramInvitationLink": "Link do convite do Telegram",
+    "meetingRecorder.telegramCopyInvitation": "Copiar link",
+    "meetingRecorder.telegramOpenInvitation": "Abrir convite",
+    "meetingRecorder.telegramInvitationCopied": "Link copiado.",
+    "meetingRecorder.telegramInvitationCopyFailed":
+      "Não foi possível copiar o link. Selecione-o e copie manualmente.",
+    "meetingRecorder.telegramInvitationOneTime":
+      "O link só é mostrado agora, pode ser usado uma vez e expira em {{date}}.",
+    "meetingRecorder.telegramColumnPerson": "Pessoa",
+    "meetingRecorder.telegramColumnAccount": "Conta do Telegram",
+    "meetingRecorder.telegramColumnDestination": "Destino no Nexus",
+    "meetingRecorder.telegramColumnActivity": "Última atividade",
+    "meetingRecorder.telegramMemberActive": "Autorizada",
+    "meetingRecorder.telegramInvitationPending": "Convite pendente",
+    "meetingRecorder.telegramInvitationExpires": "Expira em {{date}}",
+    "meetingRecorder.telegramAccessEmpty": "Nenhuma pessoa convidada",
+    "meetingRecorder.telegramAccessEmptyDescription":
+      "Crie um convite individual para autorizar alguém a enviar áudios.",
+    "meetingRecorder.telegramRemoveMember": "Remover {{name}}",
+    "meetingRecorder.telegramRemoveMemberConfirm":
+      "Remover o acesso de {{name}}? Os áudios e transcrições anteriores serão preservados.",
+    "meetingRecorder.telegramMemberRemoved": "Acesso removido.",
+    "meetingRecorder.telegramRevokeInvitation": "Cancelar convite de {{name}}",
+    "meetingRecorder.telegramRevokeInvitationConfirm":
+      "Cancelar o convite pendente de {{name}}?",
+    "meetingRecorder.telegramInvitationRevoked": "Convite cancelado.",
     "meetingRecorder.telegramTransientMode":
       "Modo sem R2: cada áudio é baixado do Telegram, transcrito imediatamente e descartado. Não será possível ouvi-lo depois no Nexus.",
     "meetingRecorder.telegramStoredMode":
@@ -245,6 +285,16 @@ export const meetingRecorderFrontendMessages = {
     "permissions.meeting_recorder.recording.manage_all":
       "Gerenciar gravações de todos",
     "permissions.meeting_recorder.transcription.create": "Criar transcrições",
+    "permissions.meeting_recorder.telegram_member.read":
+      "Visualizar pessoas convidadas por si",
+    "permissions.meeting_recorder.telegram_member.invite":
+      "Criar convites para o bot do Telegram",
+    "permissions.meeting_recorder.telegram_member.delete":
+      "Remover pessoas convidadas por si",
+    "permissions.meeting_recorder.telegram_member.read_all":
+      "Visualizar todos os convidados do Telegram",
+    "permissions.meeting_recorder.telegram_member.manage_all":
+      "Gerenciar todos os convidados do Telegram",
     "permissions.meeting_recorder.settings.read":
       "Visualizar configurações do gravador",
     "permissions.meeting_recorder.settings.update":
@@ -253,6 +303,8 @@ export const meetingRecorderFrontendMessages = {
       "Visualizar uso de armazenamento",
     "permissionGroups.meeting_recorder.recording": "Gravador — Gravações",
     "permissionGroups.meeting_recorder.transcription": "Gravador — Transcrição",
+    "permissionGroups.meeting_recorder.telegram_member":
+      "Gravador — Acesso pelo Telegram",
     "permissionGroups.meeting_recorder.settings": "Gravador — Configurações",
     "permissionGroups.meeting_recorder.storage": "Gravador — Armazenamento",
   },
@@ -409,6 +461,46 @@ export const meetingRecorderFrontendMessages = {
     "meetingRecorder.telegramLinkInstructions":
       "This personal link expires in 15 minutes. Open the bot and tap Start to finish linking.",
     "meetingRecorder.telegramOpenLink": "Open bot and link",
+    "meetingRecorder.telegramAccessTitle": "People authorized on Telegram",
+    "meetingRecorder.telegramAccessDescription":
+      "Invite other people to send audio to the bot and remove access at any time.",
+    "meetingRecorder.telegramAccessRequiresBot":
+      "Configure and verify the bot before creating invitations.",
+    "meetingRecorder.telegramInvitationName": "Person's name",
+    "meetingRecorder.telegramInvitationNamePlaceholder":
+      "For example: Maria — Sales team",
+    "meetingRecorder.telegramCreateInvitation": "Create invitation",
+    "meetingRecorder.telegramInvitationSecurity":
+      "Each invitation works once, expires in seven days, and sends new audio to your library.",
+    "meetingRecorder.telegramInvitationCreated": "Secure invitation created.",
+    "meetingRecorder.telegramInvitationReady":
+      "Invitation for {{name}} is ready to share",
+    "meetingRecorder.telegramInvitationLink": "Telegram invitation link",
+    "meetingRecorder.telegramCopyInvitation": "Copy link",
+    "meetingRecorder.telegramOpenInvitation": "Open invitation",
+    "meetingRecorder.telegramInvitationCopied": "Link copied.",
+    "meetingRecorder.telegramInvitationCopyFailed":
+      "The link could not be copied. Select it and copy it manually.",
+    "meetingRecorder.telegramInvitationOneTime":
+      "The link is shown only now, can be used once, and expires on {{date}}.",
+    "meetingRecorder.telegramColumnPerson": "Person",
+    "meetingRecorder.telegramColumnAccount": "Telegram account",
+    "meetingRecorder.telegramColumnDestination": "Nexus destination",
+    "meetingRecorder.telegramColumnActivity": "Last activity",
+    "meetingRecorder.telegramMemberActive": "Authorized",
+    "meetingRecorder.telegramInvitationPending": "Invitation pending",
+    "meetingRecorder.telegramInvitationExpires": "Expires on {{date}}",
+    "meetingRecorder.telegramAccessEmpty": "No invited people",
+    "meetingRecorder.telegramAccessEmptyDescription":
+      "Create an individual invitation to authorize someone to send audio.",
+    "meetingRecorder.telegramRemoveMember": "Remove {{name}}",
+    "meetingRecorder.telegramRemoveMemberConfirm":
+      "Remove {{name}}'s access? Previous audio and transcripts will be preserved.",
+    "meetingRecorder.telegramMemberRemoved": "Access removed.",
+    "meetingRecorder.telegramRevokeInvitation": "Cancel {{name}}'s invitation",
+    "meetingRecorder.telegramRevokeInvitationConfirm":
+      "Cancel the pending invitation for {{name}}?",
+    "meetingRecorder.telegramInvitationRevoked": "Invitation canceled.",
     "meetingRecorder.telegramTransientMode":
       "Without R2, each audio file is downloaded from Telegram, transcribed immediately, and discarded. It cannot be played later in Nexus.",
     "meetingRecorder.telegramStoredMode":
@@ -495,6 +587,16 @@ export const meetingRecorderFrontendMessages = {
     "permissions.meeting_recorder.recording.manage_all":
       "Manage everyone's recordings",
     "permissions.meeting_recorder.transcription.create": "Create transcripts",
+    "permissions.meeting_recorder.telegram_member.read":
+      "View people you invited",
+    "permissions.meeting_recorder.telegram_member.invite":
+      "Create Telegram bot invitations",
+    "permissions.meeting_recorder.telegram_member.delete":
+      "Remove people you invited",
+    "permissions.meeting_recorder.telegram_member.read_all":
+      "View all Telegram invitees",
+    "permissions.meeting_recorder.telegram_member.manage_all":
+      "Manage all Telegram invitees",
     "permissions.meeting_recorder.settings.read": "View recorder settings",
     "permissions.meeting_recorder.settings.update":
       "Change settings and Telegram",
@@ -502,6 +604,8 @@ export const meetingRecorderFrontendMessages = {
     "permissionGroups.meeting_recorder.recording": "Recorder — Recordings",
     "permissionGroups.meeting_recorder.transcription":
       "Recorder — Transcription",
+    "permissionGroups.meeting_recorder.telegram_member":
+      "Recorder — Telegram access",
     "permissionGroups.meeting_recorder.settings": "Recorder — Settings",
     "permissionGroups.meeting_recorder.storage": "Recorder — Storage",
   },
