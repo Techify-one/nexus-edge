@@ -10,7 +10,10 @@ import {
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
-import { buildPluginPackage } from "../packages/plugin-sdk/src/package.js";
+import {
+  buildPluginPackage,
+  validatePluginOpenApi,
+} from "../packages/plugin-sdk/src/package.js";
 import { generatePluginMarketplace } from "../packages/plugin-sdk/src/marketplace.js";
 import { sha256, stableJson } from "../packages/webhook-contract/src/index.js";
 import {
@@ -135,6 +138,31 @@ const packageArchive = async (): Promise<Uint8Array> => {
 };
 
 describe("plugin package format 2", () => {
+  it("keeps OpenAPI paths inside authenticated or declared public gateways", () => {
+    expect(() =>
+      validatePluginOpenApi(
+        "external_demo",
+        ["/callback"],
+        strToU8(
+          JSON.stringify({
+            openapi: "3.1.0",
+            paths: {
+              "/api/v1/p/external_demo/items": {},
+              "/api/v1/public/p/external_demo/callback/:token": {},
+            },
+          }),
+        ),
+      ),
+    ).not.toThrow();
+    expect(() =>
+      validatePluginOpenApi(
+        "external_demo",
+        [],
+        strToU8(JSON.stringify({ openapi: "3.1.0", paths: { "/items": {} } })),
+      ),
+    ).toThrow("PLUGIN_OPENAPI_PATH_OUTSIDE_NAMESPACE");
+  });
+
   it("loads an independent frontend/backend package and verifies every payload", async () => {
     const parsed = await parsePluginArchive(await packageArchive());
     expect(parsed.manifest.id).toBe("external_demo");

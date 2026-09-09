@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
-import { gzipSync, strToU8, zipSync } from "fflate";
+import { gzipSync, strFromU8, strToU8, zipSync } from "fflate";
 
 const packagePath =
   /^(?:manifest\.json|integrity\.json|signature\.json|openapi\.json|LICENSE|backend\/[A-Za-z0-9_.@/-]+|frontend\/[A-Za-z0-9_.@/-]+|locales\/[A-Za-z0-9_-]+\.json|resources\/[A-Za-z0-9_.@/-]+|migrations\/(?:d1|postgres)\/\d{4}_[a-z0-9_]+\.sql)$/u;
@@ -38,6 +38,53 @@ const normalizeCanonical = (value: unknown): unknown => {
 
 export const canonicalPluginJson = (value: unknown): string =>
   JSON.stringify(normalizeCanonical(value));
+
+export const validatePluginOpenApi = (
+  pluginId: string,
+  publicRoutes: unknown,
+  bytes: Uint8Array,
+): void => {
+  let document: unknown;
+  try {
+    document = JSON.parse(strFromU8(bytes));
+  } catch {
+    throw new Error("PLUGIN_OPENAPI_INVALID");
+  }
+  if (!document || typeof document !== "object" || Array.isArray(document))
+    throw new Error("PLUGIN_OPENAPI_INVALID");
+  const openapi = (document as { openapi?: unknown }).openapi;
+  const paths = (document as { paths?: unknown }).paths;
+  if (
+    typeof openapi !== "string" ||
+    !/^3\.[01]\./u.test(openapi) ||
+    !paths ||
+    typeof paths !== "object" ||
+    Array.isArray(paths) ||
+    Object.keys(paths).length > 200
+  )
+    throw new Error("PLUGIN_OPENAPI_INVALID");
+  const authenticatedPrefix = `/api/v1/p/${pluginId}`;
+  const publicPrefix = `/api/v1/public/p/${pluginId}`;
+  const declaredPublic = Array.isArray(publicRoutes)
+    ? publicRoutes.filter((route): route is string => typeof route === "string")
+    : [];
+  for (const path of Object.keys(paths)) {
+    const authenticated =
+      path === authenticatedPrefix ||
+      path.startsWith(`${authenticatedPrefix}/`);
+    const relativePublic = path.startsWith(publicPrefix)
+      ? path.slice(publicPrefix.length) || "/"
+      : null;
+    const allowedPublic =
+      relativePublic !== null &&
+      declaredPublic.some(
+        (route) =>
+          relativePublic === route || relativePublic.startsWith(`${route}/`),
+      );
+    if (!authenticated && !allowedPublic)
+      throw new Error("PLUGIN_OPENAPI_PATH_OUTSIDE_NAMESPACE");
+  }
+};
 
 const contentType = (path: string): string => {
   const extension = path.split(".").at(-1)?.toLowerCase();
@@ -108,6 +155,7 @@ export async function buildPluginPackage(
   const manifest = JSON.parse(manifestSource) as {
     id?: unknown;
     packageFormat?: unknown;
+    publicRoutes?: unknown;
   };
   const id = typeof manifest.id === "string" ? manifest.id : "";
   if (!/^[a-z][a-z0-9_]{1,31}$/u.test(id) || manifest.packageFormat !== 2)
@@ -133,8 +181,13 @@ export async function buildPluginPackage(
   addDirectory(files, join(options.root, "backend-modules"), "backend/modules");
   addDirectory(files, join(options.root, "locales"), "locales");
   addDirectory(files, join(options.root, "resources"), "resources");
+  const openApiPath = join(options.root, "openapi.json");
+  if (existsSync(openApiPath)) {
+    const openApi = readRegularFile(openApiPath);
+    validatePluginOpenApi(id, manifest.publicRoutes, openApi);
+    files["openapi.json"] = openApi;
+  }
   for (const [source, destination] of [
-    [join(options.root, "openapi.json"), "openapi.json"],
     [join(options.root, "LICENSE"), "LICENSE"],
   ] as const)
     if (existsSync(source)) files[destination] = readRegularFile(source);

@@ -1,8 +1,8 @@
 # Plano de plugins independentes e marketplaces GitHub
 
-Status: aprovado e executado localmente até a versão ponte. Contratos, host dinâmico, instalador, recursos, marketplaces e compatibilidade de updates foram implementados; provas em uma conta Cloudflare real, publicação do SDK/marketplace e a extração definitiva dos plugins históricos permanecem pendentes.
+Status: aprovado e implementado na branch `feat/plugin-marketplace-v2`, com marketplace/SDK publicados e instalação externa comprovada em um ambiente Cloudflare isolado. A prova integral do plugin multirrecurso continua limitada pela cota de Cron da conta Free, e a aceitação com uma segunda fonte GitHub ainda não foi executada.
 
-Data: 8 de setembro de 2026. Base inspecionada: commit `0306de3`, com Core `1.1.0-beta.8` no código local. As conclusões sobre o sistema atual vêm do repositório; não representam uma auditoria da versão em produção.
+Atualizado em 9 de setembro de 2026. Base inicial inspecionada: commit `0306de3`, com Core `1.1.0-beta.8`. A implementação e as evidências desta revisão estão registradas na seção 20; a produção permaneceu inalterada.
 
 ## 1. Resultado esperado
 
@@ -30,11 +30,11 @@ A Cloudflare pode registrar uma nova revisão de configuração/deployment quand
 ### 1.2 Premissas para revisão
 
 - Usar D1 como padrão desta instalação, preservando o suporte existente a PostgreSQL nos ambientes que já o utilizam.
-- Nome provisório do marketplace: **Techify**, conforme a marca e a organização `Techify-one` presentes no projeto. O usuário mencionou variações desse nome por voz; confirmar a grafia comercial antes de publicar.
-- Repositório proposto: `Techify-one/nexus-edge-plugins`. É uma proposta de nome, não um repositório criado ou confirmado.
+- Nome confirmado do marketplace padrão: **Techify**.
+- Repositório confirmado e publicado: `Techify-one/nexus-edge-plugins`.
 - Entrega inicial proposta para repositórios públicos; suporte privado fica descrito como uma extensão delimitada na seção 8.7, sujeito à preferência do proprietário.
 - Manter upload/download de ZIP como alternativas de desenvolvimento, recuperação e transporte. O fluxo principal passa a ser o marketplace.
-- A execução local foi autorizada pelo proprietário. Escolhas que dependem de publicação ou de uma conta Cloudflare real continuam sujeitas às provas identificadas na fase P0.
+- A execução local, a publicação no GitHub e um ambiente Cloudflare isolado foram autorizados pelo proprietário. Produção continua sujeita ao fluxo de `main` definido no runbook.
 
 ## 2. Diagnóstico do sistema atual
 
@@ -810,19 +810,19 @@ Para releases do Core, manter as verificações do runbook: `pnpm typecheck`, `p
 
 ## 17. Fases de execução após aprovação
 
-A ordem abaixo evita remover o sistema antigo antes de existir um caminho comprovado de substituição. O status registra a implementação local em 8 de setembro de 2026; não representa publicação nem validação em produção.
+A ordem abaixo evitou remover o sistema antigo antes de existir um caminho comprovado de substituição. O status registra a execução até 9 de setembro de 2026, incluindo GitHub e o ambiente isolado `nexus-edge-marketplace-test`; não representa implantação em produção.
 
 | Fase                           | Entregáveis                                                                                          | Status atual                                                         | Critério de saída                                                    |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| P0 — Provas e decisões         | Protótipos isolados de UI/SDK, assets privados, Queue, DO, limites Free e atualização                | Parcial: provas locais concluídas; ambiente Cloudflare real pendente | Evidências de viabilidade e decisões de contrato registradas         |
-| P1 — Contratos e ferramentas   | Schemas v2/v1, SDK inicial, template, packager e suíte de conformidade                               | Implementado localmente; publicação do SDK pendente                  | Plugin externo compila e valida sem checkout do Core                 |
-| P2 — Host dinâmico             | Rotas genéricas, loader local, tema, i18n, tabelas, páginas públicas e sessões persistentes          | Implementado localmente                                              | Frontend de plugin novo funciona com Core congelado                  |
-| P3 — Instalador v2             | Multimódulos, UI/assets, arquivo de pacotes, manifesto, secrets e ledger                             | Implementado localmente                                              | Instalação/atualização v2 via ZIP passam ponta a ponta               |
-| P4 — Recursos                  | D1/provider, R2, KV, Queue, DO SQLite, Cron, AI e reconciliação                                      | Implementado; smoke dos recursos reais pendente                      | Todos os recursos prioritários funcionam sem condicionais por plugin |
-| P5 — Marketplaces              | Schema de catálogo, fontes, confiança, cache, download e instalação pelo painel                      | Implementado; duas fontes GitHub publicadas pendentes                | Instalar de duas fontes, remover padrão e atualizar por origem       |
-| P6 — Compatibilidade/updates   | Preflight Core, preservação, dependências e coordenação com CI                                       | Implementado; prova de update em ambiente real pendente              | Core update preserva plugin antigo; update incompatível é bloqueado  |
-| P7 — Migração e extração       | Versão ponte, pacotes de compatibilidade, quatro plugins no novo repo e migração do catálogo externo | Ponte implementada; extração/publicação pendente                     | Instalações existentes funcionam com UI local independente           |
-| P8 — Encerramento da transição | Remoção de imports nominais, CI separado, docs e release final                                       | Pendente de P7                                                       | Matriz completa e prova principal aprovadas                          |
+| P0 — Provas e decisões         | Protótipos isolados de UI/SDK, assets privados, Queue, DO, limites Free e atualização                | Parcial: Core/D1/Queue reais; Cron multirrecurso bloqueado pela cota | Evidências de viabilidade e decisões de contrato registradas         |
+| P1 — Contratos e ferramentas   | Schemas v2/v1, SDK inicial, template, packager e suíte de conformidade                               | Concluído; SDK `1.1.1` e template públicos                           | Plugin externo compila e valida sem checkout do Core                 |
+| P2 — Host dinâmico             | Rotas genéricas, loader local, tema, i18n, tabelas, páginas públicas e sessões persistentes          | Concluído; frontend CRM externo servido no ambiente isolado          | Frontend de plugin novo funciona com Core congelado                  |
+| P3 — Instalador v2             | Multimódulos, UI/assets, arquivo de pacotes, manifesto, secrets e ledger                             | Concluído para instalação via marketplace; atualização em prova      | Instalação/atualização v2 via ZIP passam ponta a ponta               |
+| P4 — Recursos                  | D1/provider, R2, KV, Queue, DO SQLite, Cron, AI e reconciliação                                      | Implementado; prova integral real pendente por cota de Cron          | Todos os recursos prioritários funcionam sem condicionais por plugin |
+| P5 — Marketplaces              | Schema de catálogo, fontes, confiança, cache, download e instalação pelo painel                      | Fonte Techify concluída; segunda fonte de aceite pendente            | Instalar de duas fontes, remover padrão e atualizar por origem       |
+| P6 — Compatibilidade/updates   | Preflight Core, preservação, dependências e coordenação com CI                                       | Implementado; prova real de preservação em andamento                 | Core update preserva plugin antigo; update incompatível é bloqueado  |
+| P7 — Migração e extração       | Versão ponte, pacotes de compatibilidade, quatro plugins no novo repo e migração do catálogo externo | Concluído; cinco pacotes externos publicados e validados             | Instalações existentes funcionam com UI local independente           |
+| P8 — Encerramento da transição | Remoção de imports nominais, CI separado, docs e release final                                       | Implementação concluída; merge/release de produção não executados    | Matriz completa e prova principal aprovadas                          |
 
 ### 17.1 Detalhamento dos bloqueios técnicos de P0
 
@@ -853,7 +853,7 @@ O cronograma será estimado depois de P0. O projeto envolve contrato de platafor
 | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | Confiança em plugins de terceiros       | UI integrada com editores confiáveis; se for necessário código não confiável, aprovar isolamento por origem antes de P1    |
 | Banco compartilhado                     | Preservar compatibilidade atual e deixar explícito o alcance do binding; D1 dedicado opcional para novos plugins           |
-| Marca e URL do marketplace padrão       | Techify / `Techify-one/nexus-edge-plugins` provisórios até confirmação                                                     |
+| Marca e URL do marketplace padrão       | Techify / `Techify-one/nexus-edge-plugins`, confirmados e publicados                                                       |
 | Repositórios privados                   | Públicos inicialmente; adicionar o escopo da seção 8.7 se privados forem necessários desde o lançamento                    |
 | Serviços/cotas Free                     | Testar carga real e expor requisitos; não garantir uso ilimitado ou habilitar cobrança silenciosamente                     |
 | Compatibilidade ilimitada               | Manter contratos antigos usados por instalações; impedir update Core incompatível e oferecer caminho de migração explícito |
@@ -873,14 +873,24 @@ O cronograma será estimado depois de P0. O projeto envolve contrato de platafor
 - [ ] Atualizações são oferecidas pela origem correta e aplicadas somente pela ação autorizada do administrador.
 - [ ] Atualizar o Core mantém plugins, recursos, dados, segredos, permissões, preferências e links funcionando.
 - [ ] Plugins existentes foram migrados sem perda de dados nem alteração casual de IDs.
-- [ ] O Core compila e publica sem acesso ao código-fonte dos plugins de negócio.
-- [ ] Um desenvolvedor externo consegue construir um plugin com SDK/template/documentação publicados.
+- [x] O Core compila e publica sem acesso ao código-fonte dos plugins de negócio.
+- [x] Um desenvolvedor externo consegue construir um plugin com SDK/template/documentação publicados.
 - [ ] Instalações continuam operando se GitHub ou um marketplace ficar indisponível.
 - [ ] O modelo de confiança, limites suportados, procedimento de recuperação e política de compatibilidade estão documentados e testados.
 - [ ] As provas P0 e a matriz de aceite têm evidências de execução, incluindo Cloudflare real para os recursos que não podem ser validados apenas localmente.
 
-## 20. Referências de execução
+## 20. Evidências e referências de execução
+
+- Repositório público do marketplace: `https://github.com/Techify-one/nexus-edge-plugins`.
+- SDK público: release `plugin-sdk-v1.1.1`; o template foi instalado em diretório vazio, sem checkout do Core, e passou em typecheck/build.
+- Plugins publicados e imutáveis: CRM `2.0.2`, Meeting Recorder `2.0.2`, Meta Ads `2.0.2`, Soletrando `2.0.2` e Platform Probe `1.0.2`.
+- Pipeline do marketplace: validação `34372626412` e publicação assinada `34372872158`, ambas concluídas com sucesso.
+- Ambiente isolado: `https://nexus-edge-marketplace-test.francisconeto.workers.dev`, Worker `nexus-edge-marketplace-test`, D1 `nexus-edge-marketplace-test-db`, fila e DLQ próprias, com nove migrations aplicadas.
+- Pipeline do Core/ambiente isolado: execução `34372585638`, com typecheck, 178 testes, matriz D1/PostgreSQL, OpenAPI, build, artefatos, bundle, provisionamento, deploy e smoke concluídos.
+- Prova ponta a ponta: chave do marketplace confirmada por fingerprint, cinco plugins descobertos, ZIP do CRM baixado diretamente do release, CRM `2.0.2` instalado, entrypoint de frontend servido pelo host genérico e `/api/v1/p/crm/health` respondendo pelo gateway genérico.
+- Limite observado: a conta atingiu os cinco Cron Triggers permitidos no plano Workers Free (`10072`). O Cron foi omitido somente do Worker isolado do Core; nenhum trigger preexistente foi removido. Isso impede concluir nessa conta a prova real do Platform Probe completo, embora os provisionadores e o pacote sejam cobertos pela suíte local.
+- Produção não foi alterada. A branch de implementação é `feat/plugin-marketplace-v2`; publicação de produção continua dependendo de merge aprovado em `main`.
 
 Usar este plano junto com [DEPLOYMENT.md](../DEPLOYMENT.md), [PLUGIN-DEVELOPMENT.md](./PLUGIN-DEVELOPMENT.md), [CORE-UPDATES.md](./CORE-UPDATES.md), [BACKUP-RESTORE.md](./BACKUP-RESTORE.md), [DATA-TABLE-STANDARD.md](./DATA-TABLE-STANDARD.md), [INTERNATIONALIZATION.md](./INTERNATIONALIZATION.md) e [UI-STYLING-STANDARD.md](./UI-STYLING-STANDARD.md).
 
-As partes desses guias que hoje exigem frontend e artefatos de plugins no monorepo precisarão ser revisadas durante a execução aprovada. Até lá, este arquivo permanece uma proposta e não modifica as regras operacionais atuais.
+Os guias de desenvolvimento e operação foram atualizados para o limite entre Core e plugins externos. Este arquivo registra o desenho, a implementação e as provas; não altera as regras operacionais de produção.

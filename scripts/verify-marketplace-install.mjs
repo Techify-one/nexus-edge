@@ -194,12 +194,23 @@ if (!crm) {
     if (operation.state === "registering") {
       await new Promise((resolve) => setTimeout(resolve, 3_000));
     }
-    operation = (
-      await call(
-        `/api/v1/plugin-operations/${encodeURIComponent(operation.operationId)}/advance`,
-        { method: "POST", body: packageForm() },
-      )
-    ).body;
+    try {
+      operation = (
+        await call(
+          `/api/v1/plugin-operations/${encodeURIComponent(operation.operationId)}/advance`,
+          { method: "POST", body: packageForm() },
+        )
+      ).body;
+    } catch (error) {
+      const diagnostic = (
+        await call(
+          `/api/v1/plugin-operations/${encodeURIComponent(operation.operationId)}`,
+        )
+      ).body;
+      throw new Error(
+        `${error instanceof Error ? error.message : String(error)}; operation: ${JSON.stringify(diagnostic)}`,
+      );
+    }
   }
   if (operation.state !== "installed") {
     throw new Error(
