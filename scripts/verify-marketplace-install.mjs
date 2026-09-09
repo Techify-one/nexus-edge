@@ -72,9 +72,92 @@ await call("/api/auth/sign-in/email", {
   json: { email: adminEmail, password: adminPassword },
 });
 
+if (process.env.MARKETPLACE_TEST_INSPECT_ONLY === "true") {
+  console.log(
+    JSON.stringify((await call("/api/v1/plugin-operations")).body, null, 2),
+  );
+  process.exit(0);
+}
+
 const marketplaces = (await call("/api/v1/plugin-marketplaces")).body.items;
-const source = marketplaces.find((item) => item.isDefault);
+let source = marketplaces.find((item) => item.isDefault);
+let restoredDefault = false;
+if (!source && process.env.MARKETPLACE_TEST_RESTORE_DEFAULT === "true") {
+  source = (
+    await call("/api/v1/plugin-marketplaces", {
+      method: "POST",
+      json: {
+        name: "Techify",
+        repository: "Techify-one/nexus-edge-plugins",
+        ref: "main",
+        catalogPath: "nexus-marketplace.json",
+      },
+    })
+  ).body;
+  restoredDefault = true;
+}
 if (!source) throw new Error("Default marketplace is not configured.");
+
+if (process.env.MARKETPLACE_TEST_REMOVE_DEFAULT_ONLY === "true") {
+  await call(`/api/v1/plugin-marketplaces/${encodeURIComponent(source.id)}`, {
+    method: "DELETE",
+  });
+  const afterRemoval = (await call("/api/v1/plugin-marketplaces")).body.items;
+  if (afterRemoval.some((item) => item.id === source.id)) {
+    throw new Error("Removed marketplace is still listed.");
+  }
+  const installedAfterRemoval = (await call("/api/v1/plugins")).body.items;
+  const crmAfterRemoval = installedAfterRemoval.find(
+    (plugin) => plugin.id === "crm" && plugin.status === "installed",
+  );
+  const runtimeAfterRemoval = (await call("/api/v1/plugin-runtime")).body;
+  const crmRuntimeAfterRemoval = runtimeAfterRemoval.plugins.find(
+    (plugin) => plugin.pluginId === "crm",
+  );
+  const gatewayAfterRemoval = (await call("/api/v1/p/crm/health")).body;
+  if (!crmAfterRemoval || !crmRuntimeAfterRemoval || !gatewayAfterRemoval.ok) {
+    throw new Error("Removing the marketplace affected the installed CRM.");
+  }
+  console.log(
+    JSON.stringify({
+      ok: true,
+      marketplaceRemoved: source.repository,
+      installedPlugin: {
+        id: crmAfterRemoval.id,
+        version: crmAfterRemoval.installedVersion,
+      },
+      gateway: gatewayAfterRemoval,
+    }),
+  );
+  process.exit(0);
+}
+
+if (process.env.MARKETPLACE_TEST_RECREATE_DEFAULT === "true") {
+  await call(`/api/v1/plugin-marketplaces/${encodeURIComponent(source.id)}`, {
+    method: "DELETE",
+  });
+  const afterRemoval = (await call("/api/v1/plugin-marketplaces")).body.items;
+  if (afterRemoval.some((item) => item.id === source.id)) {
+    throw new Error("Removed marketplace is still listed.");
+  }
+  const restored = (
+    await call("/api/v1/plugin-marketplaces", {
+      method: "POST",
+      json: {
+        name: source.name,
+        repository: `${source.owner}/${source.repository}`,
+        ref: source.sourceRef,
+        catalogPath: source.catalogPath,
+      },
+    })
+  ).body;
+  if (restored.id !== source.id) {
+    throw new Error(
+      "The removed default marketplace was not restored in place.",
+    );
+  }
+  source = { ...source, ...restored };
+}
 
 let synchronization;
 try {
@@ -171,13 +254,24 @@ if (!crm) {
     form.set("sourceReleaseId", sourceReleaseId);
     return form;
   };
-  let operation = (
-    await call("/api/v1/plugin-operations", {
-      method: "POST",
-      headers: { "Idempotency-Key": crypto.randomUUID() },
-      body: packageForm(),
-    })
-  ).body;
+  const priorOperation = (
+    await call("/api/v1/plugin-operations")
+  ).body.items.find(
+    (operation) =>
+      operation.pluginId === "crm" &&
+      operation.targetVersion === crmRelease.version &&
+      operation.state !== "installed" &&
+      operation.state !== "failed",
+  );
+  let operation = priorOperation
+    ? priorOperation
+    : (
+        await call("/api/v1/plugin-operations", {
+          method: "POST",
+          headers: { "Idempotency-Key": crypto.randomUUID() },
+          body: packageForm(),
+        })
+      ).body;
   for (
     let attempt = 0;
     attempt < 30 && operation.state !== "installed";
@@ -207,6 +301,15 @@ if (!crm) {
           `/api/v1/plugin-operations/${encodeURIComponent(operation.operationId)}`,
         )
       ).body;
+      if (
+        diagnostic.state !== "failed" &&
+        error instanceof Error &&
+        error.message.includes('error_code":1102')
+      ) {
+        operation = diagnostic;
+        await new Promise((resolve) => setTimeout(resolve, 5_000));
+        continue;
+      }
       throw new Error(
         `${error instanceof Error ? error.message : String(error)}; operation: ${JSON.stringify(diagnostic)}`,
       );
@@ -242,6 +345,7 @@ console.log(
   JSON.stringify({
     ok: true,
     marketplace: source.repository,
+    restoredDefault,
     catalogPlugins: catalog.length,
     catalogRevision: synchronization.revision ?? "not-modified",
     installedPlugin: { id: crm.id, version: crm.installedVersion },

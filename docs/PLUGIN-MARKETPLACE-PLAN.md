@@ -817,10 +817,10 @@ A ordem abaixo evitou remover o sistema antigo antes de existir um caminho compr
 | P0 — Provas e decisões         | Protótipos isolados de UI/SDK, assets privados, Queue, DO, limites Free e atualização                | Parcial: Core/D1/Queue reais; Cron multirrecurso bloqueado pela cota | Evidências de viabilidade e decisões de contrato registradas         |
 | P1 — Contratos e ferramentas   | Schemas v2/v1, SDK inicial, template, packager e suíte de conformidade                               | Concluído; SDK `1.1.1` e template públicos                           | Plugin externo compila e valida sem checkout do Core                 |
 | P2 — Host dinâmico             | Rotas genéricas, loader local, tema, i18n, tabelas, páginas públicas e sessões persistentes          | Concluído; frontend CRM externo servido no ambiente isolado          | Frontend de plugin novo funciona com Core congelado                  |
-| P3 — Instalador v2             | Multimódulos, UI/assets, arquivo de pacotes, manifesto, secrets e ledger                             | Concluído para instalação via marketplace; atualização em prova      | Instalação/atualização v2 via ZIP passam ponta a ponta               |
+| P3 — Instalador v2             | Multimódulos, UI/assets, arquivo de pacotes, manifesto, secrets e ledger                             | Concluído; instalação e atualização reais pelo marketplace           | Instalação/atualização v2 via ZIP passam ponta a ponta               |
 | P4 — Recursos                  | D1/provider, R2, KV, Queue, DO SQLite, Cron, AI e reconciliação                                      | Implementado; prova integral real pendente por cota de Cron          | Todos os recursos prioritários funcionam sem condicionais por plugin |
-| P5 — Marketplaces              | Schema de catálogo, fontes, confiança, cache, download e instalação pelo painel                      | Fonte Techify concluída; segunda fonte de aceite pendente            | Instalar de duas fontes, remover padrão e atualizar por origem       |
-| P6 — Compatibilidade/updates   | Preflight Core, preservação, dependências e coordenação com CI                                       | Implementado; prova real de preservação em andamento                 | Core update preserva plugin antigo; update incompatível é bloqueado  |
+| P5 — Marketplaces              | Schema de catálogo, fontes, confiança, cache, download e instalação pelo painel                      | Techify/add/remove concluídos; segunda fonte de aceite pendente      | Instalar de duas fontes, remover padrão e atualizar por origem       |
+| P6 — Compatibilidade/updates   | Preflight Core, preservação, dependências e coordenação com CI                                       | Concluído para Core/CRM no ambiente isolado                          | Core update preserva plugin antigo; update incompatível é bloqueado  |
 | P7 — Migração e extração       | Versão ponte, pacotes de compatibilidade, quatro plugins no novo repo e migração do catálogo externo | Concluído; cinco pacotes externos publicados e validados             | Instalações existentes funcionam com UI local independente           |
 | P8 — Encerramento da transição | Remoção de imports nominais, CI separado, docs e release final                                       | Implementação concluída; merge/release de produção não executados    | Matriz completa e prova principal aprovadas                          |
 
@@ -870,7 +870,7 @@ O cronograma será estimado depois de P0. O projeto envolve contrato de platafor
 - [ ] Outro plugin novo usa R2, Queue, Durable Object SQLite, KV e Cron sem registro nominal no Core.
 - [ ] O marketplace padrão é configurável/removível e sua remoção sobrevive a um update Core.
 - [ ] Duas fontes GitHub distintas listam e instalam plugins pelo painel, sem baixar/enviar ZIP manualmente.
-- [ ] Atualizações são oferecidas pela origem correta e aplicadas somente pela ação autorizada do administrador.
+- [x] Atualizações são oferecidas pela origem correta e aplicadas somente pela ação autorizada do administrador.
 - [ ] Atualizar o Core mantém plugins, recursos, dados, segredos, permissões, preferências e links funcionando.
 - [ ] Plugins existentes foram migrados sem perda de dados nem alteração casual de IDs.
 - [x] O Core compila e publica sem acesso ao código-fonte dos plugins de negócio.
@@ -883,11 +883,12 @@ O cronograma será estimado depois de P0. O projeto envolve contrato de platafor
 
 - Repositório público do marketplace: `https://github.com/Techify-one/nexus-edge-plugins`.
 - SDK público: release `plugin-sdk-v1.1.1`; o template foi instalado em diretório vazio, sem checkout do Core, e passou em typecheck/build.
-- Plugins publicados e imutáveis: CRM `2.0.2`, Meeting Recorder `2.0.2`, Meta Ads `2.0.2`, Soletrando `2.0.2` e Platform Probe `1.0.2`.
-- Pipeline do marketplace: validação `34372626412` e publicação assinada `34372872158`, ambas concluídas com sucesso.
+- Plugins publicados e imutáveis: CRM `2.0.3`, Meeting Recorder `2.0.2`, Meta Ads `2.0.2`, Soletrando `2.0.2` e Platform Probe `1.0.2`.
+- Pipelines do marketplace: validações `34372626412`/`34374241388` e publicações assinadas `34372872158`/`34374470166`, todas concluídas com sucesso.
 - Ambiente isolado: `https://nexus-edge-marketplace-test.francisconeto.workers.dev`, Worker `nexus-edge-marketplace-test`, D1 `nexus-edge-marketplace-test-db`, fila e DLQ próprias, com nove migrations aplicadas.
-- Pipeline do Core/ambiente isolado: execução `34372585638`, com typecheck, 178 testes, matriz D1/PostgreSQL, OpenAPI, build, artefatos, bundle, provisionamento, deploy e smoke concluídos.
+- Pipelines do Core/ambiente isolado: execuções `34372585638` e `34374136009`, com typecheck, 178 testes, matriz D1/PostgreSQL, OpenAPI, build, artefatos, bundle, provisionamento, deploy e smoke concluídos.
 - Prova ponta a ponta: chave do marketplace confirmada por fingerprint, cinco plugins descobertos, ZIP do CRM baixado diretamente do release, CRM `2.0.2` instalado, entrypoint de frontend servido pelo host genérico e `/api/v1/p/crm/health` respondendo pelo gateway genérico.
+- Provas de ciclo de vida: um redeploy do Core preservou o CRM `2.0.2`; depois, sem alterar o Core, o catálogo ofereceu e instalou CRM `2.0.3`. Remover o marketplace preservou o plugin `2.0.3`, seu frontend e seu backend; a persistência da remoção durante o próximo redeploy é a última verificação dessa sequência.
 - Limite observado: a conta atingiu os cinco Cron Triggers permitidos no plano Workers Free (`10072`). O Cron foi omitido somente do Worker isolado do Core; nenhum trigger preexistente foi removido. Isso impede concluir nessa conta a prova real do Platform Probe completo, embora os provisionadores e o pacote sejam cobertos pela suíte local.
 - Produção não foi alterada. A branch de implementação é `feat/plugin-marketplace-v2`; publicação de produção continua dependendo de merge aprovado em `main`.
 
