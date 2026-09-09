@@ -574,25 +574,9 @@ marketplacesRoutes.post(
         "GitHub asked this marketplace to wait before synchronizing again.",
       );
     try {
-      const repositoryUrl = new URL(
-        `https://api.github.com/repos/${encodeURIComponent(source.owner)}/${encodeURIComponent(source.repository)}`,
-      );
-      const repository = await githubJson<{ id?: number; archived?: boolean }>(
-        repositoryUrl,
-        256 * 1024,
-      );
-      if (repository.notModified)
-        throw new Error("GITHUB_REPOSITORY_RESPONSE_INVALID");
-      if (
-        !Number.isSafeInteger(repository.value.id) ||
-        repository.value.archived
-      )
-        throw new Error("GITHUB_REPOSITORY_UNAVAILABLE");
-      if (
-        source.repositoryId &&
-        source.repositoryId !== String(repository.value.id)
-      )
-        throw new Error("GITHUB_REPOSITORY_ID_CHANGED");
+      // Avoid GitHub's low unauthenticated REST quota on shared Workers IPs.
+      // Repository reuse cannot impersonate a configured marketplace because
+      // the catalog and release bytes still need the separately pinned key.
       const rawPath = [
         source.owner,
         source.repository,
@@ -650,18 +634,12 @@ marketplacesRoutes.post(
       if (!source.trustedPublicKey) {
         await c.get("db").execute(
           `UPDATE plugin_marketplaces
-              SET name = ?, repository_id = ?, trust_state = 'pending',
+              SET name = ?, trust_state = 'pending',
                   key_fingerprint = ?, etag = NULL, catalog_json = NULL,
                   catalog_expires_at = NULL, last_error_code = NULL,
                   updated_at = ?
             WHERE id = ?`,
-          [
-            catalog.name,
-            String(repository.value.id),
-            fingerprint,
-            now,
-            source.id,
-          ],
+          [catalog.name, fingerprint, now, source.id],
         );
         await audit(
           c,
@@ -704,13 +682,12 @@ marketplacesRoutes.post(
       );
       const statements: SqlStatement[] = [
         {
-          sql: `UPDATE plugin_marketplaces SET name = ?, repository_id = ?, trust_state = 'trusted',
+          sql: `UPDATE plugin_marketplaces SET name = ?, trust_state = 'trusted',
                   trusted_public_key = ?, key_fingerprint = ?, etag = ?, catalog_json = ?,
                   catalog_expires_at = ?, retry_after_at = NULL,
                   last_synced_at = ?, last_error_code = NULL, updated_at = ? WHERE id = ?`,
           params: [
             catalog.name,
-            String(repository.value.id),
             catalog.publisher.publicKey,
             fingerprint,
             catalogResponse.etag,
