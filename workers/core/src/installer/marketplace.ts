@@ -121,7 +121,7 @@ export const marketplaceCatalogSchema = z
 export type MarketplaceCatalog = z.infer<typeof marketplaceCatalogSchema>;
 export type MarketplaceRelease = z.infer<typeof releaseSchema>;
 
-const withoutSignature = (catalog: MarketplaceCatalog): string => {
+const withoutSignature = (catalog: Record<string, unknown>): string => {
   const { signature: _signature, ...payload } = catalog;
   return stableJson(payload);
 };
@@ -139,14 +139,17 @@ const importPublisherKey = (publicKey: string): Promise<CryptoKey> => {
   );
 };
 
-export async function verifyCatalogSignature(
-  catalog: MarketplaceCatalog,
-): Promise<void> {
+export async function verifyCatalogSignature(catalog: unknown): Promise<void> {
+  const parsed = marketplaceCatalogSchema.safeParse(catalog);
+  if (!parsed.success || !catalog || typeof catalog !== "object")
+    throw new Error("MARKETPLACE_CATALOG_INVALID");
   const verified = await crypto.subtle.verify(
     { name: "Ed25519" },
-    await importPublisherKey(catalog.publisher.publicKey),
-    fromBase64url(catalog.signature.value) as BufferSource,
-    new TextEncoder().encode(withoutSignature(catalog)),
+    await importPublisherKey(parsed.data.publisher.publicKey),
+    fromBase64url(parsed.data.signature.value) as BufferSource,
+    new TextEncoder().encode(
+      withoutSignature(catalog as Record<string, unknown>),
+    ),
   );
   if (!verified) throw new Error("MARKETPLACE_SIGNATURE_INVALID");
 }

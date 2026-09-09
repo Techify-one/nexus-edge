@@ -623,8 +623,8 @@ marketplacesRoutes.post(
       }
       const parsed = marketplaceCatalogSchema.safeParse(catalogResponse.value);
       if (!parsed.success) throw new Error("MARKETPLACE_CATALOG_INVALID");
+      await verifyCatalogSignature(catalogResponse.value);
       const catalog = parsed.data;
-      await verifyCatalogSignature(catalog);
       if (
         source.trustedPublicKey &&
         source.trustedPublicKey !== catalog.publisher.publicKey

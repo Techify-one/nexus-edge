@@ -224,7 +224,16 @@ describe("plugin package format 2", () => {
         "migrations/postgres",
       ])
         mkdirSync(join(root, directory), { recursive: true });
-      writeFileSync(join(root, "manifest.json"), JSON.stringify(manifest));
+      const sourceManifest = JSON.parse(JSON.stringify(manifest)) as Record<
+        string,
+        unknown
+      >;
+      delete (sourceManifest.frontend as Record<string, unknown>)
+        .persistentSurface;
+      writeFileSync(
+        join(root, "manifest.json"),
+        JSON.stringify(sourceManifest),
+      );
       writeFileSync(
         join(root, "dist/index.js"),
         "export class PluginState {}; export default {};",
@@ -265,10 +274,14 @@ describe("plugin package format 2", () => {
         privateKey: key,
       });
       expect(generated.pluginCount).toBe(1);
-      const catalog = marketplaceCatalogSchema.parse(
-        JSON.parse(readFileSync(catalogOutput, "utf8")),
-      );
-      await expect(verifyCatalogSignature(catalog)).resolves.toBeUndefined();
+      const catalogSource = JSON.parse(readFileSync(catalogOutput, "utf8"));
+      const catalog = marketplaceCatalogSchema.parse(catalogSource);
+      expect(
+        catalog.plugins[0]?.releases[0]?.manifest.frontend?.persistentSurface,
+      ).toBe(false);
+      await expect(
+        verifyCatalogSignature(catalogSource),
+      ).resolves.toBeUndefined();
     } finally {
       rmSync(workspace, { recursive: true, force: true });
     }
