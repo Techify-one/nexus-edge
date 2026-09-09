@@ -868,7 +868,7 @@ O cronograma será estimado depois de P0. O projeto envolve contrato de platafor
 
 - [ ] Um novo plugin com frontend/backend é criado e instalado sem alteração no código, assets ou CI do Core.
 - [ ] Outro plugin novo usa R2, Queue, Durable Object SQLite, KV e Cron sem registro nominal no Core.
-- [ ] O marketplace padrão é configurável/removível e sua remoção sobrevive a um update Core.
+- [x] O marketplace padrão é configurável/removível e sua remoção sobrevive a um update Core.
 - [ ] Duas fontes GitHub distintas listam e instalam plugins pelo painel, sem baixar/enviar ZIP manualmente.
 - [x] Atualizações são oferecidas pela origem correta e aplicadas somente pela ação autorizada do administrador.
 - [ ] Atualizar o Core mantém plugins, recursos, dados, segredos, permissões, preferências e links funcionando.
@@ -886,9 +886,9 @@ O cronograma será estimado depois de P0. O projeto envolve contrato de platafor
 - Plugins publicados e imutáveis: CRM `2.0.3`, Meeting Recorder `2.0.2`, Meta Ads `2.0.2`, Soletrando `2.0.2` e Platform Probe `1.0.2`.
 - Pipelines do marketplace: validações `34372626412`/`34374241388` e publicações assinadas `34372872158`/`34374470166`, todas concluídas com sucesso.
 - Ambiente isolado: `https://nexus-edge-marketplace-test.francisconeto.workers.dev`, Worker `nexus-edge-marketplace-test`, D1 `nexus-edge-marketplace-test-db`, fila e DLQ próprias, com nove migrations aplicadas.
-- Pipelines do Core/ambiente isolado: execuções `34372585638` e `34374136009`, com typecheck, 178 testes, matriz D1/PostgreSQL, OpenAPI, build, artefatos, bundle, provisionamento, deploy e smoke concluídos.
+- Pipelines do Core/ambiente isolado: execuções `34372585638`, `34374136009` e `34375772523`, com typecheck, 178 testes, matriz D1/PostgreSQL, OpenAPI, build, artefatos, bundle, provisionamento, deploy e smoke concluídos.
 - Prova ponta a ponta: chave do marketplace confirmada por fingerprint, cinco plugins descobertos, ZIP do CRM baixado diretamente do release, CRM `2.0.2` instalado, entrypoint de frontend servido pelo host genérico e `/api/v1/p/crm/health` respondendo pelo gateway genérico.
-- Provas de ciclo de vida: um redeploy do Core preservou o CRM `2.0.2`; depois, sem alterar o Core, o catálogo ofereceu e instalou CRM `2.0.3`. Remover o marketplace preservou o plugin `2.0.3`, seu frontend e seu backend; a persistência da remoção durante o próximo redeploy é a última verificação dessa sequência.
+- Provas de ciclo de vida: um redeploy do Core preservou o CRM `2.0.2`; depois, sem alterar o Core, o catálogo ofereceu e instalou CRM `2.0.3`. Remover o marketplace preservou o plugin `2.0.3`, seu frontend e seu backend; a remoção sobreviveu ao redeploy `34375772523`, sem ser recriada por migration. A mesma fonte foi então restaurada no registro original, teve a chave reconfirmada e sincronizou a revisão `mkGQ3uDOV210BeTOnFTC_SewEhIGTPEZ`.
 - Limite observado: a conta atingiu os cinco Cron Triggers permitidos no plano Workers Free (`10072`). O Cron foi omitido somente do Worker isolado do Core; nenhum trigger preexistente foi removido. Isso impede concluir nessa conta a prova real do Platform Probe completo, embora os provisionadores e o pacote sejam cobertos pela suíte local.
 - Produção não foi alterada. A branch de implementação é `feat/plugin-marketplace-v2`; publicação de produção continua dependendo de merge aprovado em `main`.
 
