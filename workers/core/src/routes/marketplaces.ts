@@ -193,7 +193,10 @@ const githubJson = async <T>(
   if (etag) headers.set("If-None-Match", etag);
   const response = await fetch(url, {
     headers,
-    redirect: "error",
+    // Cloudflare Workers implements `follow` and `manual`, but not the
+    // browser-only `error` mode. Keeping redirects manual means a 3xx still
+    // reaches the non-success branch below and is rejected.
+    redirect: "manual",
     signal: AbortSignal.timeout(15_000),
   });
   if (response.status === 304)
