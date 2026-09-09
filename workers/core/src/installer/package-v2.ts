@@ -245,12 +245,15 @@ export async function parsePluginArchive(
         /[.*+?^${}()|[\]\\]/gu,
         "\\$&",
       );
-      if (
-        !new RegExp(
-          `(?:export\\s+(?:class|const|let|var|function)\\s+${className}\\b|\\b${className}\\s+as\\s+${className}\\b)`,
-          "u",
-        ).test(workerSource)
-      )
+      const directExport = new RegExp(
+        `export\\s+(?:class|const|let|var|function)\\s+${className}\\b`,
+        "u",
+      );
+      const exportList = new RegExp(
+        `export\\s*\\{[^}]{0,8192}(?:\\b${className}\\b|\\b[A-Za-z_$][\\w$]*\\s+as\\s+${className}\\b)[^}]*\\}`,
+        "u",
+      );
+      if (!directExport.test(workerSource) && !exportList.test(workerSource))
         throw new Error("PLUGIN_DURABLE_OBJECT_EXPORT_MISSING");
     }
     const integrityBytes = extracted["integrity.json"];

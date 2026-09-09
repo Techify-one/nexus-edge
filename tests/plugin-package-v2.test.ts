@@ -90,7 +90,7 @@ const packageArchive = async (): Promise<Uint8Array> => {
   const payload: Record<string, Uint8Array> = {
     "manifest.json": strToU8(JSON.stringify(manifest)),
     "backend/worker.mjs": strToU8(
-      "export class PluginState {}; export default {}",
+      "var PluginState = class {}; export { PluginState }; export default {}",
     ),
     "frontend/entry.js": strToU8(
       "export default { mountPage(){ return { dispose(){} } } }",
