@@ -1,376 +1,319 @@
-# Plugin development and packaging
+# Desenvolvimento de plugins independentes
 
-This is the authoritative guide for creating installable Nexus Edge plugins.
-Start from `plugins/template`; do not create a Worker, package layout, or
-build command from memory.
+Este é o contrato de desenvolvimento de plugins do Nexus Edge. Um plugin no
+formato 2 possui frontend, backend, migrations e metadados próprios. Depois que
+o Core compatível estiver instalado, criar ou atualizar um plugin **não exige
+editar, recompilar ou publicar o Core**.
 
-Plugin UI is compiled into the Core SPA. The plugin Worker is a private backend
-reached only through a Cloudflare Service Binding and the Core gateway at
-`/api/v1/p/<plugin-id>/*`.
+O Core funciona como host estável: autentica o usuário, filtra permissões,
+carrega assets locais verificados, encaminha a API por Service Binding e
+provisiona os recursos Cloudflare declarados. Como no WordPress e no Odoo, o
+plugin é código confiável escolhido pelo administrador; Shadow DOM evita
+conflitos de estilo, mas não é uma sandbox de segurança.
 
-## 1. Create the plugin from the template
+## 1. Começar pelo template
 
-For an example plugin named `inventory`:
-
-```bash
-cp -R plugins/template plugins/inventory
-```
-
-Replace every template identifier consistently:
-
-| Location                              | Required value                |
-| ------------------------------------- | ----------------------------- |
-| directory                             | `plugins/inventory`           |
-| `package.json` name                   | `@app/plugin-inventory`       |
-| `manifest.json` id                    | `inventory`                   |
-| `manifest.json` table prefix          | `inventory_`                  |
-| Wrangler Worker name                  | `app-plugin-inventory`        |
-| permission prefix                     | `inventory.`                  |
-| Core binding created by the Installer | `PLUGIN_INVENTORY`            |
-| Core gateway                          | `/api/v1/p/inventory/*`       |
-| frontend directory                    | `plugins/inventory/frontend/` |
-| table preference IDs                  | `plugin.inventory.<resource>` |
-
-Plugin IDs must match `^[a-z][a-z0-9_]{1,31}$`. Released IDs, permission keys,
-migration IDs, route keys, table IDs, and data-column keys are persistent
-contracts; do not rename them casually.
-
-## 2. Keep the manifest and Wrangler configuration aligned
-
-The manifest is strict and accepts only these fields:
-
-- `id`, `name`, and valid semantic `version`;
-- `apiVersion: 1` and a valid `coreMinVersion`;
-- a real `compatibilityDate` in `YYYY-MM-DD` format;
-- only compatibility flags allowed by the Core environment;
-- `databaseDialects: ["d1", "postgres"]` in that order;
-- optional `runtimeBindings`, limited to `"ai"` and `"r2"` in canonical
-  lexicographic order, when the plugin uses Workers AI or dedicated object
-  storage;
-- optional `optionalRuntimeBindings`, with the same canonical ordering and no
-  overlap with `runtimeBindings`, for capabilities that may be attached after
-  installation without reinstalling the plugin;
-- optional localized metadata for `pt-BR` and `en`, with menu keys already
-  declared by the manifest;
-- `tablePrefix` equal to `<id>_`;
-- namespaced permissions in `<id>.<resource>.<action>` form;
-- menu entries whose route keys are compiled into the Core.
-
-Keep `compatibilityDate` and `compatibilityFlags` identical in `manifest.json`
-and `wrangler.jsonc`. Keep these Wrangler security settings:
-
-```jsonc
-{
-  "name": "app-plugin-inventory",
-  "main": "src/index.ts",
-  "workers_dev": false,
-  "preview_urls": false,
-}
-```
-
-The Installer supplies the production database binding and provider variable.
-For a manifest that declares `runtimeBindings: ["ai"]`, it also supplies a
-single `AI` binding without exposing Cloudflare credentials to the plugin. A
-plugin declaring `"r2"` receives a dedicated private `STORAGE` bucket binding.
-When `"r2"` is declared in `optionalRuntimeBindings`, installation proceeds
-without a bucket. An administrator can later call
-`POST /api/v1/plugins/:pluginId/runtime-resources/r2`; the Core provisions the
-bucket with the temporary R2-only token, patches the installed plugin Worker,
-verifies the binding, and records the resource as ready. Required bindings keep
-the blocking Installer behavior for backward compatibility.
-For new installations, the Core namespaces the deployed Worker name with a
-stable fingerprint of `APP_INSTALLATION_ID`. Two Nexus installations in the
-same Cloudflare account therefore cannot overwrite each other's plugin
-Workers. Updates retain an existing Worker name so legacy installations keep
-their secrets and bindings.
-The Installer asks for a narrowly scoped temporary user API token with only
-`Account > Workers R2 Storage > Edit` on the target account, provisions or
-reattaches the deterministic bucket, and discards the token. Do not use an
-account-owned R2 object token for this step: Cloudflare does not allow that
-token type to create an uncreated bucket with this narrow scope. Bucket names
-and account identifiers are installation state and must never enter the
-portable ZIP. Uninstall preserves the bucket and its objects by default.
-Never put Cloudflare tokens, passwords, connection strings, session cookies, or
-other secrets in the plugin, manifest, ZIP, migrations, or Wrangler file.
-
-## 3. Build with Wrangler
-
-Every plugin package must use Wrangler's Worker pipeline:
-
-```json
-{
-  "scripts": {
-    "build": "wrangler deploy --dry-run --outdir dist --config wrangler.jsonc"
-  }
-}
-```
-
-Do not replace this with a raw `esbuild --platform=node` bundle. A raw Node
-bundle can leave dynamic `__require(...)` calls for modules such as `events`,
-`crypto`, `fs`, `net`, `stream`, or `util`. Cloudflare then rejects an otherwise
-valid package during the Installer's `deploying` stage. Wrangler converts
-supported Node compatibility imports into the Worker module format.
-
-Add the new `plugins/<id>/dist/index.js` path to
-`scripts/verify-bundles.ts`. The verification must reject unsupported dynamic
-Node built-in requires. Add the plugin build and packaging command to the root
-build workflow so CI exercises the installable artifact.
-
-## 4. Backend boundary and authorization
-
-Copy the template's `X-Plugin-Context` middleware. The Core generates this
-internal header and sends only `userId`, concrete permission keys, and
-`requestId` through the Service Binding.
-
-- Never authenticate plugin routes directly with Core cookies, passwords,
-  personal API keys, or Better Auth state.
-- Reject missing or malformed plugin context before business routes run.
-- Check the precise permission on every protected operation.
-- Keep `POST /__installer/smoke`; it must return a successful response when the
-  internal context is valid.
-- Expose business routes through `/api/v1/p/<plugin-id>/*`, not a public Worker
-  hostname.
-- If a plugin needs an external webhook, expose only the narrow handler through
-  `/api/v1/public/p/<plugin-id>/*`, validate a provider secret before reading
-  the payload, and keep every other route behind the authenticated gateway.
-- Use the shared database abstraction and the active provider supplied by the
-  Installer.
-
-The plugin Worker must remain unreachable through `workers.dev` and preview
-URLs. Do not manually add a public route during development or installation.
-
-## 5. Database migrations
-
-Create matching files for both providers:
-
-```text
-plugins/inventory/migrations/
-  d1/0001_init.sql
-  postgres/0001_init.sql
-```
-
-The two directories must contain the same ordered migration IDs. IDs use
-`NNNN_lowercase_name`, and an applied migration must never be edited. Add a new
-paired migration instead.
-
-Only additive statements are accepted:
-
-- `CREATE TABLE`;
-- `CREATE INDEX` or `CREATE UNIQUE INDEX`;
-- `ALTER TABLE ... ADD COLUMN`.
-
-Every affected table name must start with the manifest's table prefix. Foreign
-key actions such as `ON DELETE CASCADE` are allowed; standalone destructive
-statements such as `DELETE`, `DROP`, `TRUNCATE`, column removal, or table
-renaming are not. Plugin removal deliberately preserves plugin tables.
-
-Keep D1 and PostgreSQL semantics equivalent while using the correct provider
-types, for example integer timestamps for D1 and `TIMESTAMPTZ` for PostgreSQL.
-Update `scripts/test-database-matrix.ts` coverage for the new migration pair.
-
-## 6. Frontend registration
-
-Manifest `menu` entries belong to the authenticated Overview, never to the
-Core's left sidebar. The sidebar is reserved for Core-owned destinations. The
-Overview automatically shows one card per installed plugin and uses the first
-manifest menu entry registered by the Core as its primary destination; all menu
-titles and route keys are searchable there.
-
-For every manifest menu route:
-
-1. Create the page under `plugins/<plugin-id>/frontend/`.
-2. Register its lazy import and Overview destination in
-   `plugins/<plugin-id>/frontend/registry.ts`.
-3. Compose that plugin registry into the shared
-   `frontend/src/plugins/registry.ts` when adding a new plugin.
-4. Add the route key to the Core allowlist in
-   `workers/core/src/installer/manifest.ts`.
-5. Add screen-specific translations to
-   `plugins/<plugin-id>/frontend/i18n.ts`; keep only Core-wide messages in the
-   shared typed catalog.
-6. Call only the Core gateway path `/api/v1/p/<plugin-id>/*` with the shared API
-   client.
-7. Build screens from the shared `Card`, form controls, `MetricCard`,
-   `DataValue`, and `ConfigurableDataTable` components. They provide the
-   semantic surface hierarchy, metric accents, alternating table rows, and
-   light/dark-theme contrast. Do not hard-code white, black, or plugin-specific
-   page/table surfaces.
-
-Do not add plugin routes, labels, permissions, or icons to
-`frontend/src/components/layout/AppShell.tsx`.
-
-Every route registered in `frontend/src/plugins/registry.ts` automatically gets
-the Core-owned **Back** button in the authenticated header. From a nested route
-the button returns to that plugin's overview; from the plugin overview it
-returns to the Core Overview. This works for current and future plugins without
-a plugin-specific layout. Keep every plugin route in that registry and do not
-add a duplicate page-local back button.
-
-Read `docs/INTERNATIONALIZATION.md` and `docs/DATA-TABLE-STANDARD.md`. Every new
-record-list table must use `ConfigurableDataTable` with an immutable
-`plugin.<plugin-id>.<resource>` ID, stable data-column keys, explicit sizes,
-sorting, accessibility, and Core-owned per-user preferences. Do not introduce a
-plugin-specific table or preference store.
-
-### Filter layout standard
-
-Every plugin screen with two or more related filters must render them inside
-the shared `SingleLineFilterBar` from `frontend/src/components/ui/index.tsx`.
-Keep all filter controls in one compact, non-wrapping row; filters must never
-grow into a second row and push the screen's primary content down. Use compact
-labels, truncation, and popovers for complex choices. If additional filters no
-longer remain usable in that row, group secondary options into a single
-overflow or advanced-filter popover instead of stacking another row.
-
-Document plugin endpoints in the Core OpenAPI map and add API, permission, UI,
-and interaction tests in the same change.
-
-## 7. Package the artifact
-
-Build first, then use the repository packager:
+Copie `plugins/template` para um repositório separado:
 
 ```bash
-pnpm --filter @app/plugin-inventory build
-node --import tsx scripts/package-plugin.ts inventory
+cp -R plugins/template inventory
 ```
 
-The resulting `plugins/inventory/release/inventory.plugin.zip` is a
-reproducible, versioned release output and must contain exactly the expected
-install inputs:
+Troque os identificadores de modo consistente:
+
+| Contrato              | Exemplo                        |
+| --------------------- | ------------------------------ |
+| ID do plugin          | `inventory`                    |
+| pacote                | `@my-company/plugin-inventory` |
+| prefixo de tabelas    | `inventory_`                   |
+| permissões            | `inventory.product.read`       |
+| rotas de tela         | `/app/p/inventory/*`           |
+| API autenticada       | `/api/v1/p/inventory/*`        |
+| API pública declarada | `/api/v1/public/p/inventory/*` |
+| preferência de tabela | `plugin.inventory.products`    |
+
+IDs publicados, chaves de permissão, route keys, nomes lógicos de recursos,
+bindings, migrations, IDs de tabela e chaves de coluna são contratos
+persistentes. Não os renomeie em uma atualização comum.
+
+## 2. Conteúdo do pacote 2
 
 ```text
 manifest.json
-worker.mjs
-migrations/d1/*.sql
-migrations/postgres/*.sql
+backend/worker.mjs
+backend/modules/*                 # opcional
+frontend/entry.js
+frontend/*.css                   # opcional
+locales/pt-BR.json               # opcional
+locales/en.json                  # opcional
+migrations/d1/NNNN_nome.sql
+migrations/postgres/NNNN_nome.sql
+openapi.json                     # opcional
+resources/*                      # opcional
+LICENSE                          # opcional
+integrity.json
+signature.json
 ```
 
-Do not hand-build the ZIP or package TypeScript source as `worker.mjs`. The raw
-combined install input must not exceed 4 MiB, and the gzipped Worker must not
-exceed 3 MiB. Commit every generated `plugins/*/release/*.plugin.zip` with its
-plugin source. CI rebuilds the deterministic packages and rejects stale,
-missing, or untracked plugin artifacts. Packages must not contain source maps,
-credentials, `.dev.vars`, environment files, or unrelated files.
+O ZIP bruto pode ter até 8 MiB, a expansão até 24 MiB, cada arquivo até 6 MiB
+e no máximo 25 entradas. Paths duplicados, diferenças apenas de maiúsculas,
+symlinks, ZIP64, arquivos extras, source maps e travessia de diretório são
+rejeitados. `integrity.json` registra SHA-256, tamanho e MIME de cada payload;
+`signature.json` assina sua representação canônica com Ed25519. O marketplace
+também assina o ZIP completo.
 
-The Installer archives these exact validated inputs in bounded chunks after the
-package-hash check. An administrator with `core.plugin.export` can later
-download a fresh `.plugin.zip` for another Nexus installation. Export performs
-the manifest, migration-policy, and SHA-256 checks again and includes only the
-four documented package areas. It never queries or serializes plugin tables,
-business records, database bindings, environment variables, session data, or
-Nexus credentials. Do not embed credentials in Worker source: source code is an
-intentional part of every portable plugin package. Installation is rejected if
-the submitted files contain any protected runtime credential or
-installation-specific identifier currently configured in the destination
-Nexus.
+Nunca inclua tokens, senhas, cookies, IDs da instalação, nomes físicos de
+recursos, `.dev.vars`, connection strings ou dados de negócio no pacote.
 
-## 8. Required verification
+## 3. Manifesto
 
-Use Node.js 24+ and pnpm 11.19.0. From the repository root, run:
+O template contém o manifesto mínimo completo. Os campos de plataforma são:
+
+```json
+{
+  "manifestVersion": 2,
+  "packageFormat": 2,
+  "id": "inventory",
+  "name": "Inventory",
+  "publisher": { "id": "my_company", "name": "My Company" },
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "coreMinVersion": "1.1.0",
+  "compatibilityDate": "2026-09-08",
+  "compatibilityFlags": ["nodejs_compat"],
+  "databaseDialects": ["d1", "postgres"],
+  "engines": { "hostApi": 1, "coreApi": 1 },
+  "tablePrefix": "inventory_",
+  "frontend": {
+    "entry": "frontend/entry.js",
+    "styles": ["frontend/styles.css"],
+    "isolation": "shadow",
+    "routes": [{ "routeKey": "inventory.products", "path": "/app/p/inventory" }]
+  },
+  "permissions": ["inventory.product.read"],
+  "menu": [
+    {
+      "title": "Products",
+      "routeKey": "inventory.products",
+      "path": "/app/p/inventory"
+    }
+  ]
+}
+```
+
+Metadados localizados aceitam `pt-BR` e `en`, inclusive nome, descrição,
+títulos de menu e labels de permissão. O painel usa esses labels sem adicioná-
+los ao catálogo de traduções do Core.
+
+Dependências usam ranges SemVer e são resolvidas antes de instalar. Dependência
+obrigatória ausente, versão incompatível ou ciclo bloqueia a operação. Um
+plugin requerido por outro não pode ser desinstalado primeiro.
+
+## 4. Frontend dinâmico e SDK
+
+O entrypoint exporta um `PluginModuleV1`, normalmente com `definePlugin`. O host
+fornece:
+
+- `host.api()` para a API do próprio plugin;
+- `host.coreApi()` para APIs Core autorizadas pelo usuário;
+- navegação restrita a `/app/p/<id>`;
+- notificações, locale, tema e permissões efetivas;
+- preferências de tabela por usuário.
+
+O módulo implementa `mountPage` e devolve `dispose`. Pode também manter uma
+sessão em `activate`, montar uma superfície global com `mountSurface` quando o
+manifesto define `frontend.persistentSurface: true` e limpar recursos em
+`deactivate`. A sessão/superfície sobrevive à navegação interna e é encerrada no
+logout ou na troca de release. Remova listeners, timers, streams e requests no
+descarte. Deep links e refresh são atendidos pela rota genérica
+`p/:pluginId/*`; o Core não conhece o ID do plugin no build.
+
+Para listas de registros, use `mountConfigurableDataTable` do
+`@nexus/plugin-sdk`, como demonstra `plugins/template/frontend/entry.ts`. Ele
+oferece ordenação de uma coluna, show/hide, drag-to-reorder, resize contínuo e
+independente, reset, linhas acessíveis por teclado, coluna fixa **Ações** e
+preferências persistidas. Todo `tableId` deve ser
+`plugin.<manifest-id>.<recurso>` e nunca deve ser reutilizado para outra tabela.
+
+Os assets são importados somente da cópia autenticada armazenada pelo Core e
+endereçada pelo hash do release. O release atual e o anterior ficam disponíveis
+para abas já abertas/recuperação. Use CSS autocontido e teste `light`, `dark`,
+`pt-BR` e `en`.
+
+O cabeçalho continua pertencendo ao host. O Core-owned **Back** button resolve
+o retorno hierárquico pela rota registrada, inclusive para deep links, sem o
+plugin duplicar navegação global.
+
+### Filter layout standard
+
+Telas de plugin que precisam de filtros React devem usar o
+shared `SingleLineFilterBar`: controles compactos ficam em uma non-wrapping row com
+overflow horizontal em viewports estreitos. Isso preserva o padrão visual sem
+reimplementar um toolbar diferente em cada módulo.
+
+## 5. Backend e gateway
+
+O backend é um Module Worker privado. Valide exatamente um dos headers internos
+do template:
+
+- `X-Plugin-Context` em chamadas autenticadas;
+- `X-Plugin-Public-Context` apenas em rotas públicas declaradas;
+- `X-Plugin-Installer-Context` somente no smoke test.
+
+Use `createPluginDatabase` de `@nexus/plugin-sdk/backend` para abrir o binding
+`DB` ou `HYPERDRIVE`; o plugin externo não importa pacotes privados do Core.
+
+Cheque a permissão concreta em toda operação. O Core remove cookies,
+Authorization, API key e headers internos recebidos antes do encaminhamento.
+Bodies e responses continuam como streams, permitindo binário, SSE e upgrade
+WebSocket sem conversão obrigatória para JSON.
+
+Mantenha `POST /__installer/smoke`. O Worker não recebe `workers.dev`, preview
+URL ou rota pública. O acesso de negócio ocorre exclusivamente pelos gateways
+do Core.
+
+## 6. Recursos Cloudflare declarativos
+
+Recursos possuem `name` lógico estável, `binding`, `required`, `retention` e
+`capabilityVersion: 1`. Nomes/IDs físicos são gerados ou associados por
+instalação e nunca entram no ZIP.
+
+```json
+{
+  "resources": [
+    {
+      "name": "documents",
+      "type": "r2",
+      "binding": "DOCUMENTS",
+      "required": true,
+      "retention": "preserve",
+      "configuration": {}
+    },
+    {
+      "name": "cache",
+      "type": "kv",
+      "binding": "CACHE",
+      "required": false,
+      "retention": "preserve",
+      "configuration": {}
+    },
+    {
+      "name": "events_dlq",
+      "type": "queue",
+      "binding": "EVENTS_DLQ",
+      "configuration": {}
+    },
+    {
+      "name": "events",
+      "type": "queue",
+      "binding": "EVENTS",
+      "configuration": {
+        "consumer": true,
+        "deadLetterResource": "events_dlq",
+        "settings": { "batch_size": 10, "max_retries": 3 }
+      }
+    },
+    {
+      "name": "state",
+      "type": "durable_object",
+      "binding": "STATE",
+      "retention": "preserve",
+      "configuration": { "className": "InventoryState", "storage": "sqlite" }
+    },
+    {
+      "name": "hourly",
+      "type": "cron",
+      "binding": "HOURLY",
+      "configuration": { "schedules": ["0 * * * *"] }
+    },
+    {
+      "name": "models",
+      "type": "ai",
+      "binding": "AI",
+      "required": false,
+      "configuration": {}
+    }
+  ]
+}
+```
+
+O banco da instalação é fornecido como `DB` (D1) ou `HYPERDRIVE`
+(PostgreSQL). Um recurso `database` com `mode: installation` pode criar um alias
+de binding. R2, KV e Queue usam credencial administrativa temporária por
+operação; o Core descarta seu valor. AI, Cron e Durable Objects são associados
+durante o upload do Worker. Classes Durable Object novas usam `exports`
+declarativos com storage SQLite; remoção ou rename exige procedimento explícito
+e não passa como update comum.
+
+Queue consumers e DLQ são reconciliados pelo nome/ID registrado. Cron é
+reconciliado como conjunto de expressões UTC. Updates reutilizam todos os
+recursos; uninstall preserva dados por padrão, remove triggers/consumers e
+mantém o Worker quando isso for necessário para preservar Durable Objects.
+
+## 7. Segredos e APIs públicas
+
+Declare cada segredo com nome, label, obrigatoriedade e permissão de gestão. O
+Core grava o valor diretamente como Worker Secret, retorna apenas
+`configured: true/false` e o preserva em updates. Não use nomes reservados do
+Core.
+
+`publicRoutes` é uma lista de prefixos internos, por exemplo
+`["/provider/webhook"]`. O gateway rejeita qualquer outro path. Valide a
+assinatura/segredo do provedor antes de processar o body. Se houver
+`openapi.json`, todos os paths precisam estar no namespace autenticado ou em um
+prefixo público declarado; o Core o publica dinamicamente em
+`/api/v1/plugins/<id>/openapi.json`.
+
+## 8. Migrations
+
+Crie pares com o mesmo ID:
+
+```text
+migrations/d1/0001_init.sql
+migrations/postgres/0001_init.sql
+```
+
+São aceitos somente `CREATE TABLE`, `CREATE [UNIQUE] INDEX` e
+`ALTER TABLE ... ADD COLUMN`, sempre no `tablePrefix`. Uma migration aplicada
+nunca é editada. Uninstall preserva tabelas e hashes.
+
+## 9. Build, assinatura e publicação
+
+Use Node.js 24+, pnpm 11.19.0 e o pipeline do Wrangler:
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm typecheck
-pnpm test
-pnpm test:matrix
-pnpm openapi:check
 pnpm build
-pnpm verify:artifacts
-pnpm verify:bundle
-pnpm format:check
+PLUGIN_SIGNING_PRIVATE_KEY="<PKCS8-base64url>" \
+PLUGIN_SIGNING_KEY_ID="publisher-v1" \
+pnpm package
 ```
 
-Also inspect the package before installation:
+O packager usa o output Worker do Wrangler e o bundle ESM do frontend. Não use
+um bundle Node cru. A chave privada pertence ao CI/secret manager e jamais é
+commitada, impressa ou enviada ao Core.
 
-```bash
-unzip -l plugins/inventory/release/inventory.plugin.zip
-```
+Publique o `.plugin.zip` como asset imutável de um GitHub Release no
+repositório do marketplace e gere o catálogo assinado conforme
+`docs/PLUGIN-MARKETPLACE.md`. Pacotes formato 2 não são versionados no
+repositório do Core.
 
-For a production/staging install, verify all of the following:
+## 10. Compatibilidade e testes
 
-- the operation reaches `installed`;
-- the Installer smoke test passes;
-- the plugin is listed with the expected version and active database provider;
-- business requests work only through the Core gateway;
-- the Worker has no public `workers.dev` or preview URL;
-- permissions and Overview entries appear only while the plugin is installed;
-- uninstall removes the binding and permission exposure while preserving data;
-- a subsequent Core deployment preserves the `PLUGIN_*` Service Binding.
+Uma atualização pode adicionar código, telas, permissões e recursos, mas não
+pode alterar migrations antigas, diminuir versão automaticamente, mudar a
+identidade de recurso ou renomear/remover classe Durable Object. Preserve
+contratos Host API/Core API já publicados. O Core mantém Service Bindings,
+Worker Secrets, assets instalados, tabelas e recursos quando ele próprio é
+atualizado.
 
-## 9. Installer operations and retries
+Antes de publicar, execute typecheck, testes de backend/UI, matriz D1/PostgreSQL,
+build Wrangler, verificação do bundle e validação do pacote. Teste instalação,
+update, reinstall, uninstall conservador, dois usuários com preferências
+distintas, permissões reduzidas, deep link, marketplace offline e falha de cada
+recurso solicitado.
 
-Installation and removal use the authenticated administrator session and do not
-ask for the account password again.
-
-Removal is intentionally two-step. The first delete action uninstalls an
-installed plugin, removes its Worker, binding, and permission exposure, and
-keeps an `uninstalled` row visible. A second delete action removes that catalog
-row. Both actions preserve plugin tables, migration hashes, operation history,
-and audit history.
-
-The Installer persists each stage. Package hashes cover the manifest, Worker,
-and both migration sets. API operators can keep an operation ID and use exactly
-the same `.plugin.zip` to resume it. The panel starts a safe new operation when
-the package is selected again. A rebuilt or edited package is a new artifact
-and cannot resume an older operation. Failed operations release the global
-Installer lock.
-
-Persisted operation rows are internal Installer state and are not presented as
-an end-user history on the Plugins page. Starts, successes, failures,
-uninstalls, and catalog-record deletions are recorded in the Audit page; failure
-audits contain the operation ID and stage but not raw provider errors.
-
-When installation fails, the open Installer panel presents an expandable,
-copyable support report. It contains the operation, plugin, version, failed
-stage, allowlisted failure code and description, request IDs, timestamps,
-package sizes, and migration IDs. It deliberately excludes raw provider logs,
-package contents, URLs returned in arbitrary errors, credentials, and secrets.
-The Core must convert known failures into bounded safe diagnostics; unknown
-failure text remains available only in protected server logs and is correlated
-through the operation and request IDs. This report is diagnostic context for a
-developer, while Audit remains the durable user-visible history.
-
-Packages installed before export archiving was introduced have no recoverable
-copy of the inactive-provider migrations. On the first download attempt, the
-panel asks for the exact original `.plugin.zip`. The Core validates the plugin
-ID, installed version, manifest, Worker, both migration sets, runtime-value
-boundary, and every stored installation hash before archiving it. This recovery
-does not redeploy the Worker, run migrations, or read plugin business tables.
-A rebuilt or edited package is rejected. Recovery is recorded as
-`core.plugin.package_archived`, and downloading is recorded as
-`core.plugin.package_downloaded`, in Audit.
-
-Common failures:
-
-| Result                               | Meaning                                               | Action                                                      |
-| ------------------------------------ | ----------------------------------------------------- | ----------------------------------------------------------- |
-| `409 INSTALLER_BUSY`                 | another live operation owns the global lock           | wait for that operation or resume it                        |
-| `409 PLUGIN_PACKAGE_HASH_MISMATCH`   | the selected file differs from the original operation | select the original file or start a new operation           |
-| `409 PLUGIN_DOWNGRADE_NOT_AUTOMATIC` | requested version is below the installed version      | use a documented manual downgrade procedure                 |
-| failure in `deploying`               | Cloudflare rejected the Worker bundle or metadata     | confirm the Wrangler build and bundle verification          |
-| failure in `binding`                 | the Core Service Binding could not be updated         | verify Installer credentials and the Core settings contract |
-| failure in `registering`             | the binding is not propagated yet or smoke failed     | retry with the same package after propagation               |
-
-## 10. Core and Cloudflare invariants
-
-These details are owned by the Core, not by individual plugins, but must remain
-true when the Installer or deployment code changes:
-
-- upload plugin Workers as module Workers using multipart `metadata` and
-  `worker.mjs` parts;
-- patch Core Worker settings as `multipart/form-data` with an
-  `application/json` part named `settings` containing `{ "bindings": [...] }`;
-- let the runtime generate the multipart boundary; never set the multipart
-  `Content-Type` header manually;
-- merge the new service binding with all existing Core bindings and verify it
-  through a fresh settings read;
-- release Core to production by pushing the intended commit to `main`; the
-  GitHub Actions deployment uses `pnpm deploy:core` to preserve and verify all
-  dynamic `PLUGIN_*` bindings;
-- disable and verify both public subdomain and preview exposure before
-  registration;
-- release the Installer lock atomically whenever a stage or package-hash check
-  fails.
-
-Use `plugins/crm` as the complete executable example and
-`plugins/template` as the source for new plugin scaffolds.
+Os quatro plugins históricos continuam no monorepo durante a versão ponte. O
+registry e os pacotes formato 1 existem apenas para manter instalações antigas;
+plugins novos usam exclusivamente o host dinâmico e não devem ser adicionados a
+allowlists, registries, traduções ou TypeScript references do Core.

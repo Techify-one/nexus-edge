@@ -3,6 +3,7 @@ import { createId, type PluginPublicContext } from "@app/core-contract";
 import type { HonoEnv } from "../env.js";
 import { hashToken } from "../lib/crypto.js";
 import { AppError } from "../lib/http.js";
+import { parseJson } from "../lib/values.js";
 
 const encode = (value: unknown): string => {
   const bytes = new TextEncoder().encode(JSON.stringify(value));
@@ -75,11 +76,15 @@ publicPluginGatewayRoutes.all("/:pluginId/*", async (c) => {
       },
       405,
     );
-  const plugin = await c
-    .get("db")
-    .first<{ status: string }>("SELECT status FROM plugins WHERE id = ?", [
-      pluginId,
-    ]);
+  const plugin = await c.get("db").first<{
+    status: string;
+    packageFormat: number | string;
+    manifest: unknown;
+  }>(
+    `SELECT status, package_format AS "packageFormat",
+              manifest_json AS manifest FROM plugins WHERE id = ?`,
+    [pluginId],
+  );
   if (!plugin || plugin.status !== "installed")
     throw new AppError(404, "PLUGIN_NOT_INSTALLED", "Plugin is not installed.");
   const binding = c.env[`PLUGIN_${pluginId.toUpperCase()}`];
@@ -93,6 +98,16 @@ publicPluginGatewayRoutes.all("/:pluginId/*", async (c) => {
   const prefix = `/api/v1/public/p/${pluginId}`;
   const incoming = new URL(c.req.url);
   const forwardedPath = incoming.pathname.slice(prefix.length) || "/";
+  const manifest = parseJson<{ publicRoutes?: string[] }>(plugin.manifest, {});
+  const declaredRoutes =
+    Number(plugin.packageFormat) === 2 ? (manifest.publicRoutes ?? []) : [];
+  if (
+    !declaredRoutes.some(
+      (route) =>
+        forwardedPath === route || forwardedPath.startsWith(`${route}/`),
+    )
+  )
+    throw new AppError(404, "NOT_FOUND", "Resource not found.");
   const identity = forwardedPath
     .split("/")
     .filter(Boolean)
@@ -129,7 +144,14 @@ publicPluginGatewayRoutes.all("/:pluginId/*", async (c) => {
       signal: c.req.raw.signal,
     }),
   );
-  const outgoing = new Response(response.body, response);
+  const outgoing = response.webSocket
+    ? new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+        webSocket: response.webSocket,
+      })
+    : new Response(response.body, response);
   outgoing.headers.set("Cache-Control", "private, no-store");
   return outgoing;
 });

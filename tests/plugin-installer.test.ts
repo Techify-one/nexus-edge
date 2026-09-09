@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { createMongoAbility } from "@casl/ability";
 import type { DatabasePort, SqlStatement } from "@app/database";
 import { strFromU8, unzipSync } from "fflate";
@@ -27,23 +26,32 @@ import {
   pluginWorkerName,
 } from "../workers/core/src/routes/installer.js";
 
-const crmPackageParts = () => {
-  const pluginRoot = "plugins/crm";
-  const migration = (dialect: "d1" | "postgres") => ({
-    "0001_init": readFileSync(
-      `${pluginRoot}/migrations/${dialect}/0001_init.sql`,
-      "utf8",
-    ),
+const legacyManifest = (overrides: Partial<PluginManifest> = {}) =>
+  pluginManifestSchema.parse({
+    id: "crm",
+    name: "Legacy fixture",
+    version: "1.0.0",
+    apiVersion: 1,
+    coreMinVersion: "1.0.0",
+    compatibilityDate: "2026-09-08",
+    compatibilityFlags: ["nodejs_compat"],
+    databaseDialects: ["d1", "postgres"],
+    tablePrefix: "crm_",
+    permissions: [],
+    menu: [],
+    ...overrides,
   });
-  return {
-    manifest: JSON.parse(
-      readFileSync(`${pluginRoot}/manifest.json`, "utf8"),
-    ) as PluginManifest,
-    worker: "export default {};",
-    d1Migrations: migration("d1"),
-    postgresMigrations: migration("postgres"),
-  };
-};
+
+const crmPackageParts = () => ({
+  manifest: legacyManifest(),
+  worker: "export default {};",
+  d1Migrations: {
+    "0001_init": "CREATE TABLE IF NOT EXISTS crm_items (id TEXT PRIMARY KEY);",
+  },
+  postgresMigrations: {
+    "0001_init": "CREATE TABLE IF NOT EXISTS crm_items (id TEXT PRIMARY KEY);",
+  },
+});
 
 const crmPackageBody = (worker?: string) => {
   const parts = crmPackageParts();
@@ -61,36 +69,27 @@ const crmPackageBody = (worker?: string) => {
 };
 
 const releasePackageBody = (pluginId: string) => {
-  const archive = unzipSync(
-    readFileSync(`plugins/${pluginId}/release/${pluginId}.plugin.zip`),
-  );
-  const manifest = strFromU8(archive["manifest.json"]!);
-  const migrations = (dialect: "d1" | "postgres") =>
-    Object.fromEntries(
-      Object.entries(archive)
-        .filter(
-          ([path]) =>
-            path.startsWith(`migrations/${dialect}/`) && path.endsWith(".sql"),
-        )
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([path, value]) => [
-          path
-            .split("/")
-            .at(-1)!
-            .replace(/\.sql$/u, ""),
-          strFromU8(value),
-        ]),
-    );
+  const manifest = legacyManifest({
+    id: pluginId,
+    name: "Resource fixture",
+    coreMinVersion: "1.1.0-beta.8",
+    runtimeBindings: ["ai"],
+    optionalRuntimeBindings: ["r2"],
+    tablePrefix: `${pluginId}_`,
+  });
+  const migrations = {
+    "0001_init": `CREATE TABLE IF NOT EXISTS ${pluginId}_items (id TEXT PRIMARY KEY);`,
+  };
   const body = new FormData();
-  body.set("manifest", manifest);
+  body.set("manifest", JSON.stringify(manifest));
   body.set(
     "worker",
-    new File([archive["worker.mjs"]!.buffer as ArrayBuffer], "worker.mjs", {
+    new File(["export default {};"], "worker.mjs", {
       type: "application/javascript",
     }),
   );
-  body.set("d1Migrations", JSON.stringify(migrations("d1")));
-  body.set("postgresMigrations", JSON.stringify(migrations("postgres")));
+  body.set("d1Migrations", JSON.stringify(migrations));
+  body.set("postgresMigrations", JSON.stringify(migrations));
   return body;
 };
 
@@ -952,9 +951,12 @@ describe("Cloudflare plugin bindings", () => {
   });
 
   it("rejects a binding declared as both required and optional", () => {
-    const manifest = JSON.parse(
-      readFileSync("plugins/meeting_recorder/manifest.json", "utf8"),
-    ) as Record<string, unknown>;
+    const manifest = legacyManifest({
+      id: "meeting_recorder",
+      tablePrefix: "meeting_recorder_",
+      runtimeBindings: ["ai"],
+      optionalRuntimeBindings: ["r2"],
+    }) as Record<string, unknown>;
     manifest.runtimeBindings = ["ai", "r2"];
     manifest.optionalRuntimeBindings = ["r2"];
     expect(pluginManifestSchema.safeParse(manifest).success).toBe(false);
@@ -1028,9 +1030,12 @@ describe("Cloudflare plugin bindings", () => {
         throw new Error(`Unexpected URL: ${url}`);
       }),
     );
-    const manifest = JSON.parse(
-      readFileSync("plugins/meeting_recorder/manifest.json", "utf8"),
-    );
+    const manifest = legacyManifest({
+      id: "meeting_recorder",
+      tablePrefix: "meeting_recorder_",
+      runtimeBindings: ["ai"],
+      optionalRuntimeBindings: ["r2"],
+    });
     const response = await installerApp({
       plugin: {
         workerName: "nexus-plugin-meeting-recorder",

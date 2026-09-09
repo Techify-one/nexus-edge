@@ -46,7 +46,7 @@ describe("application shell", () => {
     expect(shell).not.toContain("{location.pathname}");
   });
 
-  it("shows a hierarchical Core-owned back button on registered plugin routes", () => {
+  it("shows a hierarchical Core-owned back button on dynamic plugin routes", () => {
     const shell = readFileSync(
       "frontend/src/components/layout/AppShell.tsx",
       "utf8",
@@ -55,15 +55,12 @@ describe("application shell", () => {
     const template = readFileSync("plugins/template/README.md", "utf8");
 
     expect(shell).toContain(
-      'import { pluginRoutePaths } from "../../plugins/registry.js"',
-    );
-    expect(shell).toContain(
       'import { resolvePluginBackTarget } from "../../plugins/navigation.js"',
     );
     expect(shell).toContain(
       "const pluginBackTarget = resolvePluginBackTarget(",
     );
-    expect(shell).toContain("Object.values(pluginRoutePaths)");
+    expect(shell).toContain("location.pathname,");
     expect(shell).toContain("onClick={() => navigate(pluginBackTarget)}");
     expect(shell).toContain('aria-label={t("common.back")}');
     expect(guide).toContain("Core-owned **Back** button");
@@ -71,25 +68,10 @@ describe("application shell", () => {
   });
 
   it("returns from nested plugin routes to the plugin overview", () => {
-    const routes = [
-      "/app/meeting-recorder",
-      "/app/meeting-recorder/settings",
-      "/app/meeting-recorder/:recordingId",
-      "/app/crm/leads/:leadId",
-    ];
-
-    expect(
-      resolvePluginBackTarget("/app/meeting-recorder/settings", routes),
-    ).toBe("/app/meeting-recorder");
-    expect(
-      resolvePluginBackTarget("/app/meeting-recorder/mrr_123", routes),
-    ).toBe("/app/meeting-recorder");
-    expect(resolvePluginBackTarget("/app/crm/leads/crm_123", routes)).toBe(
-      "/app/crm",
+    expect(resolvePluginBackTarget("/app/p/example/settings", [])).toBe(
+      "/app/p/example",
     );
-    expect(resolvePluginBackTarget("/app/meeting-recorder/", routes)).toBe(
-      "/app",
-    );
-    expect(resolvePluginBackTarget("/app/users", routes)).toBeUndefined();
+    expect(resolvePluginBackTarget("/app/p/example", [])).toBe("/app");
+    expect(resolvePluginBackTarget("/app/users", [])).toBeUndefined();
   });
 });

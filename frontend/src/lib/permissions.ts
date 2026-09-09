@@ -5,11 +5,15 @@ type Translator = (
   values?: Record<string, string | number>,
 ) => string;
 
-export const permissionLabel = (key: string, t: Translator): string => {
+export const permissionLabel = (
+  key: string,
+  t: Translator,
+  dynamicLabel?: string,
+): string => {
   const translationKey = `permissions.${key}`;
   return hasTranslation(translationKey)
     ? t(translationKey)
-    : t("permissions.additional");
+    : (dynamicLabel ?? key);
 };
 
 export const permissionGroupLabel = (key: string, t: Translator): string => {
@@ -20,7 +24,9 @@ export const permissionGroupLabel = (key: string, t: Translator): string => {
     : t("permissionGroups.additional");
 };
 
-export const groupPermissions = <Permission extends { key: string }>(
+export const groupPermissions = <
+  Permission extends { key: string; groupLabel?: string },
+>(
   permissions: Permission[],
   t: Translator,
 ) => {
@@ -34,6 +40,7 @@ export const groupPermissions = <Permission extends { key: string }>(
       "core.user",
       "core.group",
       "core.plugin",
+      "core.marketplace",
       "core.webhook",
       "core.audit",
       "core.settings",
@@ -47,7 +54,7 @@ export const groupPermissions = <Permission extends { key: string }>(
     const id = permission.key.split(".").slice(0, 2).join(".");
     const section = sections.get(id) ?? {
       id,
-      label: permissionGroupLabel(permission.key, t),
+      label: permission.groupLabel ?? permissionGroupLabel(permission.key, t),
       permissions: [],
     };
     section.permissions.push(permission);

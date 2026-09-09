@@ -1,13 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { gzipSync } from "fflate";
 
-const workerBundles = [
-  "plugins/crm/dist/index.js",
-  "plugins/meta_ads/dist/index.js",
-  "plugins/soletrando/dist/index.js",
-  "plugins/meeting_recorder/dist/index.js",
-  "plugins/template/dist/index.js",
-];
+const workerBundles = ["plugins/template/dist/index.js"];
 const unsupportedDynamicRequires = [
   "crypto",
   "dns",
@@ -33,9 +27,7 @@ for (const bundlePath of workerBundles) {
       `${bundlePath} contains unsupported dynamic Node.js requires: ${unsupported.join(", ")}`,
     );
 }
-for (const bundlePath of workerBundles.filter(
-  (path) => !path.includes("/template/"),
-)) {
+for (const bundlePath of workerBundles) {
   const workerBytes = gzipSync(readFileSync(bundlePath)).byteLength;
   if (workerBytes > 3 * 1024 * 1024)
     throw new Error(`${bundlePath} gzip exceeds 3 MiB: ${workerBytes}`);

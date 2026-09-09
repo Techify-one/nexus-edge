@@ -7,13 +7,10 @@
     { "path": "./packages/webhook-contract" },
     { "path": "./packages/api-contracts" },
     { "path": "./packages/installer-release-schema" },
+    { "path": "./packages/plugin-sdk" },
     { "path": "./workers/core" },
     { "path": "./installer/worker" },
     { "path": "./installer/frontend" },
-    { "path": "./plugins/crm" },
-    { "path": "./plugins/meta_ads" },
-    { "path": "./plugins/soletrando" },
-    { "path": "./plugins/meeting_recorder" },
     { "path": "./plugins/template" },
     { "path": "./frontend" }
   ]

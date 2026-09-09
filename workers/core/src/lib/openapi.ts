@@ -1,4 +1,4 @@
-export const OPENAPI_DOCUMENT = {
+const CORE_OPENAPI_DOCUMENT = {
   openapi: "3.1.0",
   info: {
     title: "Nexus Edge API",
@@ -626,6 +626,191 @@ export const OPENAPI_DOCUMENT = {
         },
       },
     },
+    "/api/v1/plugin-platform": {
+      get: {
+        responses: {
+          "200": { description: "Supported plugin contracts and capabilities" },
+        },
+      },
+    },
+    "/api/v1/plugin-runtime": {
+      get: {
+        responses: {
+          "200": {
+            description:
+              "Authorized runtime UI descriptors for installed plugins",
+          },
+        },
+      },
+    },
+    "/api/v1/plugin-openapi": {
+      get: {
+        responses: {
+          "200": {
+            description: "Authorized installed plugin OpenAPI documents",
+          },
+        },
+      },
+    },
+    "/api/v1/plugins/{pluginId}/openapi.json": {
+      get: {
+        parameters: [{ name: "pluginId", in: "path", required: true }],
+        responses: {
+          "200": { description: "Verified plugin-owned OpenAPI document" },
+          "404": { description: "Plugin document unavailable or unauthorized" },
+        },
+      },
+    },
+    "/api/v1/plugin-assets/{pluginId}/{releaseHash}/{assetPath}": {
+      get: {
+        parameters: [
+          { name: "pluginId", in: "path", required: true },
+          { name: "releaseHash", in: "path", required: true },
+          { name: "assetPath", in: "path", required: true },
+        ],
+        responses: {
+          "200": {
+            description: "Locally stored, content-addressed plugin asset",
+          },
+          "404": { description: "Asset unavailable or unauthorized" },
+        },
+      },
+    },
+    "/api/v1/plugin-marketplaces": {
+      get: {
+        responses: { "200": { description: "Configured plugin marketplaces" } },
+      },
+      post: {
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object" } } },
+        },
+        responses: { "201": { description: "GitHub marketplace added" } },
+      },
+    },
+    "/api/v1/plugin-marketplaces/{marketplaceId}": {
+      patch: {
+        parameters: [{ name: "marketplaceId", in: "path", required: true }],
+        responses: { "200": { description: "Marketplace updated" } },
+      },
+      delete: {
+        parameters: [{ name: "marketplaceId", in: "path", required: true }],
+        responses: {
+          "204": {
+            description: "Marketplace soft-removed; installations preserved",
+          },
+        },
+      },
+    },
+    "/api/v1/plugin-marketplaces/{marketplaceId}/sync": {
+      post: {
+        parameters: [{ name: "marketplaceId", in: "path", required: true }],
+        responses: {
+          "200": { description: "Signed marketplace catalog synchronized" },
+          "429": { description: "GitHub backoff is active" },
+          "502": { description: "Catalog or repository verification failed" },
+        },
+      },
+    },
+    "/api/v1/plugin-marketplaces/{marketplaceId}/trust-key": {
+      post: {
+        parameters: [
+          { name: "marketplaceId", in: "path", required: true },
+          { name: "X-Reauth-Token", in: "header", required: true },
+        ],
+        responses: {
+          "200": {
+            description: "Publisher key reassociated by confirmed fingerprint",
+          },
+        },
+      },
+    },
+    "/api/v1/plugin-marketplaces/{marketplaceId}/keys/{keyId}/revoke": {
+      post: {
+        parameters: [
+          { name: "marketplaceId", in: "path", required: true },
+          { name: "keyId", in: "path", required: true },
+          { name: "X-Reauth-Token", in: "header", required: true },
+        ],
+        responses: {
+          "204": {
+            description: "Publisher key revoked without uninstalling plugins",
+          },
+        },
+      },
+    },
+    "/api/v1/plugin-catalog": {
+      get: {
+        responses: {
+          "200": {
+            description:
+              "Best compatible stable release from each enabled source",
+          },
+        },
+      },
+    },
+    "/api/v1/plugin-catalog/{marketplaceId}/{pluginId}": {
+      get: {
+        parameters: [
+          { name: "marketplaceId", in: "path", required: true },
+          { name: "pluginId", in: "path", required: true },
+        ],
+        responses: {
+          "200": { description: "Plugin release history for one source" },
+        },
+      },
+    },
+    "/api/v1/plugin-catalog/{releaseId}/package": {
+      post: {
+        parameters: [{ name: "releaseId", in: "path", required: true }],
+        responses: {
+          "200": { description: "Verified signed plugin package" },
+          "409": { description: "Release unavailable, stale, or incompatible" },
+        },
+      },
+    },
+    "/api/v1/plugin-operations/{operationId}/resources": {
+      get: {
+        parameters: [{ name: "operationId", in: "path", required: true }],
+        responses: {
+          "200": { description: "Persisted declarative resource plan" },
+        },
+      },
+    },
+    "/api/v1/plugin-operations/{operationId}/resources/{logicalName}/provision":
+      {
+        post: {
+          parameters: [
+            { name: "operationId", in: "path", required: true },
+            { name: "logicalName", in: "path", required: true },
+            { name: "Idempotency-Key", in: "header", required: true },
+            { name: "X-Reauth-Token", in: "header", required: true },
+          ],
+          responses: {
+            "200": {
+              description: "Required R2, KV, or Queue resource provisioned",
+            },
+          },
+        },
+      },
+    "/api/v1/plugins/{pluginId}/runtime-resources": {
+      get: {
+        parameters: [{ name: "pluginId", in: "path", required: true }],
+        responses: { "200": { description: "Safe runtime resource status" } },
+      },
+    },
+    "/api/v1/plugins/{pluginId}/runtime-resources/{logicalName}/provision": {
+      post: {
+        parameters: [
+          { name: "pluginId", in: "path", required: true },
+          { name: "logicalName", in: "path", required: true },
+          { name: "X-Reauth-Token", in: "header", required: true },
+        ],
+        responses: {
+          "200": { description: "Optional declared resource activated" },
+        },
+      },
+    },
     "/api/v1/plugin-operations/{operationId}/provision-r2": {
       post: {
         parameters: [
@@ -1023,6 +1208,52 @@ export const OPENAPI_DOCUMENT = {
           "200": { description: "One signed Core update stage completed" },
         },
       },
+    },
+  },
+} as const;
+
+const corePaths = Object.fromEntries(
+  Object.entries(CORE_OPENAPI_DOCUMENT.paths).filter(
+    ([path]) =>
+      !path.startsWith("/api/v1/p/crm/") &&
+      !path.startsWith("/api/v1/p/meta_ads/") &&
+      !path.startsWith("/api/v1/p/soletrando/") &&
+      !path.startsWith("/api/v1/p/meeting_recorder/") &&
+      !path.startsWith("/api/v1/public/p/soletrando/") &&
+      !path.startsWith("/api/v1/public/p/meeting_recorder/") &&
+      !path.startsWith("/api/v1/plugins/meta_ads/") &&
+      !path.startsWith("/api/v1/plugins/meeting_recorder/"),
+  ),
+);
+
+export const OPENAPI_DOCUMENT = {
+  ...CORE_OPENAPI_DOCUMENT,
+  paths: {
+    ...corePaths,
+    "/api/v1/p/{pluginId}/{path}": {
+      get: { responses: { "200": { description: "Plugin response" } } },
+      post: { responses: { "200": { description: "Plugin response" } } },
+    },
+    "/api/v1/public/p/{pluginId}/{path}": {
+      get: {
+        security: [],
+        responses: { "200": { description: "Public plugin response" } },
+      },
+      post: {
+        security: [],
+        responses: { "200": { description: "Public plugin response" } },
+      },
+    },
+    "/api/v1/public/plugin-runtime": {
+      get: {
+        security: [],
+        responses: { "200": { description: "Public plugin page descriptor" } },
+      },
+    },
+    "/api/v1/plugins/{pluginId}/runtime-secrets/{secretName}": {
+      get: { responses: { "200": { description: "Secret status" } } },
+      put: { responses: { "200": { description: "Secret configured" } } },
+      delete: { responses: { "204": { description: "Secret deleted" } } },
     },
   },
 } as const;

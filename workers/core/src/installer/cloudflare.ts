@@ -5,6 +5,7 @@ import {
   type ReleaseAsset,
 } from "@app/installer-release-schema";
 import type { VerifiedCoreArchive } from "../updates/release.js";
+import { decodePackageFile } from "./package-v2.js";
 
 type CloudflareEnvelope<T> = {
   success: boolean;
@@ -54,6 +55,25 @@ export class R2ProvisioningError extends Error {
     super(code);
   }
 }
+
+export class PluginResourceProvisioningError extends Error {
+  constructor(
+    readonly code:
+      "invalid" | "not_found" | "conflict" | "not_entitled" | "unavailable",
+  ) {
+    super(code);
+  }
+}
+
+export type PluginRuntimeResource = {
+  logicalName: string;
+  type: "database" | "r2" | "kv" | "queue" | "durable_object" | "cron" | "ai";
+  binding: string;
+  required: boolean;
+  externalId?: string | null;
+  externalName?: string | null;
+  configuration: Record<string, unknown>;
+};
 
 async function readBoundedText(response: Response): Promise<string> {
   const declaredSize = Number(response.headers.get("Content-Length") ?? "0");
@@ -345,53 +365,278 @@ export async function provisionR2Bucket(
   }
 }
 
+/**
+ * Provision or attach a single external resource with a credential supplied
+ * for this request. The token is intentionally neither persisted nor returned.
+ */
+export async function provisionPluginResource(
+  token: string,
+  accountId: string,
+  request:
+    | {
+        type: "r2";
+        mode: "create" | "attach";
+        name: string;
+      }
+    | {
+        type: "kv";
+        mode: "create" | "attach";
+        name: string;
+        id?: string | undefined;
+        jurisdiction?: "eu" | "fedramp" | "us" | undefined;
+      }
+    | {
+        type: "queue";
+        mode: "create" | "attach";
+        name: string;
+        id?: string | undefined;
+      },
+): Promise<{
+  externalId: string | null;
+  externalName: string;
+  created: boolean;
+}> {
+  if (
+    !/^[a-f0-9]{32}$/u.test(accountId) ||
+    token.length < 40 ||
+    token.length > 2_048 ||
+    !/^[A-Za-z0-9][A-Za-z0-9 _.-]{2,127}$/u.test(request.name)
+  )
+    throw new PluginResourceProvisioningError("invalid");
+  if (request.type === "r2") {
+    try {
+      const result = await provisionR2Bucket(
+        token,
+        accountId,
+        request.name,
+        request.mode,
+      );
+      return {
+        externalId: null,
+        externalName: result.name,
+        created: result.created,
+      };
+    } catch (error) {
+      if (!(error instanceof R2ProvisioningError))
+        throw new PluginResourceProvisioningError("unavailable");
+      const mapped =
+        error.code === "bucket_missing"
+          ? "not_found"
+          : error.code === "bucket_conflict"
+            ? "conflict"
+            : error.code === "not_entitled"
+              ? "not_entitled"
+              : error.code === "unavailable"
+                ? "unavailable"
+                : "invalid";
+      throw new PluginResourceProvisioningError(mapped);
+    }
+  }
+  try {
+    await verifyCloudflareToken(token, accountId);
+    if (request.mode === "attach") {
+      if (!request.id || !/^[a-f0-9]{32}$/u.test(request.id))
+        throw new PluginResourceProvisioningError("invalid");
+      const path =
+        request.type === "kv"
+          ? `${accountPath(accountId)}/storage/kv/namespaces/${encodeURIComponent(request.id)}`
+          : `${accountPath(accountId)}/queues/${encodeURIComponent(request.id)}`;
+      const existing = await cloudflareRequest<{
+        id?: string;
+        title?: string;
+        queue_id?: string;
+        queue_name?: string;
+      }>(token, path);
+      const id = existing.id ?? existing.queue_id;
+      const name = existing.title ?? existing.queue_name;
+      if (id !== request.id || name !== request.name)
+        throw new PluginResourceProvisioningError("not_found");
+      return { externalId: id, externalName: name, created: false };
+    }
+    const path =
+      request.type === "kv"
+        ? `${accountPath(accountId)}/storage/kv/namespaces`
+        : `${accountPath(accountId)}/queues`;
+    const result = await cloudflareRequest<{
+      id?: string;
+      title?: string;
+      queue_id?: string;
+      queue_name?: string;
+    }>(token, path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(
+        request.type === "kv"
+          ? {
+              title: request.name,
+              ...(request.jurisdiction
+                ? { jurisdiction: request.jurisdiction }
+                : {}),
+            }
+          : { queue_name: request.name },
+      ),
+    });
+    const id = result.id ?? result.queue_id;
+    const name = result.title ?? result.queue_name;
+    if (!id || !name) throw new PluginResourceProvisioningError("unavailable");
+    return { externalId: id, externalName: name, created: true };
+  } catch (error) {
+    if (error instanceof PluginResourceProvisioningError) throw error;
+    if (cloudflarePermissionDenied(error))
+      throw new PluginResourceProvisioningError("invalid");
+    if (error instanceof CloudflareApiError && error.status === 404)
+      throw new PluginResourceProvisioningError("not_found");
+    if (
+      error instanceof CloudflareApiError &&
+      (error.status === 400 || error.status === 409)
+    )
+      throw new PluginResourceProvisioningError("conflict");
+    throw new PluginResourceProvisioningError("unavailable");
+  }
+}
+
 export async function uploadPluginWorker(
   env: CoreEnv,
   workerName: string,
   code: string,
   manifest: {
+    packageFormat?: 2 | undefined;
     compatibilityDate: string;
     compatibilityFlags: string[];
     runtimeBindings?: Array<"ai" | "r2"> | undefined;
     optionalRuntimeBindings?: Array<"ai" | "r2"> | undefined;
+    resources?:
+      | Array<{
+          name: string;
+          type: PluginRuntimeResource["type"];
+          binding: string;
+          required: boolean;
+          configuration: Record<string, unknown>;
+        }>
+      | undefined;
   },
-  runtimeResources: { STORAGE?: string } = {},
+  runtimeResources: PluginRuntimeResource[] | { STORAGE?: string } = [],
+  packageFiles: Record<string, string> = {},
 ): Promise<void> {
-  const bindings: Binding[] = [
-    {
-      type: "plain_text",
-      name: "DATABASE_PROVIDER",
-      text: env.DATABASE_PROVIDER,
-    },
-  ];
+  const resolvedResources: PluginRuntimeResource[] = Array.isArray(
+    runtimeResources,
+  )
+    ? runtimeResources
+    : runtimeResources.STORAGE
+      ? [
+          {
+            logicalName: "storage",
+            type: "r2",
+            binding: "STORAGE",
+            required: Boolean(manifest.runtimeBindings?.includes("r2")),
+            externalName: runtimeResources.STORAGE,
+            externalId: null,
+            configuration: {},
+          },
+        ]
+      : [];
+  const bindingsByName = new Map<string, Binding>();
+  const addBinding = (binding: Binding): void => {
+    bindingsByName.set(binding.name, binding);
+  };
+  addBinding({
+    type: "plain_text",
+    name: "DATABASE_PROVIDER",
+    text: env.DATABASE_PROVIDER,
+  });
   if (env.DATABASE_PROVIDER === "d1") {
     if (!env.D1_DATABASE_ID)
       throw new Error("D1_DATABASE_ID is not configured");
-    bindings.push({ type: "d1", name: "DB", database_id: env.D1_DATABASE_ID });
+    addBinding({ type: "d1", name: "DB", database_id: env.D1_DATABASE_ID });
   } else {
     if (!env.HYPERDRIVE_ID) throw new Error("HYPERDRIVE_ID is not configured");
-    bindings.push({
+    addBinding({
       type: "hyperdrive",
       name: "HYPERDRIVE",
       id: env.HYPERDRIVE_ID,
     });
   }
   if (manifest.runtimeBindings?.includes("ai"))
-    bindings.push({ type: "ai", name: "AI" });
+    addBinding({ type: "ai", name: "AI" });
   const supportsR2 =
     manifest.runtimeBindings?.includes("r2") ||
     manifest.optionalRuntimeBindings?.includes("r2");
-  if (supportsR2 && runtimeResources.STORAGE) {
-    const bucketName = runtimeResources.STORAGE;
-    bindings.push({
+  const legacyStorage = resolvedResources.find(
+    (resource) => resource.binding === "STORAGE" && resource.type === "r2",
+  );
+  if (supportsR2 && legacyStorage?.externalName) {
+    addBinding({
       type: "r2_bucket",
       name: "STORAGE",
-      bucket_name: bucketName,
+      bucket_name: legacyStorage.externalName,
     });
   }
-  if (manifest.runtimeBindings?.includes("r2") && !runtimeResources.STORAGE)
+  if (manifest.runtimeBindings?.includes("r2") && !legacyStorage?.externalName)
     throw new Error("PLUGIN_RUNTIME_R2_REQUIRED");
-  const aiObservability = manifest.runtimeBindings?.includes("ai")
+  const durableExports: Record<
+    string,
+    { type: "durable-object"; storage: "sqlite" }
+  > = {};
+  for (const resource of resolvedResources) {
+    if (resource.type === "database") {
+      if (env.DATABASE_PROVIDER === "d1")
+        addBinding({
+          type: "d1",
+          name: resource.binding,
+          database_id: env.D1_DATABASE_ID,
+        });
+      else
+        addBinding({
+          type: "hyperdrive",
+          name: resource.binding,
+          id: env.HYPERDRIVE_ID,
+        });
+    } else if (resource.type === "ai")
+      addBinding({ type: "ai", name: resource.binding });
+    else if (resource.type === "r2" && resource.externalName)
+      addBinding({
+        type: "r2_bucket",
+        name: resource.binding,
+        bucket_name: resource.externalName,
+      });
+    else if (resource.type === "kv" && resource.externalId)
+      addBinding({
+        type: "kv_namespace",
+        name: resource.binding,
+        namespace_id: resource.externalId,
+      });
+    else if (resource.type === "queue" && resource.externalName)
+      addBinding({
+        type: "queue",
+        name: resource.binding,
+        queue_name: resource.externalName,
+      });
+    else if (resource.type === "durable_object") {
+      const className = resource.configuration.className;
+      if (
+        typeof className !== "string" ||
+        !/^[A-Za-z_$][A-Za-z0-9_$]{0,127}$/u.test(className)
+      )
+        throw new Error("PLUGIN_DURABLE_OBJECT_CLASS_INVALID");
+      addBinding({
+        type: "durable_object_namespace",
+        name: resource.binding,
+        class_name: className,
+      });
+      durableExports[className] = {
+        type: "durable-object",
+        storage: "sqlite",
+      };
+    } else if (
+      resource.required &&
+      ["r2", "kv", "queue"].includes(resource.type)
+    )
+      throw new Error(`PLUGIN_RUNTIME_RESOURCE_REQUIRED_${resource.binding}`);
+  }
+  const usesAi =
+    manifest.runtimeBindings?.includes("ai") ||
+    resolvedResources.some((resource) => resource.type === "ai");
+  const aiObservability = usesAi
     ? {
         observability: {
           enabled: true,
@@ -406,12 +651,14 @@ export async function uploadPluginWorker(
       }
     : {};
   const body = new FormData();
+  const mainModule =
+    manifest.packageFormat === 2 ? "backend/worker.mjs" : "worker.mjs";
   body.set(
     "metadata",
     new Blob(
       [
         JSON.stringify({
-          main_module: "worker.mjs",
+          main_module: mainModule,
           compatibility_date: manifest.compatibilityDate,
           compatibility_flags: manifest.compatibilityFlags,
           ...aiObservability,
@@ -419,21 +666,168 @@ export async function uploadPluginWorker(
           // installation. Preserve them during package updates; their values
           // are never readable through the Cloudflare settings API.
           keep_bindings: ["secret_text", "secret_key"],
-          bindings,
+          bindings: [...bindingsByName.values()],
+          ...(Object.keys(durableExports).length
+            ? { exports: durableExports }
+            : {}),
         }),
       ],
       { type: "application/json" },
     ),
   );
   body.set(
-    "worker.mjs",
+    mainModule,
     new Blob([code], { type: "application/javascript+module" }),
-    "worker.mjs",
+    mainModule,
   );
+  for (const [path, encoded] of Object.entries(packageFiles)) {
+    if (!path.startsWith("backend/") || path === mainModule) continue;
+    const extension = path.split(".").at(-1)?.toLowerCase();
+    const contentType =
+      extension === "wasm"
+        ? "application/wasm"
+        : extension === "txt"
+          ? "text/plain"
+          : extension === "json"
+            ? "application/json"
+            : "application/javascript+module";
+    body.set(
+      path,
+      new Blob([decodePackageFile(encoded).slice().buffer as ArrayBuffer], {
+        type: contentType,
+      }),
+      path,
+    );
+  }
   await cf(env, `/workers/scripts/${encodeURIComponent(workerName)}`, {
     method: "PUT",
     body,
   });
+}
+
+const cronExpressions = (resources: PluginRuntimeResource[]): string[] =>
+  [
+    ...new Set(
+      resources.flatMap((resource) => {
+        if (resource.type !== "cron") return [];
+        const schedules = resource.configuration.schedules;
+        return Array.isArray(schedules)
+          ? schedules.filter(
+              (value): value is string => typeof value === "string",
+            )
+          : [];
+      }),
+    ),
+  ].sort();
+
+export async function configurePluginWorkerSchedules(
+  env: CoreEnv,
+  workerName: string,
+  resources: PluginRuntimeResource[],
+): Promise<void> {
+  const schedules = cronExpressions(resources).map((cron) => ({ cron }));
+  const result = await cf<{ schedules?: Array<{ cron?: string }> }>(
+    env,
+    `/workers/scripts/${encodeURIComponent(workerName)}/schedules`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(schedules),
+    },
+  );
+  const actual = (result.schedules ?? [])
+    .flatMap((schedule) => (schedule.cron ? [schedule.cron] : []))
+    .sort();
+  if (
+    stableStringArray(actual) !==
+    stableStringArray(schedules.map(({ cron }) => cron))
+  )
+    throw new Error("PLUGIN_CRON_VERIFICATION_FAILED");
+}
+
+const stableStringArray = (values: string[]): string =>
+  JSON.stringify([...values].sort());
+
+export async function configurePluginQueueConsumers(
+  env: CoreEnv,
+  workerName: string,
+  resources: PluginRuntimeResource[],
+): Promise<void> {
+  for (const resource of resources) {
+    if (
+      resource.type !== "queue" ||
+      resource.configuration.consumer !== true ||
+      !resource.externalId
+    )
+      continue;
+    const consumers = await cf<
+      Array<{ consumer_id?: string; script_name?: string; type?: string }>
+    >(env, `/queues/${encodeURIComponent(resource.externalId)}/consumers`, {
+      method: "GET",
+    });
+    const existing = consumers.find(
+      (consumer) =>
+        consumer.type === "worker" && consumer.script_name === workerName,
+    );
+    const rawSettings = resource.configuration.settings;
+    const settings =
+      rawSettings &&
+      typeof rawSettings === "object" &&
+      !Array.isArray(rawSettings)
+        ? rawSettings
+        : undefined;
+    const deadLetterLogicalName = resource.configuration.deadLetterResource;
+    const deadLetter =
+      typeof deadLetterLogicalName === "string"
+        ? resources.find(
+            (candidate) =>
+              candidate.logicalName === deadLetterLogicalName &&
+              candidate.type === "queue",
+          )?.externalName
+        : undefined;
+    const payload = {
+      type: "worker",
+      script_name: workerName,
+      ...(deadLetter ? { dead_letter_queue: deadLetter } : {}),
+      ...(settings ? { settings } : {}),
+    };
+    const path = existing?.consumer_id
+      ? `/queues/${encodeURIComponent(resource.externalId)}/consumers/${encodeURIComponent(existing.consumer_id)}`
+      : `/queues/${encodeURIComponent(resource.externalId)}/consumers`;
+    await cf(env, path, {
+      method: existing?.consumer_id ? "PUT" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  }
+}
+
+export async function removePluginQueueConsumers(
+  env: CoreEnv,
+  workerName: string,
+  resources: PluginRuntimeResource[],
+): Promise<void> {
+  for (const resource of resources) {
+    if (resource.type !== "queue" || !resource.externalId) continue;
+    const consumers = await cf<
+      Array<{ consumer_id?: string; script_name?: string; type?: string }>
+    >(env, `/queues/${encodeURIComponent(resource.externalId)}/consumers`, {
+      method: "GET",
+    });
+    for (const consumer of consumers) {
+      if (
+        consumer.type !== "worker" ||
+        consumer.script_name !== workerName ||
+        !consumer.consumer_id
+      )
+        continue;
+      await cf(
+        env,
+        `/queues/${encodeURIComponent(resource.externalId)}/consumers/${encodeURIComponent(consumer.consumer_id)}`,
+        { method: "DELETE" },
+      );
+    }
+  }
 }
 
 export async function attachPluginR2Binding(
@@ -467,6 +861,54 @@ export async function attachPluginR2Binding(
     )
   )
     throw new Error("Plugin R2 binding verification failed");
+}
+
+export async function attachPluginResourceBinding(
+  env: CoreEnv,
+  workerName: string,
+  resource: PluginRuntimeResource,
+): Promise<void> {
+  let binding: Binding;
+  if (resource.type === "r2" && resource.externalName)
+    binding = {
+      type: "r2_bucket",
+      name: resource.binding,
+      bucket_name: resource.externalName,
+    };
+  else if (resource.type === "kv" && resource.externalId)
+    binding = {
+      type: "kv_namespace",
+      name: resource.binding,
+      namespace_id: resource.externalId,
+    };
+  else if (resource.type === "queue" && resource.externalName)
+    binding = {
+      type: "queue",
+      name: resource.binding,
+      queue_name: resource.externalName,
+    };
+  else throw new Error("PLUGIN_RUNTIME_RESOURCE_BINDING_INVALID");
+  const path = `/workers/scripts/${encodeURIComponent(workerName)}/settings`;
+  const current = await cf<WorkerSettings>(env, path, { method: "GET" });
+  const bindings: Binding[] = (current.bindings ?? [])
+    .filter((candidate) => candidate.name !== resource.binding)
+    .map((candidate) => ({ type: "inherit", name: candidate.name }));
+  bindings.push(binding);
+  const body = new FormData();
+  body.set(
+    "settings",
+    new Blob([JSON.stringify({ bindings })], { type: "application/json" }),
+    "settings",
+  );
+  await cf(env, path, { method: "PATCH", body });
+  const verified = await cf<WorkerSettings>(env, path, { method: "GET" });
+  if (
+    !(verified.bindings ?? []).some(
+      (candidate) =>
+        candidate.name === resource.binding && candidate.type === binding.type,
+    )
+  )
+    throw new Error("Plugin resource binding verification failed");
 }
 
 async function uploadCoreAssets(

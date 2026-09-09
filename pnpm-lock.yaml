@@ -102,6 +102,9 @@ importers:
       '@cloudflare/workers-types':
         specifier: 5.20260826.1
         version: 5.20260826.1
+      '@nexus/plugin-sdk':
+        specifier: workspace:*
+        version: link:packages/plugin-sdk
       '@tailwindcss/vite':
         specifier: 4.3.3
         version: 4.3.3(vite@8.2.2(@types/node@26.2.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
@@ -171,9 +174,6 @@ importers:
       '@app/core-worker':
         specifier: workspace:*
         version: link:../workers/core
-      '@app/plugin-crm':
-        specifier: workspace:*
-        version: link:../plugins/crm
       '@casl/ability':
         specifier: 7.0.1
         version: 7.0.1
@@ -192,6 +192,9 @@ importers:
       '@hookform/resolvers':
         specifier: 5.9.1
         version: 5.9.1(@standard-schema/spec@1.1.0)(react-hook-form@7.86.0(react@19.2.8))(zod@4.4.3)
+      '@nexus/plugin-sdk':
+        specifier: workspace:*
+        version: link:../packages/plugin-sdk
       '@tanstack/react-query':
         specifier: 5.101.4
         version: 5.101.4(react@19.2.8)
@@ -307,86 +310,61 @@ importers:
         specifier: 4.4.3
         version: 4.4.3
 
+  packages/plugin-sdk:
+    dependencies:
+      fflate:
+        specifier: 0.8.3
+        version: 0.8.3
+      pg:
+        specifier: 8.23.0
+        version: 8.23.0
+    devDependencies:
+      '@cloudflare/workers-types':
+        specifier: 5.20260826.1
+        version: 5.20260826.1
+      '@types/node':
+        specifier: 26.2.0
+        version: 26.2.0
+      '@types/pg':
+        specifier: 8.23.1
+        version: 8.23.1
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+
   packages/webhook-contract:
     dependencies:
       zod:
         specifier: 4.4.3
         version: 4.4.3
 
-  plugins/crm:
-    dependencies:
-      '@app/api-contracts':
-        specifier: workspace:*
-        version: link:../../packages/api-contracts
-      '@app/core-contract':
-        specifier: workspace:*
-        version: link:../../packages/core-contract
-      '@app/database':
-        specifier: workspace:*
-        version: link:../../packages/database
-      hono:
-        specifier: 4.13.3
-        version: 4.13.3
-      zod:
-        specifier: 4.4.3
-        version: 4.4.3
-
-  plugins/meeting_recorder:
-    dependencies:
-      '@app/core-contract':
-        specifier: workspace:*
-        version: link:../../packages/core-contract
-      '@app/database':
-        specifier: workspace:*
-        version: link:../../packages/database
-      hono:
-        specifier: 4.13.3
-        version: 4.13.3
-      zod:
-        specifier: 4.4.3
-        version: 4.4.3
-
-  plugins/meta_ads:
-    dependencies:
-      '@app/core-contract':
-        specifier: workspace:*
-        version: link:../../packages/core-contract
-      '@app/database':
-        specifier: workspace:*
-        version: link:../../packages/database
-      hono:
-        specifier: 4.13.3
-        version: 4.13.3
-      zod:
-        specifier: 4.4.3
-        version: 4.4.3
-
-  plugins/soletrando:
-    dependencies:
-      '@app/core-contract':
-        specifier: workspace:*
-        version: link:../../packages/core-contract
-      '@app/database':
-        specifier: workspace:*
-        version: link:../../packages/database
-      hono:
-        specifier: 4.13.3
-        version: 4.13.3
-      zod:
-        specifier: 4.4.3
-        version: 4.4.3
-
   plugins/template:
     dependencies:
-      '@app/core-contract':
+      '@nexus/plugin-sdk':
         specifier: workspace:*
-        version: link:../../packages/core-contract
-      '@app/database':
-        specifier: workspace:*
-        version: link:../../packages/database
+        version: link:../../packages/plugin-sdk
       hono:
         specifier: 4.13.3
         version: 4.13.3
+    devDependencies:
+      '@cloudflare/workers-types':
+        specifier: 5.20260826.1
+        version: 5.20260826.1
+      '@types/pg':
+        specifier: 8.23.1
+        version: 8.23.1
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
+      tsx:
+        specifier: 4.23.12
+        version: 4.23.12
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+      wrangler:
+        specifier: 4.125.0
+        version: 4.125.0(@cloudflare/workers-types@5.20260826.1)
 
   workers/core:
     dependencies:

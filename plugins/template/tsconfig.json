@@ -1,14 +1,19 @@
 {
-  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "composite": true,
-    "rootDir": "src",
+    "target": "ES2024",
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "useDefineForClassFields": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "types": ["@cloudflare/workers-types"],
+    "rootDir": ".",
     "outDir": "dist-types",
     "tsBuildInfoFile": "dist-types/.tsbuildinfo"
   },
-  "include": ["src/**/*.ts"],
-  "references": [
-    { "path": "../../packages/core-contract" },
-    { "path": "../../packages/database" }
-  ]
+  "include": ["src/**/*.ts", "frontend/**/*.ts"]
 }

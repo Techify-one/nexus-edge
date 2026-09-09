@@ -1,18 +1,74 @@
 {
+  "manifestVersion": 2,
+  "packageFormat": 2,
   "id": "template",
   "name": "Plugin Template",
+  "description": "Reference plugin for the Nexus runtime contract.",
+  "publisher": {
+    "id": "example_publisher",
+    "name": "Example Publisher"
+  },
   "version": "1.0.0",
   "apiVersion": 1,
   "coreMinVersion": "1.0.0",
-  "compatibilityDate": "2026-08-21",
+  "compatibilityDate": "2026-09-08",
   "compatibilityFlags": ["nodejs_compat"],
   "databaseDialects": ["d1", "postgres"],
   "tablePrefix": "template_",
+  "engines": {
+    "hostApi": 1,
+    "coreApi": 1
+  },
+  "frontend": {
+    "entry": "frontend/entry.js",
+    "styles": ["frontend/styles.css"],
+    "isolation": "shadow",
+    "routes": [
+      {
+        "routeKey": "template.items",
+        "path": "/app/p/template"
+      }
+    ]
+  },
+  "localizedMetadata": {
+    "pt-BR": {
+      "name": "Plugin de exemplo",
+      "description": "Referência para criar plugins independentes.",
+      "menuTitles": {
+        "template.items": "Exemplo"
+      },
+      "permissionLabels": {
+        "template.item.read": "Ver itens do exemplo",
+        "template.item.create": "Criar itens do exemplo",
+        "template.item.update": "Atualizar itens do exemplo",
+        "template.item.delete": "Excluir itens do exemplo"
+      }
+    },
+    "en": {
+      "name": "Example plugin",
+      "description": "Reference for independent plugin development.",
+      "menuTitles": {
+        "template.items": "Example"
+      },
+      "permissionLabels": {
+        "template.item.read": "View example items",
+        "template.item.create": "Create example items",
+        "template.item.update": "Update example items",
+        "template.item.delete": "Delete example items"
+      }
+    }
+  },
   "permissions": [
     "template.item.read",
     "template.item.create",
     "template.item.update",
     "template.item.delete"
   ],
-  "menu": []
+  "menu": [
+    {
+      "title": "Example",
+      "routeKey": "template.items",
+      "path": "/app/p/template"
+    }
+  ]
 }

@@ -1,0 +1,45 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Nexus plugin template API",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/items": {
+      "get": {
+        "summary": "List example items",
+        "responses": { "200": { "description": "Example items" } }
+      },
+      "post": {
+        "summary": "Create an example item",
+        "responses": { "201": { "description": "Created item" } }
+      }
+    },
+    "/items/{id}": {
+      "patch": {
+        "summary": "Update an example item",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": { "200": { "description": "Updated item" } }
+      },
+      "delete": {
+        "summary": "Delete an example item",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": { "204": { "description": "Deleted item" } }
+      }
+    }
+  }
+}

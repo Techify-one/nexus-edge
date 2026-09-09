@@ -13,6 +13,11 @@ export const resolvePluginBackTarget = (
   registeredPaths: Iterable<string>,
 ): string | undefined => {
   const normalized = pathname.replace(/\/+$/u, "") || "/";
+  const dynamic = /^\/app\/p\/([a-z][a-z0-9_]{1,31})(?:\/|$)/u.exec(normalized);
+  if (dynamic) {
+    const root = `/app/p/${dynamic[1]}`;
+    return normalized === root ? "/app" : root;
+  }
   const roots = new Set(
     [...registeredPaths]
       .map(pluginRoot)

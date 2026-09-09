@@ -35,7 +35,6 @@ import { Card, Input, PageHeader, Skeleton } from "../components/ui/index.js";
 import { useI18n, type TranslationKey } from "../i18n/index.js";
 import { can } from "../lib/ability.js";
 import { api } from "../lib/api/core-client.js";
-import { resolvePluginRoute } from "../plugins/registry.js";
 
 const coreModules = [
   {
@@ -97,7 +96,7 @@ const coreModules = [
 type PluginNavigation = {
   pluginId: string;
   name: string;
-  menu: Array<{ title: string; routeKey: string }>;
+  menu: Array<{ title: string; routeKey: string; path?: string }>;
 };
 
 type OverviewCard = {
@@ -271,9 +270,7 @@ export default function DashboardPage() {
   const pluginCards: OverviewCard[] = (
     pluginNavigation.data?.plugins ?? []
   ).map((plugin) => {
-    const primaryEntry = plugin.menu.find((entry) =>
-      Boolean(resolvePluginRoute(entry.routeKey)),
-    );
+    const primaryEntry = plugin.menu.find((entry) => Boolean(entry.path));
     const menuSummary = plugin.menu
       .map((entry) => entry.title)
       .filter((title) => title !== plugin.name)
@@ -286,7 +283,7 @@ export default function DashboardPage() {
         (primaryEntry
           ? t("dashboard.openPlugin")
           : t("dashboard.pluginWithoutPage")),
-      to: primaryEntry ? resolvePluginRoute(primaryEntry.routeKey) : undefined,
+      to: primaryEntry?.path,
       icon: Package,
       searchTerms: [
         plugin.pluginId,

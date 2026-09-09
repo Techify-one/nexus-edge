@@ -4,40 +4,28 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
-const shippedPlugins = ["crm", "meta_ads", "soletrando", "meeting_recorder"];
-
-describe("plugin colocation", () => {
-  it("includes colocated plugin screens in Tailwind class detection", () => {
-    const styles = readFileSync(
-      resolve(repositoryRoot, "frontend/src/styles/globals.css"),
-      "utf8",
-    );
-
-    expect(styles).toContain('@source "../../../plugins";');
-  });
-
-  it.each(shippedPlugins)("keeps every %s concern in one directory", (id) => {
-    const root = resolve(repositoryRoot, "plugins", id);
+describe("plugin extraction", () => {
+  it("keeps only the format-2 author template in the Core repository", () => {
+    const root = resolve(repositoryRoot, "plugins", "template");
     const manifest = JSON.parse(
       readFileSync(resolve(root, "manifest.json"), "utf8"),
-    ) as { id?: string };
+    ) as { id?: string; packageFormat?: number };
 
-    expect(manifest.id).toBe(id);
+    expect(manifest.id).toBe("template");
+    expect(manifest.packageFormat).toBe(2);
     for (const path of [
       "frontend",
-      "frontend/i18n.ts",
-      "frontend/registry.ts",
-      "catalog.json",
       "src",
       "migrations/d1",
       "migrations/postgres",
       "package.json",
       "tsconfig.json",
       "wrangler.jsonc",
-      `release/${id}.plugin.zip`,
     ]) {
-      expect(existsSync(resolve(root, path)), `${id}/${path}`).toBe(true);
+      expect(existsSync(resolve(root, path)), `template/${path}`).toBe(true);
     }
+    for (const id of ["crm", "meta_ads", "soletrando", "meeting_recorder"])
+      expect(existsSync(resolve(repositoryRoot, "plugins", id))).toBe(false);
   });
 
   it("keeps plugin-specific directories out of Core locations", () => {

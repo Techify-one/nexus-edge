@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 export const SYSTEM_SETTINGS_ID = "system";
 export const INSTALLER_LOCK_ID = "global";
 
@@ -16,6 +16,10 @@ export const CORE_PERMISSIONS = [
   "core.plugin.update",
   "core.plugin.delete",
   "core.plugin.export",
+  "core.marketplace.read",
+  "core.marketplace.create",
+  "core.marketplace.update",
+  "core.marketplace.delete",
   "core.webhook.read",
   "core.webhook.create",
   "core.webhook.update",

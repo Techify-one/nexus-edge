@@ -1,24 +1,31 @@
 import { Hono, type Context } from "hono";
 import { createId, type PluginInstallerContext } from "@app/core-contract";
 import { sha256, stableJson } from "@app/webhook-contract";
-import type { SqlStatement } from "@app/database";
+import type { SqlStatement, SqlValue } from "@app/database";
 import semver from "semver";
 import type { HonoEnv } from "../env.js";
 import {
   attachPluginR2Binding,
+  attachPluginResourceBinding,
+  configurePluginQueueConsumers,
   deletePluginSecret,
   deletePluginWorker,
+  configurePluginWorkerSchedules,
   configurePluginRuntimeCredential,
   hardenPluginWorker,
   mergeCoreServiceBinding,
   PluginRuntimeCredentialError,
   pluginSecretConfigured,
   pluginRuntimeCredentialStatus,
+  PluginResourceProvisioningError,
+  provisionPluginResource,
   provisionR2Bucket,
   putPluginSecret,
+  removePluginQueueConsumers,
   removeCoreServiceBinding,
   R2ProvisioningError,
   uploadPluginWorker,
+  type PluginRuntimeResource,
 } from "../installer/cloudflare.js";
 import {
   PluginManifestPolicyError,
@@ -37,9 +44,15 @@ import {
   portablePackageZip,
   verifyPortablePackage,
 } from "../installer/package-archive.js";
+import {
+  decodePackageFile,
+  MAX_PLUGIN_PACKAGE_BYTES,
+  packageFilesDigest,
+  parsePluginArchive,
+} from "../installer/package-v2.js";
 import { AppError, noStore } from "../lib/http.js";
 import { canPermission } from "../lib/ability.js";
-import { dbTime } from "../lib/values.js";
+import { dbTime, numberTime, parseJson } from "../lib/values.js";
 import { requirePermission } from "../middleware/auth.js";
 import { validateRecentReauth } from "../middleware/reauth.js";
 import { audit } from "../services/audit.js";
@@ -56,6 +69,8 @@ type Operation = {
   workerSha256: string;
   d1MigrationsSha256: string;
   postgresMigrationsSha256: string;
+  assetsSha256: string | null;
+  sourceReleaseId: string | null;
   lastError: string | null;
 };
 type PackageParts = {
@@ -63,7 +78,22 @@ type PackageParts = {
   worker: string;
   d1Migrations: MigrationSet;
   postgresMigrations: MigrationSet;
+  manifestSource?: string;
+  files: Record<string, string>;
+  archiveSha256?: string | undefined;
+  sourceReleaseId: string | undefined;
   rawBytes: number;
+};
+
+type ResourceRow = {
+  logicalName: string;
+  type: PluginRuntimeResource["type"];
+  binding: string;
+  required: number | boolean;
+  externalId: string | null;
+  externalName: string | null;
+  status: string;
+  configuration: unknown;
 };
 
 const failureStages = new Set([
@@ -243,34 +273,55 @@ const runtimeSecretTarget = async (
 ) => {
   const pluginId = c.req.param("pluginId") ?? "";
   const secretName = c.req.param("secretName") ?? "";
-  const policy = allowedRuntimeSecrets.get(pluginId);
-  if (!policy?.names.has(secretName))
-    throw new AppError(404, "PLUGIN_SECRET_NOT_FOUND", "Secret not found.");
-  if (
-    !canPermission(
-      c.get("ability"),
-      `${pluginId}.${policy.permissionResource}.${access}`,
-    )
-  )
-    throw new AppError(403, "FORBIDDEN", "Permission denied.");
   const plugin = await c
     .get("db")
-    .first<{ workerName: string; status: string }>(
-      `SELECT worker_name AS "workerName", status FROM plugins WHERE id = ?`,
+    .first<{ workerName: string; status: string; manifest: unknown }>(
+      `SELECT worker_name AS "workerName", status, manifest_json AS manifest
+         FROM plugins WHERE id = ?`,
       [pluginId],
     );
   if (!plugin || plugin.status !== "installed")
     throw new AppError(404, "PLUGIN_NOT_INSTALLED", "Plugin is not installed.");
+  const parsedManifest = pluginManifestSchema.safeParse(
+    parseJson<unknown>(plugin.manifest, null),
+  );
+  const declaredSecret = parsedManifest.success
+    ? parsedManifest.data.secrets?.find((secret) => secret.name === secretName)
+    : undefined;
+  const legacyPolicy = allowedRuntimeSecrets.get(pluginId);
+  const requiredPermission =
+    declaredSecret?.permission ??
+    (legacyPolicy?.names.has(secretName)
+      ? `${pluginId}.${legacyPolicy.permissionResource}.${access}`
+      : undefined);
+  if (!requiredPermission)
+    throw new AppError(404, "PLUGIN_SECRET_NOT_FOUND", "Secret not found.");
+  if (!canPermission(c.get("ability"), requiredPermission))
+    throw new AppError(403, "FORBIDDEN", "Permission denied.");
   return { pluginId, secretName, workerName: plugin.workerName };
 };
-const insertIgnore = (provider: "d1" | "postgres"): string =>
-  provider === "d1"
-    ? "INSERT OR IGNORE INTO permissions(id,key,created_at) VALUES (?, ?, ?)"
-    : "INSERT INTO permissions(id,key,created_at) VALUES (?, ?, ?) ON CONFLICT (key) DO NOTHING";
-const insertAdminPermission = (provider: "d1" | "postgres"): string =>
-  provider === "d1"
-    ? "INSERT OR IGNORE INTO group_permissions(group_id,permission_id,created_at) VALUES ('grp_administrators', ?, ?)"
-    : "INSERT INTO group_permissions(group_id,permission_id,created_at) VALUES ('grp_administrators', ?, ?) ON CONFLICT (group_id,permission_id) DO NOTHING";
+const bulkStatements = (
+  prefix: string,
+  rows: SqlValue[][],
+  suffix = "",
+): SqlStatement[] => {
+  if (!rows.length) return [];
+  const columns = rows[0]!.length;
+  if (!columns || rows.some((row) => row.length !== columns))
+    throw new Error("Bulk SQL rows must use one stable shape.");
+  const rowsPerStatement = Math.max(1, Math.floor(90 / columns));
+  const statements: SqlStatement[] = [];
+  for (let offset = 0; offset < rows.length; offset += rowsPerStatement) {
+    const batch = rows.slice(offset, offset + rowsPerStatement);
+    statements.push({
+      sql: `${prefix} ${batch
+        .map(() => `(${Array.from({ length: columns }, () => "?").join(", ")})`)
+        .join(", ")} ${suffix}`.trim(),
+      params: batch.flat(),
+    });
+  }
+  return statements;
+};
 
 // Cloudflare account-owned API tokens use the newer `cfat_` opaque format and
 // can be considerably longer than legacy user tokens. Keep a bounded input,
@@ -295,10 +346,282 @@ const deterministicR2BucketName = async (
   return `nexus-${prefix}-${pluginSlug}`;
 };
 
+const deterministicResourceName = async (
+  installationId: string,
+  pluginId: string,
+  logicalName: string,
+): Promise<string> => {
+  const prefix = await installationNamespace(installationId);
+  const pluginSlug = pluginId.replaceAll("_", "-");
+  const resourceSlug = logicalName.replaceAll("_", "-");
+  return `nexus-${prefix}-${pluginSlug}-${resourceSlug}`.slice(0, 63);
+};
+
+const readResourceRows = async (
+  c: Context<HonoEnv>,
+  pluginId: string,
+  options: { includePreserved?: boolean } = {},
+): Promise<PluginRuntimeResource[]> => {
+  const rows = await c.get("db").query<ResourceRow>(
+    `SELECT logical_name AS "logicalName", resource_type AS type,
+            binding_name AS binding, required, external_id AS "externalId",
+            external_name AS "externalName", status,
+            declaration_json AS configuration
+       FROM plugin_resources_v2
+      WHERE plugin_id = ?${options.includePreserved ? "" : " AND status <> 'preserved'"}
+      ORDER BY logical_name`,
+    [pluginId],
+  );
+  return rows.map((row) => {
+    const declaration = parseJson<{
+      configuration?: Record<string, unknown>;
+    }>(row.configuration, {});
+    return {
+      logicalName: row.logicalName,
+      type: row.type,
+      binding: row.binding,
+      required: Boolean(row.required),
+      externalId: row.externalId,
+      externalName: row.externalName,
+      configuration: declaration.configuration ?? {},
+    };
+  });
+};
+
+const reconcileResourcePlan = async (
+  c: Context<HonoEnv>,
+  operation: Operation,
+  manifest: PluginManifest,
+): Promise<boolean> => {
+  const declarations = manifest.resources ?? [];
+  const db = c.get("db");
+  const now = dbTime(db);
+  const declaredNames = new Set(declarations.map((resource) => resource.name));
+  const existing = await db.query<ResourceRow>(
+    `SELECT logical_name AS "logicalName", resource_type AS type,
+            binding_name AS binding, required, external_id AS "externalId",
+            external_name AS "externalName", status,
+            declaration_json AS configuration
+       FROM plugin_resources_v2 WHERE plugin_id = ?`,
+    [operation.pluginId],
+  );
+  const removedDurableObject = existing.find(
+    (resource) =>
+      resource.type === "durable_object" &&
+      !declaredNames.has(resource.logicalName),
+  );
+  if (removedDurableObject)
+    throw new AppError(
+      409,
+      "PLUGIN_DURABLE_OBJECT_LIFECYCLE_CHANGE",
+      "Removing a Durable Object class requires an explicit data lifecycle procedure.",
+    );
+  const byName = new Map(
+    existing.map((resource) => [resource.logicalName, resource]),
+  );
+  const ownerWorkerName = await operationWorkerName(c, operation);
+  const statements: SqlStatement[] = existing
+    .filter((resource) => !declaredNames.has(resource.logicalName))
+    .map((resource) => ({
+      sql: `UPDATE plugin_resources_v2
+               SET status = 'preserved', preserved_at = ?, updated_at = ?
+             WHERE plugin_id = ? AND logical_name = ?`,
+      params: [now, now, operation.pluginId, resource.logicalName],
+    }));
+  let blocksInstallation = false;
+  for (const declaration of declarations) {
+    const previous = byName.get(declaration.name);
+    if (
+      previous &&
+      (previous.type !== declaration.type ||
+        previous.binding !== declaration.binding)
+    )
+      throw new AppError(
+        409,
+        "PLUGIN_RESOURCE_IDENTITY_CHANGED",
+        `Resource ${declaration.name} cannot change type or binding during an update.`,
+      );
+    if (
+      previous?.type === "durable_object" &&
+      declaration.type === "durable_object"
+    ) {
+      const previousDeclaration = parseJson<{
+        configuration?: { className?: string };
+      }>(previous.configuration, {});
+      if (
+        previousDeclaration.configuration?.className &&
+        previousDeclaration.configuration.className !==
+          declaration.configuration.className
+      )
+        throw new AppError(
+          409,
+          "PLUGIN_DURABLE_OBJECT_LIFECYCLE_CHANGE",
+          "Renaming a Durable Object class requires an explicit data lifecycle procedure.",
+        );
+    }
+    const external = ["r2", "kv", "queue"].includes(declaration.type);
+    const status =
+      previous?.externalName && ["ready", "preserved"].includes(previous.status)
+        ? "ready"
+        : external
+          ? "pending"
+          : "ready";
+    if (external && declaration.required && status !== "ready")
+      blocksInstallation = true;
+    statements.push({
+      sql: `INSERT INTO plugin_resources_v2(
+              plugin_id, logical_name, resource_type, capability_version,
+              binding_name, external_id, external_name, owner_worker_name,
+              required, status, retention_policy, declaration_json,
+              created_at, updated_at, preserved_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+            ON CONFLICT(plugin_id, logical_name) DO UPDATE SET
+              capability_version=excluded.capability_version,
+              required=excluded.required, status=excluded.status,
+              retention_policy=excluded.retention_policy,
+              declaration_json=excluded.declaration_json,
+              owner_worker_name=excluded.owner_worker_name,
+              updated_at=excluded.updated_at, preserved_at=NULL,
+              last_error_code=NULL`,
+      params: [
+        operation.pluginId,
+        declaration.name,
+        declaration.type,
+        declaration.capabilityVersion,
+        declaration.binding,
+        previous?.externalId ?? null,
+        previous?.externalName ?? null,
+        ownerWorkerName,
+        declaration.required,
+        status,
+        declaration.retention,
+        JSON.stringify(declaration),
+        now,
+        now,
+      ],
+    });
+  }
+  await db.atomic(statements);
+  return blocksInstallation;
+};
+
+const restorePreviousPluginWorker = async (
+  c: Context<HonoEnv>,
+  operation: Operation,
+): Promise<void> => {
+  if (operation.type !== "update") return;
+  const previous = await c.get("db").first<{ operationId: string }>(
+    `SELECT operation_id AS "operationId" FROM plugin_operations
+      WHERE plugin_id = ? AND state = 'installed' AND operation_id <> ?
+      ORDER BY finished_at DESC LIMIT 1`,
+    [operation.pluginId, operation.operationId],
+  );
+  if (!previous) throw new Error("PLUGIN_UPDATE_ROLLBACK_PACKAGE_MISSING");
+  const archived = await loadPortablePackage(c.get("db"), previous.operationId);
+  const workerName = await operationWorkerName(c, operation);
+  const ledger = await readResourceRows(c, operation.pluginId, {
+    includePreserved: true,
+  });
+  const ledgerByName = new Map(
+    ledger.map((resource) => [resource.logicalName, resource]),
+  );
+  const resources = (archived.manifest.resources ?? []).map((declaration) => {
+    const recorded = ledgerByName.get(declaration.name);
+    return {
+      logicalName: declaration.name,
+      type: declaration.type,
+      binding: declaration.binding,
+      required: declaration.required,
+      externalId: recorded?.externalId ?? null,
+      externalName: recorded?.externalName ?? null,
+      configuration: declaration.configuration,
+    } satisfies PluginRuntimeResource;
+  });
+  const legacyResource = archived.manifest.runtimeBindings?.includes("r2")
+    ? await c.get("db").first<{ externalName: string; status: string }>(
+        `SELECT external_name AS "externalName", status
+           FROM plugin_runtime_resources
+          WHERE plugin_id = ? AND binding_name = 'STORAGE'`,
+        [operation.pluginId],
+      )
+    : null;
+  await uploadPluginWorker(
+    c.env,
+    workerName,
+    archived.worker,
+    archived.manifest,
+    [
+      ...resources,
+      ...(legacyResource?.externalName
+        ? [
+            {
+              logicalName: "storage",
+              type: "r2" as const,
+              binding: "STORAGE",
+              required: true,
+              externalId: null,
+              externalName: legacyResource.externalName,
+              configuration: {},
+            },
+          ]
+        : []),
+    ],
+    archived.files ?? {},
+  );
+  if (archived.manifest.packageFormat === 2) {
+    await configurePluginQueueConsumers(c.env, workerName, resources);
+    await configurePluginWorkerSchedules(c.env, workerName, resources);
+  }
+  await hardenPluginWorker(c.env, workerName);
+  await mergeCoreServiceBinding(
+    c.env,
+    bindingName(operation.pluginId),
+    workerName,
+  );
+  const restoredAt = dbTime(c.get("db"));
+  await c.get("db").atomic([
+    {
+      sql: `UPDATE plugin_resources_v2
+               SET status = 'preserved', preserved_at = ?, updated_at = ?
+             WHERE plugin_id = ?`,
+      params: [restoredAt, restoredAt, operation.pluginId],
+    },
+    ...(archived.manifest.resources ?? []).map((declaration) => {
+      const recorded = ledgerByName.get(declaration.name);
+      const external = ["r2", "kv", "queue"].includes(declaration.type);
+      const externalReady =
+        declaration.type === "r2"
+          ? Boolean(recorded?.externalName)
+          : Boolean(recorded?.externalId && recorded.externalName);
+      return {
+        sql: `UPDATE plugin_resources_v2
+                 SET resource_type = ?, capability_version = ?,
+                     binding_name = ?, required = ?, status = ?,
+                     retention_policy = ?, declaration_json = ?,
+                     preserved_at = NULL, updated_at = ?
+               WHERE plugin_id = ? AND logical_name = ?`,
+        params: [
+          declaration.type,
+          declaration.capabilityVersion,
+          declaration.binding,
+          declaration.required,
+          external && !externalReady ? "pending" : "ready",
+          declaration.retention,
+          JSON.stringify(declaration),
+          restoredAt,
+          operation.pluginId,
+          declaration.name,
+        ],
+      };
+    }),
+  ]);
+};
+
 const hasR2Capability = (manifest: PluginManifest): boolean =>
   Boolean(
     manifest.runtimeBindings?.includes("r2") ||
-    manifest.optionalRuntimeBindings?.includes("r2"),
+    manifest.optionalRuntimeBindings?.includes("r2") ||
+    manifest.resources?.some((resource) => resource.type === "r2"),
   );
 
 const runtimeBoundaryValues = async (
@@ -320,13 +643,43 @@ const runtimeBoundaryValues = async (
 
 async function readPackage(c: Context<HonoEnv>): Promise<PackageParts> {
   const length = Number(c.req.header("Content-Length") ?? 0);
-  if (length > 4 * 1024 * 1024)
+  if (length > MAX_PLUGIN_PACKAGE_BYTES + 1024 * 1024)
     throw new AppError(
       413,
       "PLUGIN_TOO_LARGE",
-      "The package exceeds the 4 MiB raw size limit.",
+      "The package exceeds the raw size limit.",
     );
   const form = await c.req.formData();
+  const sourceReleaseValue = String(form.get("sourceReleaseId") ?? "").trim();
+  const sourceReleaseId = /^rel_[A-Za-z0-9_-]{8,100}$/u.test(sourceReleaseValue)
+    ? sourceReleaseValue
+    : undefined;
+  const packageValue = form.get("package");
+  if (packageValue instanceof File) {
+    if (packageValue.size > MAX_PLUGIN_PACKAGE_BYTES)
+      throw new AppError(
+        413,
+        "PLUGIN_TOO_LARGE",
+        "The package exceeds the raw size limit.",
+      );
+    try {
+      return {
+        ...(await parsePluginArchive(
+          new Uint8Array(await packageValue.arrayBuffer()),
+        )),
+        sourceReleaseId,
+      };
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "invalid";
+      throw new AppError(
+        detail.includes("SIZE") || detail.includes("EXPANSION") ? 413 : 422,
+        detail.startsWith("PLUGIN_")
+          ? detail.split(":", 1)[0]!
+          : "PLUGIN_PACKAGE_INVALID",
+        "The plugin package is invalid or failed integrity validation.",
+      );
+    }
+  }
   const manifestText = String(form.get("manifest") ?? "");
   const workerValue = form.get("worker");
   const worker =
@@ -340,11 +693,11 @@ async function readPackage(c: Context<HonoEnv>): Promise<PackageParts> {
     new TextEncoder().encode(worker).byteLength +
     new TextEncoder().encode(d1Text).byteLength +
     new TextEncoder().encode(postgresText).byteLength;
-  if (rawBytes > 4 * 1024 * 1024)
+  if (rawBytes > MAX_PLUGIN_PACKAGE_BYTES)
     throw new AppError(
       413,
       "PLUGIN_TOO_LARGE",
-      "The package exceeds the 4 MiB raw size limit.",
+      "The package exceeds the raw size limit.",
     );
   let rawManifest: unknown,
     d1Migrations: MigrationSet,
@@ -369,9 +722,12 @@ async function readPackage(c: Context<HonoEnv>): Promise<PackageParts> {
     );
   return {
     manifest: parsed.data,
+    manifestSource: manifestText,
     worker,
     d1Migrations,
     postgresMigrations,
+    files: {},
+    sourceReleaseId,
     rawBytes,
   };
 }
@@ -381,6 +737,7 @@ const hashes = async (parts: PackageParts) => ({
   worker: await sha256(parts.worker),
   d1: await sha256(stableJson(parts.d1Migrations)),
   postgres: await sha256(stableJson(parts.postgresMigrations)),
+  assets: await packageFilesDigest(parts.files),
 });
 
 const verifyPortablePackageBoundary = (
@@ -417,6 +774,12 @@ const validatePackagePolicy = (
   c: Context<HonoEnv>,
   manifest: PluginManifest,
 ): void => {
+  if (!manifest.databaseDialects.includes(c.env.DATABASE_PROVIDER))
+    throw new AppError(
+      409,
+      "PLUGIN_DATABASE_PROVIDER_UNSUPPORTED",
+      `This plugin does not support the active ${c.env.DATABASE_PROVIDER} database provider.`,
+    );
   try {
     validateManifestPolicy(
       manifest,
@@ -438,23 +801,123 @@ const validatePackagePolicy = (
               "PLUGIN_API_VERSION_UNSUPPORTED",
               "The plugin API version is not supported by this Core.",
             ]
-          : error.code === "compatibility_flag_unsupported"
+          : error.code === "host_api_unsupported"
             ? [
                 422,
-                "PLUGIN_COMPATIBILITY_FLAG_UNSUPPORTED",
-                "The plugin requests an unsupported compatibility flag.",
+                "PLUGIN_HOST_API_UNSUPPORTED",
+                "The plugin host API version is not supported by this Core.",
               ]
-            : [
-                422,
-                "PLUGIN_FRONTEND_UNAVAILABLE",
-                "The plugin frontend is not available in this Core version.",
-              ];
+            : error.code === "core_api_unsupported"
+              ? [
+                  422,
+                  "PLUGIN_CORE_API_UNSUPPORTED",
+                  "The plugin Core API version is not supported by this Core.",
+                ]
+              : error.code === "compatibility_flag_unsupported"
+                ? [
+                    422,
+                    "PLUGIN_COMPATIBILITY_FLAG_UNSUPPORTED",
+                    "The plugin requests an unsupported compatibility flag.",
+                  ]
+                : [
+                    422,
+                    "PLUGIN_FRONTEND_UNAVAILABLE",
+                    "The plugin frontend is not available in this Core version.",
+                  ];
     throw new AppError(
       mapped[0] as 409 | 422,
       mapped[1] as string,
       mapped[2] as string,
     );
   }
+};
+
+type DependencyLock = {
+  pluginId: string;
+  version: string;
+  marketplaceId: string | null;
+  releaseId: string | null;
+};
+
+const resolveDependencies = async (
+  c: Context<HonoEnv>,
+  manifest: PluginManifest,
+): Promise<DependencyLock[]> => {
+  const locks: DependencyLock[] = [];
+  for (const dependency of manifest.dependencies ?? []) {
+    if (dependency.pluginId === manifest.id)
+      throw new AppError(
+        409,
+        "PLUGIN_DEPENDENCY_CYCLE",
+        "A plugin cannot depend on itself.",
+      );
+    const installed = await c.get("db").first<{
+      version: string;
+      marketplaceId: string | null;
+      releaseId: string | null;
+    }>(
+      `SELECT installed_version AS version, marketplace_id AS "marketplaceId",
+              release_id AS "releaseId"
+         FROM plugins WHERE id = ? AND status = 'installed'`,
+      [dependency.pluginId],
+    );
+    if (!installed) {
+      if (dependency.optional) continue;
+      throw new AppError(
+        409,
+        "PLUGIN_DEPENDENCY_MISSING",
+        `Install dependency ${dependency.pluginId} (${dependency.version}) first.`,
+      );
+    }
+    if (!semver.satisfies(installed.version, dependency.version))
+      throw new AppError(
+        409,
+        "PLUGIN_DEPENDENCY_VERSION_UNSUPPORTED",
+        `Dependency ${dependency.pluginId} must satisfy ${dependency.version}.`,
+      );
+    locks.push({ pluginId: dependency.pluginId, ...installed });
+  }
+  const installedRows = await c.get("db").query<{
+    id: string;
+    manifest: unknown;
+  }>("SELECT id, manifest_json AS manifest FROM plugins WHERE status = 'installed'");
+  const graph = new Map<string, string[]>();
+  for (const row of installedRows) {
+    const parsed = pluginManifestSchema.safeParse(
+      parseJson<unknown>(row.manifest, null),
+    );
+    graph.set(
+      row.id,
+      parsed.success
+        ? (parsed.data.dependencies ?? []).map(
+            (dependency) => dependency.pluginId,
+          )
+        : [],
+    );
+  }
+  graph.set(
+    manifest.id,
+    (manifest.dependencies ?? []).map((dependency) => dependency.pluginId),
+  );
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+  const visit = (pluginId: string): boolean => {
+    if (visiting.has(pluginId)) return true;
+    if (visited.has(pluginId)) return false;
+    visiting.add(pluginId);
+    for (const dependency of graph.get(pluginId) ?? [])
+      if (graph.has(dependency) && visit(dependency)) return true;
+    visiting.delete(pluginId);
+    visited.add(pluginId);
+    return false;
+  };
+  if (visit(manifest.id))
+    throw new AppError(
+      409,
+      "PLUGIN_DEPENDENCY_CYCLE",
+      "The plugin dependency graph contains a cycle.",
+    );
+  return locks;
 };
 
 async function getOperation(c: {
@@ -464,7 +927,9 @@ async function getOperation(c: {
   const operation = await c.get("db").first<Operation>(
     `SELECT operation_id AS "operationId", plugin_id AS "pluginId", type, target_version AS "targetVersion", state,
             manifest_sha256 AS "manifestSha256", worker_sha256 AS "workerSha256", d1_migrations_sha256 AS "d1MigrationsSha256",
-            postgres_migrations_sha256 AS "postgresMigrationsSha256", last_error AS "lastError"
+            postgres_migrations_sha256 AS "postgresMigrationsSha256",
+            assets_sha256 AS "assetsSha256", source_release_id AS "sourceReleaseId",
+            last_error AS "lastError"
        FROM plugin_operations WHERE operation_id = ?`,
     [c.req.param("operationId")],
   );
@@ -486,7 +951,8 @@ async function verifyPackage(
     actual.manifest !== operation.manifestSha256 ||
     actual.worker !== operation.workerSha256 ||
     actual.d1 !== operation.d1MigrationsSha256 ||
-    actual.postgres !== operation.postgresMigrationsSha256
+    actual.postgres !== operation.postgresMigrationsSha256 ||
+    (operation.assetsSha256 != null && actual.assets !== operation.assetsSha256)
   ) {
     throw new AppError(
       409,
@@ -718,21 +1184,90 @@ installerRoutes.post("/plugin-operations", async (c) => {
     throw new AppError(422, "PLUGIN_WORKER_MISSING", "worker.mjs is required.");
   const d1Ids = Object.keys(parts.d1Migrations).sort();
   const postgresIds = Object.keys(parts.postgresMigrations).sort();
-  if (stableJson(d1Ids) !== stableJson(postgresIds))
+  const supportsD1 = parts.manifest.databaseDialects.includes("d1");
+  const supportsPostgres = parts.manifest.databaseDialects.includes("postgres");
+  if (
+    (supportsD1 && !d1Ids.length) ||
+    (supportsPostgres && !postgresIds.length) ||
+    (!supportsD1 && d1Ids.length > 0) ||
+    (!supportsPostgres && postgresIds.length > 0) ||
+    (supportsD1 &&
+      supportsPostgres &&
+      stableJson(d1Ids) !== stableJson(postgresIds))
+  )
     throw new AppError(
       422,
       "PLUGIN_MIGRATIONS_UNPAIRED",
       "D1 and PostgreSQL migrations must have the same IDs.",
     );
-  migrationStatements(parts.d1Migrations, parts.manifest.tablePrefix);
-  migrationStatements(parts.postgresMigrations, parts.manifest.tablePrefix);
+  if (supportsD1)
+    migrationStatements(parts.d1Migrations, parts.manifest.tablePrefix);
+  if (supportsPostgres)
+    migrationStatements(parts.postgresMigrations, parts.manifest.tablePrefix);
   verifyPortablePackageBoundary(
     c.env,
     parts,
     await runtimeBoundaryValues(c, parts.manifest.id),
   );
-  const installed = await c.get("db").first<{ installedVersion: string }>(
-    `SELECT installed_version AS "installedVersion"
+  let selectedSource:
+    { marketplaceId: string; publisherId: string } | undefined;
+  if (parts.sourceReleaseId) {
+    const release = await c.get("db").first<{
+      pluginId: string;
+      version: string;
+      marketplaceId: string;
+      publisherId: string;
+      artifactSha256: string;
+      enabled: number | boolean;
+      trustState: string;
+      compatible: number | boolean;
+      catalogExpiresAt: unknown;
+    }>(
+      `SELECT r.plugin_id AS "pluginId", r.version,
+              r.marketplace_id AS "marketplaceId",
+              r.publisher_id AS "publisherId",
+              r.artifact_sha256 AS "artifactSha256", r.compatible,
+              m.enabled, m.trust_state AS "trustState",
+              m.catalog_expires_at AS "catalogExpiresAt"
+         FROM plugin_releases r
+         JOIN plugin_marketplaces m ON m.id = r.marketplace_id
+        WHERE r.id = ? AND m.removed_at IS NULL`,
+      [parts.sourceReleaseId],
+    );
+    if (
+      !release ||
+      release.pluginId !== parts.manifest.id ||
+      release.version !== parts.manifest.version ||
+      !parts.archiveSha256 ||
+      release.artifactSha256 !== parts.archiveSha256 ||
+      !Boolean(release.enabled) ||
+      !Boolean(release.compatible) ||
+      release.trustState !== "trusted" ||
+      !release.catalogExpiresAt ||
+      numberTime(release.catalogExpiresAt) < Date.now()
+    )
+      throw new AppError(
+        409,
+        "PLUGIN_MARKETPLACE_RELEASE_MISMATCH",
+        "The package does not match the selected marketplace release.",
+      );
+    selectedSource = {
+      marketplaceId: release.marketplaceId,
+      publisherId: release.publisherId,
+    };
+  }
+  const installed = await c.get("db").first<{
+    installedVersion: string;
+    packageFormat: number | string;
+    marketplaceId: string | null;
+    publisherId: string | null;
+    releaseHash: string | null;
+  }>(
+    `SELECT installed_version AS "installedVersion",
+            package_format AS "packageFormat",
+            marketplace_id AS "marketplaceId",
+            publisher_id AS "publisherId",
+            release_hash AS "releaseHash"
            FROM plugins
           WHERE id = ? AND status = 'installed'`,
     [parts.manifest.id],
@@ -746,8 +1281,41 @@ installerRoutes.post("/plugin-operations", async (c) => {
       "PLUGIN_DOWNGRADE_NOT_AUTOMATIC",
       "A plugin downgrade requires a documented manual procedure.",
     );
+  if (
+    installed?.marketplaceId &&
+    installed.marketplaceId !== selectedSource?.marketplaceId
+  )
+    throw new AppError(
+      409,
+      "PLUGIN_MARKETPLACE_ORIGIN_CHANGED",
+      "Use an explicit publisher reassociation procedure before changing this plugin marketplace.",
+    );
+  if (
+    installed?.publisherId &&
+    installed.publisherId !==
+      (selectedSource?.publisherId ?? parts.manifest.publisher?.id)
+  )
+    throw new AppError(
+      409,
+      "PLUGIN_PUBLISHER_CHANGED",
+      "Use an explicit publisher reassociation procedure before changing this plugin publisher.",
+    );
+  if (
+    installed &&
+    Number(installed.packageFormat) === 2 &&
+    parts.manifest.packageFormat === 2 &&
+    parts.manifest.version === installed.installedVersion &&
+    installed.releaseHash &&
+    (await packageFilesDigest(parts.files)) !== installed.releaseHash
+  )
+    throw new AppError(
+      409,
+      "PLUGIN_RELEASE_IMMUTABILITY_VIOLATION",
+      "An installed plugin version cannot be replaced with different package content.",
+    );
   const operationType = installed ? "update" : "install";
   requirePluginOperationPermission(c, operationType);
+  await resolveDependencies(c, parts.manifest);
   if (!c.env.CF_API_TOKEN || !c.env.CF_ACCOUNT_ID)
     throw new AppError(
       409,
@@ -789,8 +1357,8 @@ installerRoutes.post("/plugin-operations", async (c) => {
     );
   const digest = await hashes(parts);
   await c.get("db").execute(
-    `INSERT INTO plugin_operations(operation_id, plugin_id, type, target_version, target_api_version, database_provider, manifest_sha256, worker_sha256, d1_migrations_sha256, postgres_migrations_sha256, state, lock_acquired_at, lock_expires_at, created_by_user_id, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'validating', ?, ?, ?, ?)`,
+    `INSERT INTO plugin_operations(operation_id, plugin_id, type, target_version, target_api_version, database_provider, manifest_sha256, worker_sha256, d1_migrations_sha256, postgres_migrations_sha256, assets_sha256, source_release_id, package_format, state, lock_acquired_at, lock_expires_at, created_by_user_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'validating', ?, ?, ?, ?)`,
     [
       operationId,
       parts.manifest.id,
@@ -802,6 +1370,9 @@ installerRoutes.post("/plugin-operations", async (c) => {
       digest.worker,
       digest.d1,
       digest.postgres,
+      digest.assets,
+      parts.sourceReleaseId ?? null,
+      parts.manifest.packageFormat ?? 1,
       dbTime(c.get("db"), now),
       dbTime(c.get("db"), now + 300_000),
       c.get("principal").userId,
@@ -1094,6 +1665,271 @@ installerRoutes.post(
   },
 );
 
+installerRoutes.get("/plugin-operations/:operationId/resources", async (c) => {
+  const operation = await getOperation(c);
+  requirePluginOperationPermission(c, operation.type);
+  const rows = await c.get("db").query<ResourceRow>(
+    `SELECT logical_name AS "logicalName", resource_type AS type,
+              binding_name AS binding, required, external_id AS "externalId",
+              external_name AS "externalName", status,
+              declaration_json AS configuration
+         FROM plugin_resources_v2
+        WHERE plugin_id = ? ORDER BY required DESC, logical_name`,
+    [operation.pluginId],
+  );
+  return c.json(
+    {
+      operationId: operation.operationId,
+      state: operation.state,
+      items: rows.map((row) => ({
+        logicalName: row.logicalName,
+        type: row.type,
+        binding: row.binding,
+        required: Boolean(row.required),
+        externalId: row.externalId,
+        externalName: row.externalName,
+        status: row.status,
+      })),
+    },
+    200,
+    noStore,
+  );
+});
+
+installerRoutes.post(
+  "/plugin-operations/:operationId/resources/:logicalName/provision",
+  async (c) => {
+    const operation = await getOperation(c);
+    requirePluginOperationPermission(c, operation.type);
+    await validateRecentReauth(c);
+    if (!(c.req.header("Idempotency-Key") ?? "").trim())
+      throw new AppError(
+        400,
+        "IDEMPOTENCY_KEY_REQUIRED",
+        "Idempotency-Key is required for resource provisioning.",
+      );
+    const logicalName = c.req.param("logicalName") ?? "";
+    if (!/^[a-z][a-z0-9_-]{0,47}$/u.test(logicalName))
+      throw new AppError(
+        404,
+        "PLUGIN_RESOURCE_NOT_FOUND",
+        "Plugin resource not found.",
+      );
+    const db = c.get("db");
+    const resource = await db.first<ResourceRow>(
+      `SELECT logical_name AS "logicalName", resource_type AS type,
+              binding_name AS binding, required, external_id AS "externalId",
+              external_name AS "externalName", status,
+              declaration_json AS configuration
+         FROM plugin_resources_v2
+        WHERE plugin_id = ? AND logical_name = ?`,
+      [operation.pluginId, logicalName],
+    );
+    if (!resource || !["r2", "kv", "queue"].includes(resource.type))
+      throw new AppError(
+        404,
+        "PLUGIN_RESOURCE_NOT_FOUND",
+        "Plugin resource not found or does not require provisioning.",
+      );
+    if (resource.status === "ready" && operation.state === "migrating")
+      return c.json({
+        operationId: operation.operationId,
+        state: operation.state,
+        resource: {
+          logicalName,
+          type: resource.type,
+          binding: resource.binding,
+          status: "ready",
+        },
+        replay: true,
+      });
+    if (operation.state !== "provisioning")
+      throw new AppError(
+        409,
+        "OPERATION_NOT_PROVISIONING",
+        "This operation is not waiting for resource provisioning.",
+      );
+    if (!c.env.CF_ACCOUNT_ID || !c.env.APP_INSTALLATION_ID)
+      throw new AppError(
+        503,
+        "PLUGIN_RESOURCE_TARGET_MISSING",
+        "The Cloudflare account or installation identifier is unavailable.",
+      );
+    const body = (await c.req.json().catch(() => null)) as {
+      token?: unknown;
+      mode?: unknown;
+      externalName?: unknown;
+      externalId?: unknown;
+    } | null;
+    const token = typeof body?.token === "string" ? body.token.trim() : "";
+    if (!validCloudflareTokenLength(token))
+      throw new AppError(
+        422,
+        "PLUGIN_RESOURCE_TOKEN_INVALID",
+        "Enter a valid temporary Cloudflare resource token.",
+      );
+    const mode = body?.mode === "attach" ? "attach" : "create";
+    const generatedName = await deterministicResourceName(
+      c.env.APP_INSTALLATION_ID,
+      operation.pluginId,
+      logicalName,
+    );
+    const requestedName =
+      mode === "attach" && typeof body?.externalName === "string"
+        ? body.externalName.trim()
+        : generatedName;
+    const requestedId =
+      mode === "attach" && typeof body?.externalId === "string"
+        ? body.externalId.trim()
+        : undefined;
+    if (
+      (resource.type === "r2" &&
+        !/^[a-z0-9][a-z0-9-]{2,62}$/u.test(requestedName)) ||
+      (resource.type !== "r2" &&
+        !/^[A-Za-z0-9][A-Za-z0-9 _.-]{2,127}$/u.test(requestedName))
+    )
+      throw new AppError(
+        422,
+        "PLUGIN_RESOURCE_NAME_INVALID",
+        "The Cloudflare resource name is invalid.",
+      );
+    if (resource.externalName && resource.externalName !== requestedName)
+      throw new AppError(
+        409,
+        "PLUGIN_RESOURCE_IDENTITY_CONFLICT",
+        "A different preserved resource is already registered for this plugin.",
+      );
+    const now = dbTime(db);
+    await db.execute(
+      `UPDATE plugin_resources_v2
+          SET status = 'provisioning', updated_at = ?, last_error_code = NULL
+        WHERE plugin_id = ? AND logical_name = ?`,
+      [now, operation.pluginId, logicalName],
+    );
+    const declaration = parseJson<{
+      configuration?: { jurisdiction?: "eu" | "fedramp" | "us" };
+    }>(resource.configuration, {});
+    try {
+      const result = await provisionPluginResource(
+        token,
+        c.env.CF_ACCOUNT_ID,
+        resource.type === "r2"
+          ? { type: "r2", mode, name: requestedName }
+          : resource.type === "kv"
+            ? {
+                type: "kv",
+                mode,
+                name: requestedName,
+                ...(requestedId ? { id: requestedId } : {}),
+                ...(declaration.configuration?.jurisdiction
+                  ? { jurisdiction: declaration.configuration.jurisdiction }
+                  : {}),
+              }
+            : {
+                type: "queue",
+                mode,
+                name: requestedName,
+                ...(requestedId ? { id: requestedId } : {}),
+              },
+      );
+      const verifiedAt = dbTime(db);
+      await db.execute(
+        `UPDATE plugin_resources_v2
+            SET external_id = ?, external_name = ?, status = 'ready',
+                last_error_code = NULL, updated_at = ?, preserved_at = NULL
+          WHERE plugin_id = ? AND logical_name = ?`,
+        [
+          result.externalId,
+          result.externalName,
+          verifiedAt,
+          operation.pluginId,
+          logicalName,
+        ],
+      );
+      const pending = await db.first<{ count: number | string }>(
+        `SELECT COUNT(*) AS count FROM plugin_resources_v2
+          WHERE plugin_id = ? AND required = ?
+            AND status NOT IN ('ready', 'preserved')`,
+        [operation.pluginId, true],
+      );
+      const nextState =
+        Number(pending?.count ?? 0) === 0 ? "migrating" : "provisioning";
+      await db.execute(
+        "UPDATE plugin_operations SET state = ?, lock_expires_at = ? WHERE operation_id = ? AND state = 'provisioning'",
+        [nextState, dbTime(db, Date.now() + 300_000), operation.operationId],
+      );
+      await audit(
+        c,
+        "core.plugin.resource_ready",
+        "core.plugin",
+        operation.pluginId,
+        {
+          operationId: operation.operationId,
+          logicalName,
+          resourceType: resource.type,
+          created: result.created,
+        },
+      );
+      return c.json({
+        operationId: operation.operationId,
+        state: nextState,
+        resource: {
+          logicalName,
+          type: resource.type,
+          binding: resource.binding,
+          status: "ready",
+        },
+      });
+    } catch (error) {
+      const code =
+        error instanceof PluginResourceProvisioningError
+          ? error.code
+          : "unavailable";
+      await db.atomic([
+        {
+          sql: `UPDATE plugin_resources_v2
+                   SET status = 'error', last_error_code = ?, updated_at = ?
+                 WHERE plugin_id = ? AND logical_name = ?`,
+          params: [code, dbTime(db), operation.pluginId, logicalName],
+        },
+        {
+          sql: "UPDATE plugin_operations SET state = 'failed', last_error = ? WHERE operation_id = ?",
+          params: [
+            JSON.stringify({
+              from: "provisioning",
+              detail: `resource_${resource.type}_${code}`,
+              requestId: c.get("requestId"),
+              failedAt: Date.now(),
+            }),
+            operation.operationId,
+          ],
+        },
+        {
+          sql: `UPDATE installer_lock SET operation_id = NULL,
+                       acquired_at = NULL, expires_at = NULL
+                 WHERE id = 'global' AND operation_id = ?`,
+          params: [operation.operationId],
+        },
+      ]);
+      const message =
+        code === "conflict"
+          ? "A Cloudflare resource with this generated name already exists; attach it explicitly if it belongs to this installation."
+          : code === "not_found"
+            ? "The Cloudflare resource to attach was not found."
+            : code === "not_entitled"
+              ? "Activate this Cloudflare product before installing the plugin."
+              : code === "invalid"
+                ? "The temporary token or target resource is invalid."
+                : "Cloudflare could not provision the plugin resource.";
+      throw new AppError(
+        code === "unavailable" ? 503 : code === "not_entitled" ? 409 : 422,
+        `PLUGIN_RESOURCE_${code.toUpperCase()}`,
+        message,
+      );
+    }
+  },
+);
+
 installerRoutes.post(
   "/plugins/:pluginId/runtime-resources/r2",
   requirePermission("core.plugin.update"),
@@ -1335,6 +2171,231 @@ installerRoutes.post(
   },
 );
 
+installerRoutes.get(
+  "/plugins/:pluginId/runtime-resources",
+  requirePermission("core.plugin.read"),
+  async (c) => {
+    const pluginId = c.req.param("pluginId") ?? "";
+    const plugin = await c
+      .get("db")
+      .first<{ status: string }>("SELECT status FROM plugins WHERE id = ?", [
+        pluginId,
+      ]);
+    if (!plugin || plugin.status !== "installed")
+      throw new AppError(
+        404,
+        "PLUGIN_NOT_INSTALLED",
+        "Plugin is not installed.",
+      );
+    const items = await c.get("db").query<ResourceRow>(
+      `SELECT logical_name AS "logicalName", resource_type AS type,
+              binding_name AS binding, required, external_id AS "externalId",
+              external_name AS "externalName", status,
+              declaration_json AS configuration
+         FROM plugin_resources_v2 WHERE plugin_id = ? ORDER BY logical_name`,
+      [pluginId],
+    );
+    return c.json(
+      {
+        items: items.map((resource) => ({
+          logicalName: resource.logicalName,
+          type: resource.type,
+          binding: resource.binding,
+          required: Boolean(resource.required),
+          status: resource.status,
+          configured: resource.status === "ready",
+        })),
+      },
+      200,
+      noStore,
+    );
+  },
+);
+
+installerRoutes.post(
+  "/plugins/:pluginId/runtime-resources/:logicalName/provision",
+  requirePermission("core.plugin.update"),
+  async (c) => {
+    await validateRecentReauth(c);
+    const pluginId = c.req.param("pluginId") ?? "";
+    const logicalName = c.req.param("logicalName") ?? "";
+    const plugin = await c.get("db").first<{
+      status: string;
+      workerName: string;
+      packageFormat: number | string;
+    }>(
+      `SELECT status, worker_name AS "workerName",
+              package_format AS "packageFormat"
+         FROM plugins WHERE id = ?`,
+      [pluginId],
+    );
+    if (!plugin || plugin.status !== "installed")
+      throw new AppError(
+        404,
+        "PLUGIN_NOT_INSTALLED",
+        "Plugin is not installed.",
+      );
+    if (Number(plugin.packageFormat) !== 2)
+      throw new AppError(
+        409,
+        "PLUGIN_RESOURCE_FORMAT_UNSUPPORTED",
+        "Use the legacy resource endpoint for this plugin package.",
+      );
+    const resource = await c.get("db").first<ResourceRow>(
+      `SELECT logical_name AS "logicalName", resource_type AS type,
+              binding_name AS binding, required, external_id AS "externalId",
+              external_name AS "externalName", status,
+              declaration_json AS configuration
+         FROM plugin_resources_v2
+        WHERE plugin_id = ? AND logical_name = ?`,
+      [pluginId, logicalName],
+    );
+    if (!resource || !["r2", "kv", "queue"].includes(resource.type))
+      throw new AppError(
+        404,
+        "PLUGIN_RESOURCE_NOT_FOUND",
+        "Plugin resource not found.",
+      );
+    if (!c.env.CF_ACCOUNT_ID || !c.env.APP_INSTALLATION_ID)
+      throw new AppError(
+        503,
+        "PLUGIN_RESOURCE_TARGET_MISSING",
+        "The Cloudflare account or installation identifier is unavailable.",
+      );
+    const body = (await c.req.json().catch(() => null)) as {
+      token?: unknown;
+      mode?: unknown;
+      externalName?: unknown;
+      externalId?: unknown;
+    } | null;
+    const token = typeof body?.token === "string" ? body.token.trim() : "";
+    if (!validCloudflareTokenLength(token))
+      throw new AppError(
+        422,
+        "PLUGIN_RESOURCE_TOKEN_INVALID",
+        "Enter a valid temporary Cloudflare resource token.",
+      );
+    const generatedName = await deterministicResourceName(
+      c.env.APP_INSTALLATION_ID,
+      pluginId,
+      logicalName,
+    );
+    const requestedMode = body?.mode === "attach" ? "attach" : "create";
+    const mode = resource.externalName ? "attach" : requestedMode;
+    const name =
+      resource.externalName ??
+      (mode === "attach" && typeof body?.externalName === "string"
+        ? body.externalName.trim()
+        : generatedName);
+    const id =
+      resource.externalId ??
+      (mode === "attach" && typeof body?.externalId === "string"
+        ? body.externalId.trim()
+        : undefined);
+    let provisioned:
+      | { externalId: string | null; externalName: string; created: boolean }
+      | undefined;
+    const declaration = parseJson<{
+      configuration?: { jurisdiction?: "eu" | "fedramp" | "us" };
+    }>(resource.configuration, {});
+    try {
+      provisioned = await provisionPluginResource(
+        token,
+        c.env.CF_ACCOUNT_ID,
+        resource.type === "r2"
+          ? { type: "r2", mode, name }
+          : resource.type === "kv"
+            ? {
+                type: "kv",
+                mode,
+                name,
+                ...(id ? { id } : {}),
+                ...(declaration.configuration?.jurisdiction
+                  ? { jurisdiction: declaration.configuration.jurisdiction }
+                  : {}),
+              }
+            : { type: "queue", mode, name, ...(id ? { id } : {}) },
+      );
+      const resolved: PluginRuntimeResource = {
+        logicalName,
+        type: resource.type,
+        binding: resource.binding,
+        required: Boolean(resource.required),
+        externalId: provisioned.externalId,
+        externalName: provisioned.externalName,
+        configuration: declaration.configuration ?? {},
+      };
+      const now = dbTime(c.get("db"));
+      await c.get("db").execute(
+        `UPDATE plugin_resources_v2
+            SET external_id = ?, external_name = ?, status = 'provisioning',
+                updated_at = ?, last_error_code = NULL
+          WHERE plugin_id = ? AND logical_name = ?`,
+        [
+          provisioned.externalId,
+          provisioned.externalName,
+          now,
+          pluginId,
+          logicalName,
+        ],
+      );
+      await attachPluginResourceBinding(c.env, plugin.workerName, resolved);
+      if (resolved.type === "queue")
+        await configurePluginQueueConsumers(
+          c.env,
+          plugin.workerName,
+          await readResourceRows(c, pluginId),
+        );
+      await c.get("db").execute(
+        `UPDATE plugin_resources_v2
+            SET status = 'ready', updated_at = ?, preserved_at = NULL
+          WHERE plugin_id = ? AND logical_name = ?`,
+        [dbTime(c.get("db")), pluginId, logicalName],
+      );
+      await audit(
+        c,
+        "core.plugin.resource_activated",
+        "core.plugin",
+        pluginId,
+        {
+          logicalName,
+          resourceType: resource.type,
+          created: provisioned.created,
+        },
+      );
+      return c.json(
+        { logicalName, type: resource.type, status: "ready" },
+        200,
+        noStore,
+      );
+    } catch (error) {
+      const code =
+        error instanceof PluginResourceProvisioningError
+          ? error.code
+          : "binding_failed";
+      await c.get("db").execute(
+        `UPDATE plugin_resources_v2
+            SET external_id = ?, external_name = ?, status = 'error',
+                last_error_code = ?, updated_at = ?
+          WHERE plugin_id = ? AND logical_name = ?`,
+        [
+          provisioned?.externalId ?? resource.externalId,
+          provisioned?.externalName ?? resource.externalName,
+          code,
+          dbTime(c.get("db")),
+          pluginId,
+          logicalName,
+        ],
+      );
+      throw new AppError(
+        code === "binding_failed" || code === "unavailable" ? 503 : 422,
+        `PLUGIN_RESOURCE_${code.toUpperCase()}`,
+        "The plugin resource could not be activated safely.",
+      );
+    }
+  },
+);
+
 installerRoutes.post("/plugin-operations/:operationId/advance", async (c) => {
   const operation = await getOperation(c);
   requirePluginOperationPermission(c, operation.type);
@@ -1379,10 +2440,19 @@ installerRoutes.post("/plugin-operations/:operationId/advance", async (c) => {
     );
   };
   const fail = async (from: string, error: unknown) => {
-    await recordFailure(
-      from,
-      error instanceof Error ? error.message : "unknown",
-    );
+    let detail = error instanceof Error ? error.message : "unknown";
+    if (
+      operation.type === "update" &&
+      ["deploying", "hardening", "binding", "registering"].includes(from)
+    )
+      try {
+        await restorePreviousPluginWorker(c, operation);
+      } catch (rollbackError) {
+        detail = `${detail};rollback_failed:${
+          rollbackError instanceof Error ? rollbackError.message : "unknown"
+        }`;
+      }
+    await recordFailure(from, detail);
     throw new AppError(
       500,
       "PLUGIN_OPERATION_FAILED",
@@ -1402,14 +2472,20 @@ installerRoutes.post("/plugin-operations/:operationId/advance", async (c) => {
       await db.atomic(
         archivePackageStatements(operation.operationId, parts, dbTime(db)),
       );
+      const v2ResourceProvisioning = await reconcileResourcePlan(
+        c,
+        operation,
+        parts.manifest,
+      );
       const resource = await db.first<{ status: string }>(
         `SELECT status FROM plugin_runtime_resources
           WHERE plugin_id = ? AND binding_name = 'STORAGE'`,
         [operation.pluginId],
       );
       const nextState =
-        parts.manifest.runtimeBindings?.includes("r2") &&
-        resource?.status !== "ready"
+        v2ResourceProvisioning ||
+        (parts.manifest.runtimeBindings?.includes("r2") &&
+          resource?.status !== "ready")
           ? "provisioning"
           : "migrating";
       await db.execute(
@@ -1421,8 +2497,8 @@ installerRoutes.post("/plugin-operations/:operationId/advance", async (c) => {
     if (operation.state === "provisioning")
       throw new AppError(
         409,
-        "PLUGIN_RUNTIME_R2_REQUIRED",
-        "Provision the private R2 bucket before advancing this operation.",
+        "PLUGIN_RUNTIME_RESOURCE_REQUIRED",
+        "Provision every required plugin resource before advancing this operation.",
       );
     if (operation.state === "migrating") {
       const parts = await readPackage(c);
@@ -1470,6 +2546,7 @@ installerRoutes.post("/plugin-operations/:operationId/advance", async (c) => {
       const parts = await readPackage(c);
       await verifyPackage(operation, parts);
       const targetWorkerName = await operationWorkerName(c, operation);
+      const v2Resources = await readResourceRows(c, operation.pluginId);
       const resource = hasR2Capability(parts.manifest)
         ? await db.first<{ externalName: string; status: string }>(
             `SELECT external_name AS "externalName", status
@@ -1488,8 +2565,39 @@ installerRoutes.post("/plugin-operations/:operationId/advance", async (c) => {
         targetWorkerName,
         parts.worker,
         parts.manifest,
-        resource?.status === "ready" ? { STORAGE: resource.externalName } : {},
+        [
+          ...v2Resources,
+          ...(resource?.status === "ready" &&
+          !v2Resources.some((entry) => entry.binding === "STORAGE")
+            ? [
+                {
+                  logicalName: "storage",
+                  type: "r2" as const,
+                  binding: "STORAGE",
+                  required: Boolean(
+                    parts.manifest.runtimeBindings?.includes("r2"),
+                  ),
+                  externalName: resource.externalName,
+                  externalId: null,
+                  configuration: {},
+                },
+              ]
+            : []),
+        ],
+        parts.files,
       );
+      if (parts.manifest.packageFormat === 2) {
+        await configurePluginQueueConsumers(
+          c.env,
+          targetWorkerName,
+          v2Resources,
+        );
+        await configurePluginWorkerSchedules(
+          c.env,
+          targetWorkerName,
+          v2Resources,
+        );
+      }
       await db.execute(
         "UPDATE plugin_operations SET state = 'hardening' WHERE operation_id = ?",
         [operation.operationId],
@@ -1552,13 +2660,126 @@ installerRoutes.post("/plugin-operations/:operationId/advance", async (c) => {
       const permissionIds = parts.manifest.permissions.map(
         (key) => `perm_${key.replaceAll(".", "_")}`,
       );
+      const releaseHash = await packageFilesDigest(parts.files);
+      const assetStatements: SqlStatement[] = [];
+      const assetRows: SqlValue[][] = [];
+      const contributionRows: SqlValue[][] = [];
+      if (parts.manifest.frontend) {
+        assetStatements.push({
+          sql: "UPDATE plugin_assets SET active = ? WHERE plugin_id = ? AND active = ?",
+          params: [false, operation.pluginId, true],
+        });
+        assetStatements.push({
+          sql: "UPDATE plugin_contributions SET active = ? WHERE plugin_id = ? AND active = ?",
+          params: [false, operation.pluginId, true],
+        });
+        for (const [path, encoded] of Object.entries(parts.files)) {
+          if (
+            !path.startsWith("frontend/") &&
+            !path.startsWith("locales/") &&
+            path !== "openapi.json"
+          )
+            continue;
+          const bytes = decodePackageFile(encoded);
+          const extension = path.split(".").at(-1)?.toLowerCase();
+          const contentType =
+            extension === "js" || extension === "mjs"
+              ? "text/javascript; charset=utf-8"
+              : extension === "css"
+                ? "text/css; charset=utf-8"
+                : extension === "json"
+                  ? "application/json; charset=utf-8"
+                  : extension === "svg"
+                    ? "image/svg+xml"
+                    : extension === "png"
+                      ? "image/png"
+                      : extension === "webp"
+                        ? "image/webp"
+                        : extension === "woff2"
+                          ? "font/woff2"
+                          : "application/octet-stream";
+          assetRows.push([
+            operation.pluginId,
+            releaseHash,
+            path,
+            contentType,
+            operation.operationId,
+            await sha256(bytes),
+            bytes.byteLength,
+            true,
+            now,
+          ]);
+        }
+        for (const route of parts.manifest.frontend.routes)
+          contributionRows.push([
+            operation.pluginId,
+            releaseHash,
+            "route",
+            route.routeKey,
+            JSON.stringify(route),
+            true,
+            now,
+          ]);
+        for (const menu of parts.manifest.menu)
+          contributionRows.push([
+            operation.pluginId,
+            releaseHash,
+            "menu",
+            menu.routeKey,
+            JSON.stringify(menu),
+            true,
+            now,
+          ]);
+        assetStatements.push(
+          ...bulkStatements(
+            `INSERT INTO plugin_assets(
+              plugin_id, release_hash, path, content_type, operation_id,
+              sha256, byte_length, active, created_at) VALUES`,
+            assetRows,
+            `ON CONFLICT(plugin_id, release_hash, path) DO UPDATE SET
+              content_type=excluded.content_type,
+              operation_id=excluded.operation_id,
+              sha256=excluded.sha256,
+              byte_length=excluded.byte_length,
+              active=excluded.active`,
+          ),
+          ...bulkStatements(
+            `INSERT INTO plugin_contributions(
+              plugin_id, release_hash, kind, contribution_id,
+              payload_json, active, created_at) VALUES`,
+            contributionRows,
+            `ON CONFLICT(plugin_id, release_hash, kind, contribution_id)
+              DO UPDATE SET payload_json=excluded.payload_json,
+                active=excluded.active`,
+          ),
+        );
+      }
+      const sourceRelease = operation.sourceReleaseId
+        ? await db.first<{ marketplaceId: string; publisherId: string }>(
+            `SELECT marketplace_id AS "marketplaceId", publisher_id AS "publisherId"
+               FROM plugin_releases WHERE id = ?`,
+            [operation.sourceReleaseId],
+          )
+        : null;
+      const dependencyLocks = await resolveDependencies(c, parts.manifest);
+      const previousPlugin = await db.first<{ releaseHash: string | null }>(
+        `SELECT release_hash AS "releaseHash" FROM plugins
+          WHERE id = ? AND status = 'installed'`,
+        [operation.pluginId],
+      );
+      const previousPackage = await db.first<{ operationId: string }>(
+        `SELECT operation_id AS "operationId" FROM plugin_operations
+          WHERE plugin_id = ? AND state = 'installed' AND operation_id <> ?
+          ORDER BY finished_at DESC LIMIT 1`,
+        [operation.pluginId, operation.operationId],
+      );
       await commitWithEvent(
         c,
         [
           {
-            sql: `INSERT INTO plugins(id, name, installed_version, api_version, database_dialects_json, active_database_provider, worker_name, status, manifest_json, installed_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'installed', ?, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET name=excluded.name, installed_version=excluded.installed_version, api_version=excluded.api_version, worker_name=excluded.worker_name, status='installed', manifest_json=excluded.manifest_json, updated_at=excluded.updated_at`,
+            sql: `INSERT INTO plugins(id, name, installed_version, api_version, database_dialects_json, active_database_provider, worker_name, status, manifest_json, installed_at, updated_at, package_format, marketplace_id, publisher_id, release_id, release_hash)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'installed', ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET name=excluded.name, installed_version=excluded.installed_version, api_version=excluded.api_version, worker_name=excluded.worker_name, status='installed', manifest_json=excluded.manifest_json, updated_at=excluded.updated_at, package_format=excluded.package_format, marketplace_id=excluded.marketplace_id, publisher_id=excluded.publisher_id, release_id=excluded.release_id, release_hash=excluded.release_hash`,
             params: [
               parts.manifest.id,
               parts.manifest.name,
@@ -1570,23 +2791,96 @@ installerRoutes.post("/plugin-operations/:operationId/advance", async (c) => {
               JSON.stringify(parts.manifest),
               now,
               now,
+              parts.manifest.packageFormat ?? 1,
+              sourceRelease?.marketplaceId ?? null,
+              sourceRelease?.publisherId ??
+                parts.manifest.publisher?.id ??
+                null,
+              operation.sourceReleaseId,
+              parts.manifest.frontend ? releaseHash : null,
             ],
           },
-          ...parts.manifest.permissions.map((key) => ({
-            sql: insertIgnore(db.provider),
-            params: [`perm_${key.replaceAll(".", "_")}`, key, now],
-          })),
-          ...permissionIds.map((permissionId) => ({
-            sql: insertAdminPermission(db.provider),
-            params: [permissionId, now],
-          })),
+          ...assetStatements,
+          ...bulkStatements(
+            db.provider === "d1"
+              ? "INSERT OR IGNORE INTO permissions(id,key,created_at) VALUES"
+              : "INSERT INTO permissions(id,key,created_at) VALUES",
+            parts.manifest.permissions.map((key) => [
+              `perm_${key.replaceAll(".", "_")}`,
+              key,
+              now,
+            ]),
+            db.provider === "postgres" ? "ON CONFLICT (key) DO NOTHING" : "",
+          ),
+          ...bulkStatements(
+            db.provider === "d1"
+              ? "INSERT OR IGNORE INTO group_permissions(group_id,permission_id,created_at) VALUES"
+              : "INSERT INTO group_permissions(group_id,permission_id,created_at) VALUES",
+            permissionIds.map((permissionId) => [
+              "grp_administrators",
+              permissionId,
+              now,
+            ]),
+            db.provider === "postgres"
+              ? "ON CONFLICT (group_id,permission_id) DO NOTHING"
+              : "",
+          ),
+          {
+            sql: "DELETE FROM plugin_dependency_locks WHERE plugin_id = ?",
+            params: [operation.pluginId],
+          },
+          ...bulkStatements(
+            `INSERT INTO plugin_dependency_locks(
+              plugin_id, dependency_plugin_id, version,
+              marketplace_id, release_id, created_at) VALUES`,
+            dependencyLocks.map((dependency) => [
+              operation.pluginId,
+              dependency.pluginId,
+              dependency.version,
+              dependency.marketplaceId,
+              dependency.releaseId,
+              now,
+            ]),
+          ),
+          ...(parts.manifest.frontend
+            ? [
+                {
+                  sql: `DELETE FROM plugin_assets
+                         WHERE plugin_id = ? AND release_hash <> ?
+                           AND (? IS NULL OR release_hash <> ?)`,
+                  params: [
+                    operation.pluginId,
+                    releaseHash,
+                    previousPlugin?.releaseHash ?? null,
+                    previousPlugin?.releaseHash ?? null,
+                  ],
+                },
+                {
+                  sql: `DELETE FROM plugin_contributions
+                         WHERE plugin_id = ? AND release_hash <> ?
+                           AND (? IS NULL OR release_hash <> ?)`,
+                  params: [
+                    operation.pluginId,
+                    releaseHash,
+                    previousPlugin?.releaseHash ?? null,
+                    previousPlugin?.releaseHash ?? null,
+                  ],
+                },
+              ]
+            : []),
           {
             sql: `DELETE FROM plugin_package_chunks
                    WHERE operation_id IN (
                      SELECT operation_id FROM plugin_operations
                       WHERE plugin_id = ? AND operation_id <> ?
+                        AND (? IS NULL OR operation_id <> ?)
                    )`,
-            params: [operation.pluginId, operation.operationId],
+            params: [
+              operation.pluginId,
+              operation.operationId,
+              previousPackage?.operationId ?? null,
+              previousPackage?.operationId ?? null,
+            ],
           },
           {
             sql: "UPDATE plugin_operations SET state = 'installed', finished_at = ? WHERE operation_id = ?",
@@ -1674,10 +2968,12 @@ installerRoutes.get(
       workerSha256: string;
       d1MigrationsSha256: string;
       postgresMigrationsSha256: string;
+      assetsSha256: string | null;
     }>(
       `SELECT operation_id AS "operationId", manifest_sha256 AS "manifestSha256",
               worker_sha256 AS "workerSha256", d1_migrations_sha256 AS "d1MigrationsSha256",
-              postgres_migrations_sha256 AS "postgresMigrationsSha256"
+              postgres_migrations_sha256 AS "postgresMigrationsSha256",
+              assets_sha256 AS "assetsSha256"
          FROM plugin_operations
         WHERE plugin_id = ? AND target_version = ? AND state = 'installed'
         ORDER BY finished_at DESC`,
@@ -1701,6 +2997,7 @@ installerRoutes.get(
         worker: operation.workerSha256,
         d1: operation.d1MigrationsSha256,
         postgres: operation.postgresMigrationsSha256,
+        ...(operation.assetsSha256 ? { assets: operation.assetsSha256 } : {}),
       });
       const zip = portablePackageZip(parts);
       await audit(
@@ -1759,7 +3056,9 @@ installerRoutes.post(
       `SELECT operation_id AS "operationId", plugin_id AS "pluginId", type, target_version AS "targetVersion", state,
               manifest_sha256 AS "manifestSha256", worker_sha256 AS "workerSha256",
               d1_migrations_sha256 AS "d1MigrationsSha256",
-              postgres_migrations_sha256 AS "postgresMigrationsSha256", last_error AS "lastError"
+              postgres_migrations_sha256 AS "postgresMigrationsSha256",
+              assets_sha256 AS "assetsSha256",
+              source_release_id AS "sourceReleaseId", last_error AS "lastError"
          FROM plugin_operations
         WHERE plugin_id = ? AND target_version = ? AND state = 'installed'
         ORDER BY finished_at DESC`,
@@ -1787,10 +3086,26 @@ installerRoutes.post(
       if (!parts.worker) throw new Error("worker.mjs is required.");
       const d1Ids = Object.keys(parts.d1Migrations).sort();
       const postgresIds = Object.keys(parts.postgresMigrations).sort();
-      if (stableJson(d1Ids) !== stableJson(postgresIds))
+      const supportsD1 = parts.manifest.databaseDialects.includes("d1");
+      const supportsPostgres =
+        parts.manifest.databaseDialects.includes("postgres");
+      if (
+        (supportsD1 && !d1Ids.length) ||
+        (supportsPostgres && !postgresIds.length) ||
+        (!supportsD1 && d1Ids.length > 0) ||
+        (!supportsPostgres && postgresIds.length > 0) ||
+        (supportsD1 &&
+          supportsPostgres &&
+          stableJson(d1Ids) !== stableJson(postgresIds))
+      )
         throw new Error("Plugin migrations are not paired.");
-      migrationStatements(parts.d1Migrations, parts.manifest.tablePrefix);
-      migrationStatements(parts.postgresMigrations, parts.manifest.tablePrefix);
+      if (supportsD1)
+        migrationStatements(parts.d1Migrations, parts.manifest.tablePrefix);
+      if (supportsPostgres)
+        migrationStatements(
+          parts.postgresMigrations,
+          parts.manifest.tablePrefix,
+        );
       verifyPortablePackageBoundary(
         c.env,
         parts,
@@ -1837,12 +3152,16 @@ installerRoutes.delete(
   requirePermission("core.plugin.delete"),
   async (c) => {
     const pluginId = c.req.param("pluginId");
-    const plugin = await c
-      .get("db")
-      .first<{ workerName: string; status: string }>(
-        `SELECT worker_name AS "workerName", status FROM plugins WHERE id = ?`,
-        [pluginId],
-      );
+    const plugin = await c.get("db").first<{
+      workerName: string;
+      status: string;
+      packageFormat: number | string;
+    }>(
+      `SELECT worker_name AS "workerName", status,
+                package_format AS "packageFormat"
+           FROM plugins WHERE id = ?`,
+      [pluginId],
+    );
     if (!plugin)
       throw new AppError(404, "PLUGIN_NOT_FOUND", "Plugin not found.");
     if (plugin.status === "uninstalled") {
@@ -1878,6 +3197,19 @@ installerRoutes.delete(
         "PLUGIN_STATE_CONFLICT",
         `The plugin cannot be removed while its status is ${plugin.status}.`,
       );
+    const dependent = await c.get("db").first<{ id: string }>(
+      `SELECT l.plugin_id AS id
+         FROM plugin_dependency_locks l
+         JOIN plugins p ON p.id = l.plugin_id AND p.status = 'installed'
+        WHERE l.dependency_plugin_id = ? LIMIT 1`,
+      [pluginId],
+    );
+    if (dependent)
+      throw new AppError(
+        409,
+        "PLUGIN_REQUIRED_BY_DEPENDENT",
+        `Uninstall dependent plugin ${dependent.id} first.`,
+      );
     const uninstallingAt = dbTime(c.get("db"));
     await c.get("db").atomic([
       {
@@ -1891,9 +3223,28 @@ installerRoutes.delete(
                  AND status IN ('ready','error')`,
         params: [uninstallingAt, pluginId],
       },
+      {
+        sql: `UPDATE plugin_resources_v2
+                 SET status = 'preserving', updated_at = ?
+               WHERE plugin_id = ? AND status IN ('ready','error')`,
+        params: [uninstallingAt, pluginId],
+      },
     ]);
     await removeCoreServiceBinding(c.env, bindingName(pluginId));
-    await deletePluginWorker(c.env, plugin.workerName);
+    const durableObject = await c.get("db").first<{ count: number | string }>(
+      `SELECT COUNT(*) AS count FROM plugin_resources_v2
+        WHERE plugin_id = ? AND resource_type = 'durable_object'`,
+      [pluginId],
+    );
+    const preserveWorker = Number(durableObject?.count ?? 0) > 0;
+    if (Number(plugin.packageFormat) === 2) {
+      const resources = await readResourceRows(c, pluginId, {
+        includePreserved: true,
+      });
+      await removePluginQueueConsumers(c.env, plugin.workerName, resources);
+      await configurePluginWorkerSchedules(c.env, plugin.workerName, []);
+    }
+    if (!preserveWorker) await deletePluginWorker(c.env, plugin.workerName);
     await commitWithEvent(
       c,
       [
@@ -1910,9 +3261,27 @@ installerRoutes.delete(
           params: [dbTime(c.get("db")), pluginId],
         },
         {
+          sql: "UPDATE plugin_assets SET active = ? WHERE plugin_id = ?",
+          params: [false, pluginId],
+        },
+        {
+          sql: "UPDATE plugin_contributions SET active = ? WHERE plugin_id = ?",
+          params: [false, pluginId],
+        },
+        {
+          sql: "DELETE FROM plugin_dependency_locks WHERE plugin_id = ?",
+          params: [pluginId],
+        },
+        {
           sql: `UPDATE plugin_runtime_resources
                    SET status = 'preserved', preserved_at = ?, updated_at = ?
                  WHERE plugin_id = ? AND binding_name = 'STORAGE'`,
+          params: [dbTime(c.get("db")), dbTime(c.get("db")), pluginId],
+        },
+        {
+          sql: `UPDATE plugin_resources_v2
+                   SET status = 'preserved', preserved_at = ?, updated_at = ?
+                 WHERE plugin_id = ?`,
           params: [dbTime(c.get("db")), dbTime(c.get("db")), pluginId],
         },
       ],
@@ -1920,11 +3289,16 @@ installerRoutes.delete(
         eventType: "core.plugin.uninstalled",
         resourceType: "core.plugin",
         resourceId: pluginId,
-        data: { tablesPreserved: true, objectStoragePreserved: true },
+        data: {
+          tablesPreserved: true,
+          resourcesPreserved: true,
+          workerPreservedForDurableObjects: preserveWorker,
+        },
       },
     );
     await audit(c, "core.plugin.uninstalled", "core.plugin", pluginId, {
-      objectStoragePreserved: true,
+      resourcesPreserved: true,
+      workerPreservedForDurableObjects: preserveWorker,
     });
     return c.body(null, 204);
   },

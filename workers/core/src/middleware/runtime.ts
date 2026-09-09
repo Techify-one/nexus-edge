@@ -54,7 +54,7 @@ export const securityHeaders: MiddlewareHandler<HonoEnv> = async (c, next) => {
   c.header("Referrer-Policy", "strict-origin-when-cross-origin");
   c.header(
     "Permissions-Policy",
-    "camera=(), microphone=(self), display-capture=(self), geolocation=()",
+    "camera=(self), microphone=(self), display-capture=(self), geolocation=(self)",
   );
   c.header(
     "Content-Security-Policy",

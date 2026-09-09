@@ -21,7 +21,11 @@ describe("public plugin gateway", () => {
       provider: "d1",
       orm: {},
       query: async () => [],
-      first: async () => ({ status: "installed" }),
+      first: async () => ({
+        status: "installed",
+        packageFormat: 2,
+        manifest: JSON.stringify({ publicRoutes: ["/play"] }),
+      }),
       execute: async () => ({ rowsAffected: 1 }),
       atomic: async () => [],
       close: async () => undefined,

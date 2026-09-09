@@ -7,10 +7,6 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { crmFrontendMessages } from "../../../plugins/crm/frontend/i18n.js";
-import { metaAdsFrontendMessages } from "../../../plugins/meta_ads/frontend/i18n.js";
-import { soletrandoFrontendMessages } from "../../../plugins/soletrando/frontend/i18n.js";
-import { meetingRecorderFrontendMessages } from "../../../plugins/meeting_recorder/frontend/i18n.js";
 
 export const supportedLocales = ["pt-BR", "en"] as const;
 export type AppLocale = (typeof supportedLocales)[number];
@@ -20,12 +16,14 @@ const ptBR = {
   "common.add": "Adicionar",
   "common.back": "Voltar",
   "common.active": "Ativo",
+  "common.activate": "Ativar",
   "common.cancel": "Cancelar",
   "common.close": "Fechar",
   "common.copy": "Copiar",
   "common.created": "Criado",
   "common.date": "Data",
   "common.delete": "Excluir",
+  "common.deactivate": "Desativar",
   "common.deleteConfirm": "Excluir {{name}}?",
   "common.edit": "Editar",
   "common.email": "E-mail",
@@ -67,6 +65,7 @@ const ptBR = {
   "errors.pageLoadDescription":
     "A aplicação pode ter sido atualizada. Recarregue para usar a versão mais recente.",
   "errors.reloadPage": "Recarregar página",
+  "errors.reloadGuarded": "Finalize a atividade em andamento e atualize",
   "errors.META_RATE_LIMITED":
     "A Meta limitou temporariamente as consultas desta conta. Aguarde alguns minutos e tente novamente.",
   "errors.META_TOKEN_INVALID":
@@ -238,6 +237,10 @@ const ptBR = {
   "permissions.core.plugin.update": "Atualizar plugins instalados",
   "permissions.core.plugin.delete": "Desinstalar plugins",
   "permissions.core.plugin.export": "Baixar pacotes de plugins",
+  "permissions.core.marketplace.read": "Visualizar marketplaces",
+  "permissions.core.marketplace.create": "Adicionar marketplaces",
+  "permissions.core.marketplace.update": "Atualizar marketplaces",
+  "permissions.core.marketplace.delete": "Remover marketplaces",
   "permissions.core.webhook.read": "Visualizar webhooks",
   "permissions.core.webhook.create": "Criar webhooks",
   "permissions.core.webhook.update": "Editar webhooks e trocar segredos",
@@ -270,6 +273,7 @@ const ptBR = {
   "permissionGroups.core.user": "Usuários",
   "permissionGroups.core.group": "Grupos e acessos",
   "permissionGroups.core.plugin": "Plugins",
+  "permissionGroups.core.marketplace": "Marketplaces de plugins",
   "permissionGroups.core.webhook": "Webhooks",
   "permissionGroups.core.audit": "Auditoria",
   "permissionGroups.core.settings": "Configurações gerais",
@@ -382,11 +386,6 @@ const ptBR = {
   "webhooks.enabled": "Endpoint ativo",
   "webhooks.rotate": "Rotacionar",
 
-  ...crmFrontendMessages["pt-BR"],
-  ...metaAdsFrontendMessages["pt-BR"],
-  ...soletrandoFrontendMessages["pt-BR"],
-  ...meetingRecorderFrontendMessages["pt-BR"],
-
   "audit.description": "Ações administrativas e rastreabilidade por requestId.",
   "audit.search": "Buscar por ação",
   "audit.noEvents": "Nenhum evento",
@@ -398,7 +397,47 @@ const ptBR = {
   "audit.user": "Usuário",
   "audit.metadata": "Metadados",
 
-  "plugins.description": "Módulos first-party publicados em Workers isolados.",
+  "plugins.description":
+    "Instale, atualize e gerencie plugins independentes e seus marketplaces.",
+  "plugins.installedSection": "Instalados",
+  "plugins.explore": "Explorar",
+  "plugins.exploreDescription":
+    "Instale ou atualize diretamente de marketplaces GitHub verificados.",
+  "plugins.searchMarketplace": "Buscar no catálogo",
+  "plugins.publisher": "Editor",
+  "plugins.marketplace": "Marketplace",
+  "plugins.compatibility": "Compatibilidade",
+  "plugins.compatible": "Compatível",
+  "plugins.incompatible": "Incompatível",
+  "plugins.catalogEmpty":
+    "Nenhum plugin está disponível. Sincronize um marketplace para carregar o catálogo.",
+  "plugins.marketplaces": "Marketplaces",
+  "plugins.marketplacesDescription":
+    "Fontes GitHub autorizadas para descoberta e atualização de plugins.",
+  "plugins.addMarketplace": "Adicionar marketplace",
+  "plugins.defaultMarketplace": "padrão",
+  "plugins.repository": "Repositório GitHub",
+  "plugins.trust": "Confiança",
+  "plugins.lastSync": "Última sincronização",
+  "plugins.syncMarketplace": "Sincronizar marketplace",
+  "plugins.marketplaceAdded": "Marketplace adicionado.",
+  "plugins.marketplaceSynced":
+    "Marketplace sincronizado e assinatura validada.",
+  "plugins.marketplaceRemoved":
+    "Marketplace removido; os plugins já instalados foram preservados.",
+  "plugins.removeMarketplaceConfirm": "Remover o marketplace {{name}}?",
+  "plugins.marketplaceTrustNotice":
+    "Ao sincronizar pela primeira vez, a chave pública assinante deste repositório será fixada nesta instalação.",
+  "plugins.marketplaceDownloadFailed":
+    "Não foi possível baixar e verificar o pacote do marketplace.",
+  "plugins.recoveryModeTitle": "Modo de recuperação do Core",
+  "plugins.recoveryModeDescription":
+    "A interface dinâmica deste plugin não foi carregada. Abra Plugins para desativá-lo, atualizá-lo ou inspecionar sua origem.",
+  "plugins.dynamicUnavailableTitle": "Interface do plugin indisponível",
+  "plugins.dynamicUnavailableDescription":
+    "O plugin não está instalado, você não tem acesso ou seus assets locais não estão disponíveis.",
+  "plugins.dynamicFailedTitle": "A interface do plugin encontrou um erro",
+  "plugins.openRecoveryMode": "Abrir modo de recuperação",
   "plugins.search": "Buscar plugin",
   "plugins.database": "Banco",
   "plugins.worker": "Worker",
@@ -428,7 +467,9 @@ const ptBR = {
     "O pacote precisa conter manifest.json e worker.mjs.",
   "plugins.migrationPairs":
     "As migrations D1 e PostgreSQL devem existir aos pares.",
-  "plugins.rawTooLarge": "O pacote cru excede 4 MiB.",
+  "plugins.rawTooLarge": "O pacote cru excede 8 MiB.",
+  "plugins.expansionTooLarge":
+    "O pacote excede os limites seguros de expansão ou quantidade de arquivos.",
   "plugins.gzipTooLarge": "O worker compactado excede 3 MiB.",
   "plugins.installFailed":
     "A instalação falhou. Abra e copie o relatório de suporte abaixo.",
@@ -483,7 +524,7 @@ const ptBR = {
   "plugins.deleteRecordConfirm":
     "Excluir {{name}} da lista de plugins? As tabelas e o histórico serão preservados.",
   "plugins.state.validating": "Validando",
-  "plugins.state.provisioning": "Provisionando R2",
+  "plugins.state.provisioning": "Provisionando recursos",
   "plugins.state.migrating": "Aplicando migrations",
   "plugins.state.deploying": "Publicando",
   "plugins.state.hardening": "Protegendo",
@@ -506,6 +547,37 @@ const ptBR = {
   "plugins.r2TokenPrivacy":
     "O token permanece apenas na memória desta tela e é descartado após o provisionamento.",
   "plugins.r2TokenRequired": "Informe o token temporário do R2.",
+  "plugins.resourceProvisioningTitle": "Recursos privados do plugin",
+  "plugins.resourceProvisioningDescription":
+    "O manifesto solicita recursos Cloudflare isolados. O Core cria e registra cada recurso sem guardar o token administrativo.",
+  "plugins.resourceProvisioningStepPermission":
+    "Crie um token temporário limitado às permissões e aos produtos solicitados pelo manifesto.",
+  "plugins.resourceProvisioningStepPaste":
+    "Cole o token abaixo; o Core provisionará somente os recursos pendentes.",
+  "plugins.resourceProvisioningStepRevoke":
+    "Revogue o token na Cloudflare assim que a operação terminar.",
+  "plugins.resourceOpenTokens": "Abrir tokens da conta Cloudflare",
+  "plugins.resourceTokenLabel": "Token temporário dos recursos",
+  "plugins.resourceTokenPlaceholder": "Cole o token temporário",
+  "plugins.resourceTokenPrivacy":
+    "O token é usado somente durante esta operação e não é salvo nem enviado ao plugin.",
+  "plugins.resourceTokenRequired":
+    "Informe um token temporário com acesso somente aos produtos solicitados pelo plugin.",
+  "plugins.resourceReauthPassword":
+    "Confirme sua senha para provisionar os recursos Cloudflare do plugin.",
+  "plugins.resourcePlanInvalid":
+    "O plano de recursos do plugin está incompleto ou inconsistente.",
+  "plugins.marketplaceTrustTitle": "Confiar na chave do marketplace",
+  "plugins.marketplaceTrustDescription":
+    "Confira o fingerprint por um canal confiável e digite-o para fixar a identidade deste editor.",
+  "plugins.marketplaceFingerprint": "Fingerprint apresentado",
+  "plugins.marketplaceFingerprintConfirmation":
+    "Confirme digitando o fingerprint completo",
+  "plugins.marketplaceTrustConfirm": "Confiar e sincronizar",
+  "plugins.marketplaceTrusted": "Marketplace confiado e sincronizado.",
+  "plugins.marketplaceTrustInvalid": "Os dados da chave não estão disponíveis.",
+  "plugins.marketplaceTrustReauthPassword":
+    "Confirme sua senha para confiar na chave do marketplace.",
   "plugins.r2ReauthPassword": "Confirme sua senha para provisionar o R2",
 
   "errors.fallback": "Não foi possível concluir a operação.",
@@ -567,12 +639,14 @@ const en: Record<TranslationKey, string> = {
   "common.add": "Add",
   "common.back": "Back",
   "common.active": "Active",
+  "common.activate": "Activate",
   "common.cancel": "Cancel",
   "common.close": "Close",
   "common.copy": "Copy",
   "common.created": "Created",
   "common.date": "Date",
   "common.delete": "Delete",
+  "common.deactivate": "Deactivate",
   "common.deleteConfirm": "Delete {{name}}?",
   "common.edit": "Edit",
   "common.email": "Email",
@@ -614,6 +688,7 @@ const en: Record<TranslationKey, string> = {
   "errors.pageLoadDescription":
     "The application may have been updated. Reload to use the latest version.",
   "errors.reloadPage": "Reload page",
+  "errors.reloadGuarded": "Finish the active task and update",
   "errors.META_RATE_LIMITED":
     "Meta temporarily limited requests for this ad account. Wait a few minutes and try again.",
   "errors.META_TOKEN_INVALID":
@@ -777,6 +852,10 @@ const en: Record<TranslationKey, string> = {
   "permissions.core.plugin.update": "Update installed plugins",
   "permissions.core.plugin.delete": "Uninstall plugins",
   "permissions.core.plugin.export": "Download plugin packages",
+  "permissions.core.marketplace.read": "View marketplaces",
+  "permissions.core.marketplace.create": "Add marketplaces",
+  "permissions.core.marketplace.update": "Update marketplaces",
+  "permissions.core.marketplace.delete": "Remove marketplaces",
   "permissions.core.webhook.read": "View webhooks",
   "permissions.core.webhook.create": "Create webhooks",
   "permissions.core.webhook.update": "Edit webhooks and replace secrets",
@@ -809,6 +888,7 @@ const en: Record<TranslationKey, string> = {
   "permissionGroups.core.user": "Users",
   "permissionGroups.core.group": "Groups and access",
   "permissionGroups.core.plugin": "Plugins",
+  "permissionGroups.core.marketplace": "Plugin marketplaces",
   "permissionGroups.core.webhook": "Webhooks",
   "permissionGroups.core.audit": "Audit",
   "permissionGroups.core.settings": "General settings",
@@ -914,10 +994,6 @@ const en: Record<TranslationKey, string> = {
   "webhooks.urlPlaceholder": "https://example.com/webhook",
   "webhooks.enabled": "Active endpoint",
   "webhooks.rotate": "Rotate",
-  ...crmFrontendMessages.en,
-  ...metaAdsFrontendMessages.en,
-  ...soletrandoFrontendMessages.en,
-  ...meetingRecorderFrontendMessages.en,
   "audit.description": "Administrative actions and requestId traceability.",
   "audit.search": "Search by action",
   "audit.noEvents": "No events",
@@ -928,7 +1004,46 @@ const en: Record<TranslationKey, string> = {
   "audit.record": "Audit record",
   "audit.user": "User",
   "audit.metadata": "Metadata",
-  "plugins.description": "First-party modules published as isolated Workers.",
+  "plugins.description":
+    "Install, update, and manage independent plugins and their marketplaces.",
+  "plugins.installedSection": "Installed",
+  "plugins.explore": "Explore",
+  "plugins.exploreDescription":
+    "Install or update directly from verified GitHub marketplaces.",
+  "plugins.searchMarketplace": "Search catalog",
+  "plugins.publisher": "Publisher",
+  "plugins.marketplace": "Marketplace",
+  "plugins.compatibility": "Compatibility",
+  "plugins.compatible": "Compatible",
+  "plugins.incompatible": "Incompatible",
+  "plugins.catalogEmpty":
+    "No plugins are available. Sync a marketplace to load the catalog.",
+  "plugins.marketplaces": "Marketplaces",
+  "plugins.marketplacesDescription":
+    "Authorized GitHub sources for plugin discovery and updates.",
+  "plugins.addMarketplace": "Add marketplace",
+  "plugins.defaultMarketplace": "default",
+  "plugins.repository": "GitHub repository",
+  "plugins.trust": "Trust",
+  "plugins.lastSync": "Last sync",
+  "plugins.syncMarketplace": "Sync marketplace",
+  "plugins.marketplaceAdded": "Marketplace added.",
+  "plugins.marketplaceSynced": "Marketplace synced and signature verified.",
+  "plugins.marketplaceRemoved":
+    "Marketplace removed; installed plugins were preserved.",
+  "plugins.removeMarketplaceConfirm": "Remove marketplace {{name}}?",
+  "plugins.marketplaceTrustNotice":
+    "On the first sync, this repository's signing public key will be pinned to this installation.",
+  "plugins.marketplaceDownloadFailed":
+    "The marketplace package could not be downloaded and verified.",
+  "plugins.recoveryModeTitle": "Core recovery mode",
+  "plugins.recoveryModeDescription":
+    "This plugin's dynamic interface was not loaded. Open Plugins to disable, update, or inspect its source.",
+  "plugins.dynamicUnavailableTitle": "Plugin interface unavailable",
+  "plugins.dynamicUnavailableDescription":
+    "The plugin is not installed, you do not have access, or its local assets are unavailable.",
+  "plugins.dynamicFailedTitle": "The plugin interface encountered an error",
+  "plugins.openRecoveryMode": "Open recovery mode",
   "plugins.search": "Search plugins",
   "plugins.database": "Database",
   "plugins.worker": "Worker",
@@ -957,7 +1072,9 @@ const en: Record<TranslationKey, string> = {
   "plugins.packageContents":
     "The package must contain manifest.json and worker.mjs.",
   "plugins.migrationPairs": "D1 and PostgreSQL migrations must exist in pairs.",
-  "plugins.rawTooLarge": "The raw package exceeds 4 MiB.",
+  "plugins.rawTooLarge": "The raw package exceeds 8 MiB.",
+  "plugins.expansionTooLarge":
+    "The package exceeds the safe expansion or file-count limits.",
   "plugins.gzipTooLarge": "The compressed Worker exceeds 3 MiB.",
   "plugins.installFailed":
     "Installation failed. Open and copy the support report below.",
@@ -1012,7 +1129,7 @@ const en: Record<TranslationKey, string> = {
   "plugins.deleteRecordConfirm":
     "Delete {{name}} from the plugin list? Tables and history will be preserved.",
   "plugins.state.validating": "Validating",
-  "plugins.state.provisioning": "Provisioning R2",
+  "plugins.state.provisioning": "Provisioning resources",
   "plugins.state.migrating": "Running migrations",
   "plugins.state.deploying": "Deploying",
   "plugins.state.hardening": "Hardening",
@@ -1035,6 +1152,37 @@ const en: Record<TranslationKey, string> = {
   "plugins.r2TokenPrivacy":
     "The token stays only in this screen's memory and is discarded after provisioning.",
   "plugins.r2TokenRequired": "Enter the temporary R2 token.",
+  "plugins.resourceProvisioningTitle": "Private plugin resources",
+  "plugins.resourceProvisioningDescription":
+    "The manifest requests isolated Cloudflare resources. Core creates and records each resource without retaining the administrative token.",
+  "plugins.resourceProvisioningStepPermission":
+    "Create a temporary token limited to the permissions and products requested by the manifest.",
+  "plugins.resourceProvisioningStepPaste":
+    "Paste the token below; Core will provision only the pending resources.",
+  "plugins.resourceProvisioningStepRevoke":
+    "Revoke the token in Cloudflare as soon as the operation completes.",
+  "plugins.resourceOpenTokens": "Open Cloudflare account tokens",
+  "plugins.resourceTokenLabel": "Temporary resource token",
+  "plugins.resourceTokenPlaceholder": "Paste the temporary token",
+  "plugins.resourceTokenPrivacy":
+    "The token is used only for this operation and is not stored or sent to the plugin.",
+  "plugins.resourceTokenRequired":
+    "Enter a temporary token limited to the products requested by the plugin.",
+  "plugins.resourceReauthPassword":
+    "Confirm your password to provision the plugin Cloudflare resources.",
+  "plugins.resourcePlanInvalid":
+    "The plugin resource plan is incomplete or inconsistent.",
+  "plugins.marketplaceTrustTitle": "Trust marketplace key",
+  "plugins.marketplaceTrustDescription":
+    "Verify the fingerprint through a trusted channel and enter it to pin this publisher identity.",
+  "plugins.marketplaceFingerprint": "Presented fingerprint",
+  "plugins.marketplaceFingerprintConfirmation":
+    "Confirm by entering the complete fingerprint",
+  "plugins.marketplaceTrustConfirm": "Trust and synchronize",
+  "plugins.marketplaceTrusted": "Marketplace trusted and synchronized.",
+  "plugins.marketplaceTrustInvalid": "The key details are unavailable.",
+  "plugins.marketplaceTrustReauthPassword":
+    "Confirm your password to trust the marketplace key.",
   "plugins.r2ReauthPassword": "Confirm your password to provision R2",
   "errors.fallback": "Unable to complete the operation.",
   "errors.BOOTSTRAP_UNAVAILABLE": "Initial setup has already been completed.",

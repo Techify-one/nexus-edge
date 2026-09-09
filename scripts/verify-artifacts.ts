@@ -1,6 +1,8 @@
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { execFileSync, spawnSync } from "node:child_process";
 import { join } from "node:path";
+import { strFromU8, unzipSync } from "fflate";
+import { parsePluginArchive } from "../workers/core/src/installer/package-v2.js";
 
 const pluginsDirectory = "plugins";
 const generatedArtifacts = readdirSync(pluginsDirectory, {
@@ -12,7 +14,19 @@ const generatedArtifacts = readdirSync(pluginsDirectory, {
   )
   .filter(existsSync)
   .sort();
-const trackedArtifacts = execFileSync(
+const legacyArtifacts = generatedArtifacts.filter((file) => {
+  const files = unzipSync(readFileSync(file));
+  const manifest = JSON.parse(strFromU8(files["manifest.json"]!)) as {
+    packageFormat?: number;
+  };
+  return manifest.packageFormat !== 2;
+});
+const v2Artifacts = generatedArtifacts.filter(
+  (file) => !legacyArtifacts.includes(file),
+);
+for (const file of v2Artifacts) await parsePluginArchive(readFileSync(file));
+
+const trackedLegacyArtifacts = execFileSync(
   "git",
   ["ls-files", "--", `${pluginsDirectory}/*/release/*.plugin.zip`],
   { encoding: "utf8" },
@@ -21,31 +35,30 @@ const trackedArtifacts = execFileSync(
   .filter(Boolean)
   .sort();
 
-if (
-  generatedArtifacts.length !== trackedArtifacts.length ||
-  generatedArtifacts.some((file, index) => file !== trackedArtifacts[index])
-) {
+if (legacyArtifacts.some((file) => !trackedLegacyArtifacts.includes(file))) {
   throw new Error(
     [
-      "Generated and tracked plugin artifact lists differ.",
-      `Generated: ${generatedArtifacts.join(", ") || "none"}`,
-      `Tracked: ${trackedArtifacts.join(", ") || "none"}`,
-      "Stage every generated plugins/*/release/*.plugin.zip file before verification.",
+      "A legacy bridge artifact is not tracked.",
+      `Legacy: ${legacyArtifacts.join(", ") || "none"}`,
+      `Tracked: ${trackedLegacyArtifacts.join(", ") || "none"}`,
+      "Format 2 artifacts belong in a marketplace release, not in the Core repository.",
     ].join("\n"),
   );
 }
 
-const comparison = spawnSync(
-  "git",
-  ["diff", "--exit-code", "--", ...generatedArtifacts],
-  { stdio: "inherit" },
-);
-if (comparison.error) throw comparison.error;
-if (comparison.status !== 0)
-  throw new Error(
-    "Generated plugin artifacts differ from their staged versions. Rebuild and stage them.",
+if (legacyArtifacts.length) {
+  const comparison = spawnSync(
+    "git",
+    ["diff", "--exit-code", "--", ...legacyArtifacts],
+    { stdio: "inherit" },
   );
+  if (comparison.error) throw comparison.error;
+  if (comparison.status !== 0)
+    throw new Error(
+      "Generated plugin artifacts differ from their staged versions. Rebuild and stage them.",
+    );
+}
 
 process.stdout.write(
-  `Verified ${generatedArtifacts.length} tracked plugin artifacts.\n`,
+  `Verified ${legacyArtifacts.length} legacy bridge artifact(s) and ${v2Artifacts.length} format 2 artifact(s).\n`,
 );

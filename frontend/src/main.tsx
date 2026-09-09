@@ -3,7 +3,6 @@ import { createRoot } from "react-dom/client";
 import {
   createBrowserRouter,
   isRouteErrorResponse,
-  Navigate,
   Outlet,
   RouterProvider,
   useRouteError,
@@ -21,12 +20,9 @@ import DashboardPage from "./features/dashboard.js";
 import { useI18n } from "./i18n/index.js";
 import { registerChunkRecovery } from "./lib/chunk-recovery.js";
 import { isReloadGuarded } from "./lib/reload-guard.js";
-import {
-  pluginUiRegistry,
-  SoletrandoChildDetailPage,
-  SoletrandoPracticePage,
-} from "./plugins/registry.js";
 import { initializeTheme } from "./theme/index.js";
+import { PluginPageHost } from "./plugins/PluginPageHost.js";
+import { PublicPluginPageHost } from "./plugins/PublicPluginPageHost.js";
 import "./styles/globals.css";
 
 const UsersPage = lazy(() => import("./features/users/UsersPage.js"));
@@ -107,7 +103,7 @@ const AuthenticatedRouteErrorPage = () => {
         </Button>
         <Button onClick={reload}>
           {isReloadGuarded()
-            ? t("meetingRecorder.stopAndUpdate")
+            ? t("errors.reloadGuarded")
             : t("errors.reloadPage")}
         </Button>
       </div>
@@ -120,10 +116,6 @@ const router = createBrowserRouter([
   { path: "/setup", element: <SetupPage /> },
   { path: "/login", element: <LoginPage /> },
   { path: "/accept-invite", element: <AcceptInvitePage /> },
-  {
-    path: "/soletrando/c/:token",
-    element: lazyElement(SoletrandoPracticePage),
-  },
   {
     path: "/app",
     element: <AuthenticatedLayout />,
@@ -140,56 +132,16 @@ const router = createBrowserRouter([
           { path: "settings/webhooks", element: lazyElement(WebhooksPage) },
           { path: "plugins", element: lazyElement(PluginsPage) },
           { path: "audit", element: lazyElement(AuditPage) },
+          { path: "p/:pluginId/*", element: <PluginPageHost /> },
           {
             path: "settings/general",
             element: lazyElement(GeneralSettingsPage),
-          },
-          { path: "crm", element: lazyElement(pluginUiRegistry["crm.home"]) },
-          {
-            path: "crm/leads",
-            element: lazyElement(pluginUiRegistry["crm.leads"]),
-          },
-          {
-            path: "crm/leads/:leadId",
-            element: lazyElement(pluginUiRegistry["crm.leads"]),
-          },
-          {
-            path: "meta-ads",
-            element: lazyElement(pluginUiRegistry["meta_ads.dashboard"]),
-          },
-          {
-            path: "meta-ads/accounts",
-            element: lazyElement(pluginUiRegistry["meta_ads.accounts"]),
-          },
-          {
-            path: "soletrando",
-            element: lazyElement(pluginUiRegistry["soletrando.children"]),
-          },
-          {
-            path: "soletrando/children/:childId",
-            element: lazyElement(SoletrandoChildDetailPage),
-          },
-          {
-            path: "meeting-recorder",
-            element: lazyElement(pluginUiRegistry["meeting_recorder.home"]),
-          },
-          {
-            path: "meeting-recorder/new",
-            element: lazyElement(pluginUiRegistry["meeting_recorder.new"]),
-          },
-          {
-            path: "meeting-recorder/settings",
-            element: lazyElement(pluginUiRegistry["meeting_recorder.settings"]),
-          },
-          {
-            path: "meeting-recorder/:recordingId",
-            element: lazyElement(pluginUiRegistry["meeting_recorder.detail"]),
           },
         ],
       },
     ],
   },
-  { path: "*", element: <Navigate to="/" replace /> },
+  { path: "*", element: <PublicPluginPageHost /> },
 ]);
 
 createRoot(document.getElementById("root")!).render(

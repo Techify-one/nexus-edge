@@ -197,11 +197,52 @@ managementRoutes.get("/me/ability", (c) =>
 
 managementRoutes.get("/me/permissions", async (c) => {
   const items = await availablePermissionRows(c.get("db"));
+  const locale = /^en(?:-|,|;|$)/iu.test(c.req.header("Accept-Language") ?? "")
+    ? "en"
+    : "pt-BR";
+  const plugins = await c.get("db").query<{
+    id: string;
+    name: string;
+    manifest: unknown;
+  }>(
+    `SELECT id, name, manifest_json AS manifest
+       FROM plugins WHERE status = 'installed'`,
+  );
+  const metadata = new Map(
+    plugins.map((plugin) => {
+      const manifest = parseJson<{
+        localizedMetadata?: Partial<
+          Record<
+            "pt-BR" | "en",
+            { name?: string; permissionLabels?: Record<string, string> }
+          >
+        >;
+      }>(plugin.manifest, {});
+      const localized = manifest.localizedMetadata?.[locale];
+      return [
+        plugin.id,
+        {
+          groupLabel: localized?.name ?? plugin.name,
+          labels: localized?.permissionLabels ?? {},
+        },
+      ] as const;
+    }),
+  );
   return c.json(
     {
-      items: items.filter((permission) =>
-        canPermission(c.get("ability"), permission.key),
-      ),
+      items: items
+        .filter((permission) => canPermission(c.get("ability"), permission.key))
+        .map((permission) => {
+          const pluginId = permission.key.split(".")[0] ?? "";
+          const localized = metadata.get(pluginId);
+          return {
+            ...permission,
+            ...(localized?.labels[permission.key]
+              ? { label: localized.labels[permission.key] }
+              : {}),
+            ...(localized ? { groupLabel: localized.groupLabel } : {}),
+          };
+        }),
     },
     200,
     noStore,
@@ -339,7 +380,8 @@ managementRoutes.get("/me/plugin-navigation", async (c) => {
     .query<{ key: string }>("SELECT key FROM permissions ORDER BY key");
   const visiblePlugins = plugins.flatMap((plugin) => {
     const manifest = parseJson<{
-      menu?: Array<{ title: string; routeKey: string }>;
+      menu?: Array<{ title: string; routeKey: string; path?: string }>;
+      frontend?: unknown;
       localizedMetadata?: Partial<
         Record<
           "pt-BR" | "en",
@@ -359,6 +401,11 @@ managementRoutes.get("/me/plugin-navigation", async (c) => {
             name: localized?.name ?? plugin.name,
             menu: (manifest.menu ?? []).map((entry) => ({
               ...entry,
+              ...(entry.path
+                ? { path: entry.path }
+                : manifest.frontend
+                  ? { path: `/app/p/${plugin.id}` }
+                  : {}),
               title: localized?.menuTitles?.[entry.routeKey] ?? entry.title,
             })),
           },

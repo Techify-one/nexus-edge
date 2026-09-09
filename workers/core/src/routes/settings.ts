@@ -1,5 +1,6 @@
 import { Hono, type Context } from "hono";
 import { createId } from "@app/core-contract";
+import type { InstallerRelease } from "@app/installer-release-schema";
 import semver from "semver";
 import type { HonoEnv } from "../env.js";
 import {
@@ -18,6 +19,8 @@ import {
   downloadVerifiedCoreArchive,
   readPinnedCoreRelease,
 } from "../updates/release.js";
+import { pluginManifestSchema } from "../installer/manifest.js";
+import { parseJson } from "../lib/values.js";
 
 type UpdateOperation = {
   operationId: string;
@@ -87,6 +90,60 @@ async function assertPinnedRelease(
   )
     throw new Error("CORE_UPDATE_PIN_MISMATCH");
   return release;
+}
+
+async function assertInstalledPluginCompatibility(
+  c: Context<HonoEnv>,
+  platform: InstallerRelease["pluginPlatform"],
+): Promise<void> {
+  const plugins = await c.get("db").query<{
+    id: string;
+    packageFormat: number | string;
+    manifest: unknown;
+  }>(
+    `SELECT id, package_format AS "packageFormat", manifest_json AS manifest
+       FROM plugins WHERE status = 'installed'`,
+  );
+  if (!platform) {
+    if (plugins.some((plugin) => Number(plugin.packageFormat) === 2))
+      throw new AppError(
+        409,
+        "CORE_UPDATE_PLUGIN_COMPATIBILITY_UNKNOWN",
+        "The Core release does not declare compatibility with installed package 2 plugins.",
+      );
+    return;
+  }
+  for (const plugin of plugins) {
+    const packageFormat = Number(plugin.packageFormat);
+    if (!platform.packageFormats.includes(packageFormat))
+      throw new AppError(
+        409,
+        "CORE_UPDATE_PLUGIN_INCOMPATIBLE",
+        `The Core release does not support installed plugin ${plugin.id}.`,
+      );
+    if (packageFormat !== 2) continue;
+    const parsed = pluginManifestSchema.safeParse(
+      parseJson<unknown>(plugin.manifest, null),
+    );
+    if (
+      !parsed.success ||
+      !parsed.data.engines ||
+      !platform.manifestVersions.includes(parsed.data.manifestVersion ?? 1) ||
+      !platform.hostApis.includes(parsed.data.engines.hostApi) ||
+      !platform.coreApis.includes(parsed.data.engines.coreApi) ||
+      (parsed.data.resources ?? []).some(
+        (resource) =>
+          !platform.capabilities[resource.type]?.includes(
+            resource.capabilityVersion,
+          ),
+      )
+    )
+      throw new AppError(
+        409,
+        "CORE_UPDATE_PLUGIN_INCOMPATIBLE",
+        `The Core release does not satisfy the contracts used by plugin ${plugin.id}.`,
+      );
+  }
 }
 
 async function failOperation(
@@ -193,6 +250,10 @@ settingsRoutes.post(
         "CORE_UPDATE_NOT_AVAILABLE",
         "This installation is already current.",
       );
+    await assertInstalledPluginCompatibility(
+      c,
+      release.manifest.pluginPlatform,
+    );
 
     const operationId = createId("cup");
     const now = Date.now();

@@ -1,0 +1,47 @@
+{
+  "name": "@nexus/plugin-sdk",
+  "version": "1.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "nexus-plugin-package": "./dist/cli.js",
+    "nexus-marketplace-generate": "./dist/marketplace-cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package": {
+      "types": "./dist/package.d.ts",
+      "import": "./dist/package.js"
+    },
+    "./marketplace": {
+      "types": "./dist/marketplace.d.ts",
+      "import": "./dist/marketplace.js"
+    },
+    "./backend": {
+      "types": "./dist/backend.d.ts",
+      "import": "./dist/backend.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "fflate": "0.8.3",
+    "pg": "8.23.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20260826.1",
+    "@types/node": "26.2.0",
+    "@types/pg": "8.23.1",
+    "typescript": "7.0.2"
+  }
+}

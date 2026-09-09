@@ -23,7 +23,6 @@ import { Button } from "../ui/index.js";
 import { LanguageSwitcher } from "../i18n/LanguageSwitcher.js";
 import { ThemeToggle } from "../theme/ThemeToggle.js";
 import { useI18n, type TranslationKey } from "../../i18n/index.js";
-import { pluginRoutePaths } from "../../plugins/registry.js";
 import { resolvePluginBackTarget } from "../../plugins/navigation.js";
 
 const items = [
@@ -86,10 +85,7 @@ export function AppShell() {
   });
   const navigate = useNavigate();
   const location = useLocation();
-  const pluginBackTarget = resolvePluginBackTarget(
-    location.pathname,
-    Object.values(pluginRoutePaths),
-  );
+  const pluginBackTarget = resolvePluginBackTarget(location.pathname, []);
   useEffect(() => {
     try {
       window.localStorage.setItem(

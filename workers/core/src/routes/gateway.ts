@@ -55,8 +55,12 @@ gatewayRoutes.all("/:pluginId/*", async (c) => {
     throw new AppError(404, "NOT_FOUND", "Resource not found.");
   const internalUrl = new URL(forwardedPath, "https://plugin.internal");
   internalUrl.search = incoming.search;
+  const contentType = c.req.header("Content-Type") ?? "";
+  const idempotencyRequested = Boolean(c.req.header("Idempotency-Key"));
   const idempotency =
-    c.req.method === "POST"
+    c.req.method === "POST" &&
+    idempotencyRequested &&
+    contentType.toLowerCase().includes("application/json")
       ? await idempotencyLookup(
           c,
           `plugins.${pluginId}.${internalUrl.pathname}.create`,

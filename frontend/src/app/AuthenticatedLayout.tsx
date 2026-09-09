@@ -16,16 +16,8 @@ export function AuthenticatedLayout() {
     queryFn: () => api<{ rules: unknown }>("/api/v1/me/ability"),
     enabled: session.isSuccess,
   });
-  const pluginNavigation = useQuery({
-    queryKey: ["me", "plugin-navigation"],
-    queryFn: () =>
-      api<{ plugins: Array<{ pluginId: string }> }>(
-        "/api/v1/me/plugin-navigation",
-      ),
-    enabled: session.isSuccess,
-  });
   if (session.isError) return <Navigate to="/login" replace />;
-  if (session.isPending || rules.isPending || pluginNavigation.isPending)
+  if (session.isPending || rules.isPending)
     return (
       <main className="mx-auto max-w-6xl space-y-4 p-8">
         <Skeleton className="h-16" />
@@ -34,11 +26,7 @@ export function AuthenticatedLayout() {
     );
   if (rules.data) updateAbility(rules.data.rules);
   return (
-    <PersistentPluginSurfaceHost
-      installedPluginIds={(pluginNavigation.data?.plugins ?? []).map(
-        (plugin) => plugin.pluginId,
-      )}
-    >
+    <PersistentPluginSurfaceHost>
       <AppShell />
     </PersistentPluginSurfaceHost>
   );

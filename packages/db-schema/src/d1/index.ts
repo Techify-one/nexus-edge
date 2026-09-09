@@ -311,6 +311,11 @@ export const plugins = sqliteTable("plugins", {
   workerName: text("worker_name").notNull(),
   status: text("status").notNull(),
   manifestJson: text("manifest_json").notNull(),
+  packageFormat: integer("package_format").notNull().default(1),
+  marketplaceId: text("marketplace_id"),
+  publisherId: text("publisher_id"),
+  releaseId: text("release_id"),
+  releaseHash: text("release_hash"),
   installedAt: instant("installed_at"),
   updatedAt: instant("updated_at").notNull(),
 });
@@ -327,6 +332,9 @@ export const pluginOperations = sqliteTable(
     workerSha256: text("worker_sha256").notNull(),
     d1MigrationsSha256: text("d1_migrations_sha256").notNull(),
     postgresMigrationsSha256: text("postgres_migrations_sha256").notNull(),
+    sourceReleaseId: text("source_release_id"),
+    packageFormat: integer("package_format").notNull().default(1),
+    assetsSha256: text("assets_sha256"),
     state: text("state").notNull(),
     lockAcquiredAt: instant("lock_acquired_at"),
     lockExpiresAt: instant("lock_expires_at"),
@@ -381,6 +389,191 @@ export const pluginRuntimeResources = sqliteTable(
     primaryKey({ columns: [t.pluginId, t.bindingName] }),
     index("plugin_runtime_resources_status_idx").on(t.status, t.updatedAt),
   ],
+);
+export const pluginMarketplaces = sqliteTable(
+  "plugin_marketplaces",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    owner: text("owner").notNull(),
+    repository: text("repository").notNull(),
+    repositoryId: text("repository_id"),
+    sourceRef: text("source_ref").notNull().default("main"),
+    catalogPath: text("catalog_path")
+      .notNull()
+      .default("nexus-marketplace.json"),
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    isDefault: integer("is_default", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    trustState: text("trust_state").notNull().default("pending"),
+    trustedPublicKey: text("trusted_public_key"),
+    keyFingerprint: text("key_fingerprint"),
+    etag: text("etag"),
+    catalogJson: text("catalog_json"),
+    catalogExpiresAt: instant("catalog_expires_at"),
+    retryAfterAt: instant("retry_after_at"),
+    credentialRef: text("credential_ref"),
+    lastSyncedAt: instant("last_synced_at"),
+    lastErrorCode: text("last_error_code"),
+    removedAt: instant("removed_at"),
+    createdAt: instant("created_at").notNull(),
+    updatedAt: instant("updated_at").notNull(),
+  },
+  (t) => [
+    uniqueIndex("plugin_marketplaces_source_idx").on(
+      t.owner,
+      t.repository,
+      t.sourceRef,
+      t.catalogPath,
+    ),
+  ],
+);
+export const pluginMarketplaceKeys = sqliteTable(
+  "plugin_marketplace_keys",
+  {
+    marketplaceId: text("marketplace_id").notNull(),
+    keyId: text("key_id").notNull(),
+    publisherId: text("publisher_id").notNull(),
+    publicKey: text("public_key").notNull(),
+    fingerprint: text("fingerprint").notNull(),
+    status: text("status").notNull(),
+    validFrom: instant("valid_from").notNull(),
+    validUntil: instant("valid_until"),
+    createdAt: instant("created_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.marketplaceId, t.keyId] })],
+);
+export const pluginCatalogSnapshots = sqliteTable(
+  "plugin_catalog_snapshots",
+  {
+    id: text("id").primaryKey(),
+    marketplaceId: text("marketplace_id").notNull(),
+    revision: text("revision").notNull(),
+    sha256: text("sha256").notNull(),
+    etag: text("etag"),
+    catalogJson: text("catalog_json").notNull(),
+    fetchedAt: instant("fetched_at").notNull(),
+  },
+  (t) => [
+    uniqueIndex("plugin_catalog_snapshots_revision_idx").on(
+      t.marketplaceId,
+      t.revision,
+    ),
+  ],
+);
+export const pluginReleases = sqliteTable(
+  "plugin_releases",
+  {
+    id: text("id").primaryKey(),
+    marketplaceId: text("marketplace_id").notNull(),
+    pluginId: text("plugin_id").notNull(),
+    publisherId: text("publisher_id").notNull(),
+    publisherName: text("publisher_name").notNull(),
+    version: text("version").notNull(),
+    channel: text("channel").notNull().default("stable"),
+    description: text("description").notNull().default(""),
+    manifestJson: text("manifest_json").notNull(),
+    artifactUrl: text("artifact_url").notNull(),
+    artifactSha256: text("artifact_sha256").notNull(),
+    artifactSignature: text("artifact_signature").notNull(),
+    packageBytes: integer("package_bytes"),
+    compatible: integer("compatible", { mode: "boolean" })
+      .notNull()
+      .default(true),
+    compatibilityReason: text("compatibility_reason"),
+    publishedAt: instant("published_at"),
+    discoveredAt: instant("discovered_at").notNull(),
+  },
+  (t) => [
+    uniqueIndex("plugin_releases_version_idx").on(
+      t.marketplaceId,
+      t.pluginId,
+      t.channel,
+      t.version,
+    ),
+    index("plugin_releases_catalog_idx").on(
+      t.pluginId,
+      t.channel,
+      t.discoveredAt,
+    ),
+  ],
+);
+export const pluginAssets = sqliteTable(
+  "plugin_assets",
+  {
+    pluginId: text("plugin_id").notNull(),
+    releaseHash: text("release_hash").notNull(),
+    path: text("path").notNull(),
+    contentType: text("content_type").notNull(),
+    operationId: text("operation_id").notNull(),
+    sha256: text("sha256").notNull(),
+    byteLength: integer("byte_length").notNull(),
+    active: integer("active", { mode: "boolean" }).notNull().default(false),
+    createdAt: instant("created_at").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.pluginId, t.releaseHash, t.path] }),
+    index("plugin_assets_active_idx").on(t.pluginId, t.active, t.path),
+    index("plugin_assets_operation_idx").on(t.operationId, t.path),
+  ],
+);
+export const pluginContributions = sqliteTable(
+  "plugin_contributions",
+  {
+    pluginId: text("plugin_id").notNull(),
+    releaseHash: text("release_hash").notNull(),
+    kind: text("kind").notNull(),
+    contributionId: text("contribution_id").notNull(),
+    payloadJson: text("payload_json").notNull(),
+    active: integer("active", { mode: "boolean" }).notNull().default(false),
+    createdAt: instant("created_at").notNull(),
+  },
+  (t) => [
+    primaryKey({
+      columns: [t.pluginId, t.releaseHash, t.kind, t.contributionId],
+    }),
+  ],
+);
+export const pluginResourcesV2 = sqliteTable(
+  "plugin_resources_v2",
+  {
+    pluginId: text("plugin_id").notNull(),
+    logicalName: text("logical_name").notNull(),
+    resourceType: text("resource_type").notNull(),
+    capabilityVersion: integer("capability_version").notNull().default(1),
+    bindingName: text("binding_name").notNull(),
+    externalId: text("external_id"),
+    externalName: text("external_name"),
+    ownerWorkerName: text("owner_worker_name"),
+    required: integer("required", { mode: "boolean" }).notNull().default(true),
+    status: text("status").notNull(),
+    retentionPolicy: text("retention_policy").notNull().default("preserve"),
+    declarationJson: text("declaration_json").notNull(),
+    lastErrorCode: text("last_error_code"),
+    createdAt: instant("created_at").notNull(),
+    updatedAt: instant("updated_at").notNull(),
+    preservedAt: instant("preserved_at"),
+  },
+  (t) => [
+    primaryKey({ columns: [t.pluginId, t.logicalName] }),
+    uniqueIndex("plugin_resources_v2_binding_idx").on(
+      t.pluginId,
+      t.bindingName,
+    ),
+  ],
+);
+export const pluginDependencyLocks = sqliteTable(
+  "plugin_dependency_locks",
+  {
+    pluginId: text("plugin_id").notNull(),
+    dependencyPluginId: text("dependency_plugin_id").notNull(),
+    version: text("version").notNull(),
+    marketplaceId: text("marketplace_id"),
+    releaseId: text("release_id"),
+    createdAt: instant("created_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.pluginId, t.dependencyPluginId] })],
 );
 export const installerLock = sqliteTable("installer_lock", {
   id: text("id").primaryKey(),
@@ -468,39 +661,4 @@ export const webhookDeliveries = sqliteTable(
     uniqueIndex("webhook_delivery_unique").on(t.endpointId, t.eventId),
     index("webhook_delivery_status_idx").on(t.status, t.nextAttemptAt),
   ],
-);
-
-export const crmLeads = sqliteTable(
-  "crm_leads",
-  {
-    id: text("id").primaryKey(),
-    name: text("name").notNull(),
-    email: text("email"),
-    phone: text("phone"),
-    company: text("company"),
-    status: text("status").notNull(),
-    notes: text("notes"),
-    ownerUserId: text("owner_user_id").notNull(),
-    version: integer("version").notNull().default(1),
-    createdAt: instant("created_at").notNull(),
-    updatedAt: instant("updated_at").notNull(),
-  },
-  (t) => [
-    index("crm_leads_status_idx").on(t.status, t.updatedAt),
-    index("crm_leads_owner_idx").on(t.ownerUserId, t.updatedAt),
-  ],
-);
-export const crmActivities = sqliteTable(
-  "crm_activities",
-  {
-    id: text("id").primaryKey(),
-    leadId: text("lead_id")
-      .notNull()
-      .references(() => crmLeads.id, { onDelete: "cascade" }),
-    type: text("type").notNull(),
-    body: text("body"),
-    actorUserId: text("actor_user_id").notNull(),
-    createdAt: instant("created_at").notNull(),
-  },
-  (t) => [index("crm_activities_lead_idx").on(t.leadId, t.createdAt)],
 );

@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   archivePackageStatements,
@@ -9,21 +8,27 @@ import {
 import type { PluginManifest } from "../workers/core/src/installer/manifest.js";
 
 const packageParts = () => ({
-  manifest: JSON.parse(
-    readFileSync("plugins/crm/manifest.json", "utf8"),
-  ) as PluginManifest,
-  worker: `export default {};\n${"x".repeat(130_000)}`,
+  manifest: {
+    id: "archive_fixture",
+    name: "Archive fixture",
+    version: "1.0.0",
+    apiVersion: 1,
+    coreMinVersion: "1.0.0",
+    compatibilityDate: "2026-09-08",
+    compatibilityFlags: ["nodejs_compat"],
+    databaseDialects: ["d1", "postgres"],
+    tablePrefix: "archive_fixture_",
+    permissions: [],
+    menu: [],
+  } as PluginManifest,
+  worker: `export default {};\n${"x".repeat(3_100_000)}`,
   d1Migrations: {
-    "0001_init": readFileSync(
-      "plugins/crm/migrations/d1/0001_init.sql",
-      "utf8",
-    ),
+    "0001_init":
+      "CREATE TABLE IF NOT EXISTS archive_fixture_items (id TEXT PRIMARY KEY);",
   },
   postgresMigrations: {
-    "0001_init": readFileSync(
-      "plugins/crm/migrations/postgres/0001_init.sql",
-      "utf8",
-    ),
+    "0001_init":
+      "CREATE TABLE IF NOT EXISTS archive_fixture_items (id TEXT PRIMARY KEY);",
   },
 });
 

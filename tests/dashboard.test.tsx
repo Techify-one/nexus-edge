@@ -49,8 +49,16 @@ describe("Overview navigation", () => {
               pluginId: "crm",
               name: "CRM",
               menu: [
-                { title: "CRM", routeKey: "crm.home" },
-                { title: "Leads", routeKey: "crm.leads" },
+                {
+                  title: "CRM",
+                  routeKey: "crm.home",
+                  path: "/app/p/crm",
+                },
+                {
+                  title: "Leads",
+                  routeKey: "crm.leads",
+                  path: "/app/p/crm/leads",
+                },
               ],
             },
             {
@@ -60,10 +68,12 @@ describe("Overview navigation", () => {
                 {
                   title: "Meta Ads",
                   routeKey: "meta_ads.dashboard",
+                  path: "/app/p/meta_ads",
                 },
                 {
                   title: "Contas de anúncios",
                   routeKey: "meta_ads.accounts",
+                  path: "/app/p/meta_ads/accounts",
                 },
               ],
             },
@@ -89,10 +99,10 @@ describe("Overview navigation", () => {
       (
         await screen.findByRole("link", { name: /CRM/ }, { timeout: 5_000 })
       ).getAttribute("href"),
-    ).toBe("/app/crm");
+    ).toBe("/app/p/crm");
     expect(
       screen.getByRole("link", { name: /Meta Ads/ }).getAttribute("href"),
-    ).toBe("/app/meta-ads");
+    ).toBe("/app/p/meta_ads");
     expect(
       screen
         .getByRole("link", { name: /Chaves de API|API keys/ })
@@ -147,7 +157,13 @@ describe("Overview navigation", () => {
             {
               pluginId: "crm",
               name: "CRM",
-              menu: [{ title: "CRM", routeKey: "crm.home" }],
+              menu: [
+                {
+                  title: "CRM",
+                  routeKey: "crm.home",
+                  path: "/app/p/crm",
+                },
+              ],
             },
           ],
         });

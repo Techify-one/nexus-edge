@@ -2,7 +2,12 @@ import { useMemo } from "react";
 import { useI18n } from "../../i18n/index.js";
 import { groupPermissions, permissionLabel } from "../../lib/permissions.js";
 
-type Permission = { id: string; key: string };
+type Permission = {
+  id: string;
+  key: string;
+  label?: string;
+  groupLabel?: string;
+};
 
 export function PermissionChecklist({
   permissions,
@@ -46,7 +51,9 @@ export function PermissionChecklist({
                   value={permission.key}
                   defaultChecked={selected.has(permission.key)}
                 />
-                <span>{permissionLabel(permission.key, t)}</span>
+                <span>
+                  {permissionLabel(permission.key, t, permission.label)}
+                </span>
               </label>
             ))}
           </div>

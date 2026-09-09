@@ -5,7 +5,7 @@ import type { HonoEnv } from "../env.js";
 export class AppError extends Error {
   constructor(
     readonly status:
-      400 | 401 | 403 | 404 | 409 | 410 | 413 | 422 | 429 | 500 | 503,
+      400 | 401 | 403 | 404 | 409 | 410 | 413 | 422 | 429 | 500 | 502 | 503,
     readonly code: ErrorCode | string,
     message: string,
     readonly fieldErrors?: Record<string, string[]>,

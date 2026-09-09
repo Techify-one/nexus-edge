@@ -8,17 +8,16 @@
     "node": ">=24"
   },
   "scripts": {
-    "build": "pnpm build:frontend && pnpm build:installer && pnpm build:plugins && pnpm --filter @app/plugin-template build",
+    "build": "pnpm --filter @nexus/plugin-sdk build && pnpm build:frontend && pnpm build:installer && pnpm build:plugins",
     "build:frontend": "pnpm --filter @app/frontend build",
     "build:installer": "pnpm --filter @app/installer-frontend build && pnpm --filter @app/installer-worker build",
-    "build:plugins": "pnpm --filter @app/plugin-crm build && node --import tsx scripts/package-plugin.ts crm && pnpm --filter @app/plugin-meta-ads build && node --import tsx scripts/package-plugin.ts meta_ads && pnpm --filter @app/plugin-soletrando build && node --import tsx scripts/package-plugin.ts soletrando && pnpm --filter @app/plugin-meeting-recorder build && node --import tsx scripts/package-plugin.ts meeting_recorder",
+    "build:plugins": "pnpm --filter @app/plugin-template build",
     "verify:artifacts": "node --import tsx scripts/verify-artifacts.ts",
     "typecheck": "tsc -b --pretty false && tsc -p installer/worker/tests/tsconfig.json --noEmit --pretty false",
     "test": "vitest run && pnpm test:installer",
     "test:installer": "pnpm --dir installer/worker exec vitest run --config vitest.config.ts",
     "test:watch": "vitest",
     "test:matrix": "node --import tsx scripts/test-database-matrix.ts",
-    "test:meeting-recorder:api": "node --import tsx scripts/test-meeting-recorder-api.ts",
     "lint": "tsc -b --pretty false",
     "format:check": "prettier --check .",
     "dev": "pnpm --filter @app/frontend dev",
@@ -36,7 +35,8 @@
     "installer:release:publish": "node --import tsx scripts/publish-installer-release.ts",
     "installer:release:publish-objects": "INSTALLER_RELEASE_PUBLISH_MODE=objects node --import tsx scripts/publish-installer-release.ts",
     "installer:release:promote": "INSTALLER_RELEASE_PUBLISH_MODE=promote node --import tsx scripts/publish-installer-release.ts",
-    "core:update:release:build": "pnpm build:frontend && node --import tsx scripts/build-installer-release.ts && node --import tsx scripts/package-core-update-release.ts"
+    "core:update:release:build": "pnpm build:frontend && node --import tsx scripts/build-installer-release.ts && node --import tsx scripts/package-core-update-release.ts",
+    "marketplace:generate": "pnpm --filter @nexus/plugin-sdk build && node --import tsx scripts/generate-marketplace.ts"
   },
   "dependencies": {
     "@better-auth/api-key": "1.7.1",
@@ -69,6 +69,7 @@
   },
   "devDependencies": {
     "@app/installer-release-schema": "workspace:*",
+    "@nexus/plugin-sdk": "workspace:*",
     "@cloudflare/vite-plugin": "1.53.1",
     "@cloudflare/vitest-plugin": "1.1.0",
     "@cloudflare/workers-types": "5.20260826.1",

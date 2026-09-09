@@ -63,12 +63,9 @@ pnpm verify:artifacts
 pnpm verify:bundle
 ```
 
-The installable packages include `plugins/crm/release/crm.plugin.zip`,
-`plugins/meta_ads/release/meta_ads.plugin.zip`, and
-`plugins/meeting_recorder/release/meeting_recorder.plugin.zip`. They are
-reproducible tracked release outputs; commit them with the source that generated
-them. CI rebuilds and compares the packages so a stale or missing artifact
-blocks deployment.
+Installable packages are signed, immutable GitHub Release assets published by
+independent marketplace repositories. The Core repository keeps only the author
+template and validates marketplace packages at download and installation time.
 
 ## 3A. D1 path
 
@@ -167,24 +164,23 @@ curl -fsS https://YOUR-DOMAIN/api/v1/setup/status
 
 Open `https://YOUR-DOMAIN/setup` and create the first administrator using only a name, email address, and a password of at least eight characters. There is no public sign-up; the bootstrap endpoint permanently closes for that installation after completion.
 
-## 6. Install the CRM
+## 6. Install a marketplace plugin
 
 New plugin packages must follow `docs/PLUGIN-DEVELOPMENT.md`. In particular,
-build the Worker with Wrangler dry-run, package it with
-`scripts/package-plugin.ts`, and never substitute a raw Node/esbuild bundle.
+build the Worker with Wrangler dry-run and package it with the public SDK.
 
 1. Sign in as an administrator.
 2. Open `/app/plugins`.
-3. Click **Add** and select `plugins/crm/release/crm.plugin.zip`.
+3. Trust and synchronize the marketplace, then click **Install** on a catalog entry.
 4. Review the version, sizes, migrations, menus, and permissions.
 5. Confirm the installation. The interface advances one stage per request and displays the persisted state.
-6. Verify `/app/crm/leads`, create/edit/delete one lead, and inspect `/app/audit`.
+6. Open the plugin at `/app/p/<plugin-id>`, exercise its API, and inspect `/app/audit`.
 7. Download the installed plugin package and verify that the ZIP can be selected
    by the Installer on another Nexus without containing business data or Nexus
    credentials.
 
-The Installer creates `app-plugin-crm`, applies only the active provider's
-migration, disables the public URL, and adds `PLUGIN_CRM` to the Core. On
+The Installer creates the plugin Worker, applies only the active provider's
+migration, disables the public URL, and adds its service binding to the Core. On
 failure, copy the expandable support report before closing the panel and attach
 it to the incident or developer report. It contains safe operation and request
 identifiers, the failed stage, a bounded error code, and package metadata; raw

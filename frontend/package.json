@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@app/core-worker": "workspace:*",
-    "@app/plugin-crm": "workspace:*",
+    "@nexus/plugin-sdk": "workspace:*",
     "@casl/ability": "7.0.1",
     "@casl/react": "7.0.1",
     "@dnd-kit/core": "6.3.1",

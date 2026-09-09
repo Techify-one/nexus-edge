@@ -25,7 +25,6 @@ export type CoreEnv = {
   PLUGIN_COMPATIBILITY_FLAGS?: string;
   WEBHOOK_QUEUE: Queue<WebhookQueueMessage>;
   ASSETS?: Fetcher;
-  PLUGIN_CRM?: Fetcher;
   [binding: `PLUGIN_${string}`]: unknown;
 };
 

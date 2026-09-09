@@ -3,15 +3,20 @@ import { sha256, stableJson } from "@app/webhook-contract";
 import { strToU8, zipSync } from "fflate";
 import { pluginManifestSchema, type PluginManifest } from "./manifest.js";
 import { migrationStatements, type MigrationSet } from "./migrations.js";
+import { decodePackageFile, packageFilesDigest } from "./package-v2.js";
 
-const CHUNK_CHARACTERS = 60_000;
+// Stays below D1's 2 MB maximum row size while keeping a worst-case format-2
+// package under the Free-plan per-invocation query count during archival.
+const CHUNK_CHARACTERS = 1_500_000;
 const migrationPath = /^migrations\/(d1|postgres)\/(\d{4}_[a-z0-9_]+)\.sql$/u;
 
 export type PortablePackage = {
   manifest: PluginManifest;
+  manifestSource?: string;
   worker: string;
   d1Migrations: MigrationSet;
   postgresMigrations: MigrationSet;
+  files?: Record<string, string>;
 };
 
 export type PackageHashes = {
@@ -19,6 +24,7 @@ export type PackageHashes = {
   worker: string;
   d1: string;
   postgres: string;
+  assets?: string;
 };
 
 export type PackageChunkRow = {
@@ -36,6 +42,13 @@ export const assertNoRuntimeValues = (
     parts.worker,
     stableJson(parts.d1Migrations),
     stableJson(parts.postgresMigrations),
+    ...Object.values(parts.files ?? {}).map((value) => {
+      try {
+        return new TextDecoder().decode(decodePackageFile(value));
+      } catch {
+        return "";
+      }
+    }),
   ].join("\n");
   if (
     runtimeValues.some(
@@ -51,8 +64,10 @@ export const assertNoRuntimeValues = (
 };
 
 const packageFiles = (parts: PortablePackage): Record<string, string> => ({
-  "manifest.json": `${JSON.stringify(parts.manifest, null, 2)}\n`,
-  "worker.mjs": parts.worker,
+  "manifest.json":
+    parts.manifestSource ?? `${JSON.stringify(parts.manifest, null, 2)}\n`,
+  [parts.manifest.packageFormat === 2 ? "backend/worker.mjs" : "worker.mjs"]:
+    parts.worker,
   ...Object.fromEntries(
     Object.entries(parts.d1Migrations).map(([id, sql]) => [
       `migrations/d1/${id}.sql`,
@@ -63,6 +78,12 @@ const packageFiles = (parts: PortablePackage): Record<string, string> => ({
     Object.entries(parts.postgresMigrations).map(([id, sql]) => [
       `migrations/postgres/${id}.sql`,
       sql,
+    ]),
+  ),
+  ...Object.fromEntries(
+    Object.entries(parts.files ?? {}).map(([path, content]) => [
+      path,
+      `base64:${content}`,
     ]),
   ),
 });
@@ -107,6 +128,10 @@ const restoreFiles = (rows: PackageChunkRow[]): Record<string, string> => {
     if (
       row.path !== "manifest.json" &&
       row.path !== "worker.mjs" &&
+      row.path !== "backend/worker.mjs" &&
+      !/^(?:integrity\.json|signature\.json|openapi\.json|LICENSE|backend\/[A-Za-z0-9_.@/-]+|frontend\/[A-Za-z0-9_.@/-]+|locales\/[A-Za-z0-9_-]+\.json|resources\/[A-Za-z0-9_.@/-]+)$/u.test(
+        row.path,
+      ) &&
       !migrationPath.test(row.path)
     )
       throw new Error("The stored plugin package contains an invalid path.");
@@ -130,7 +155,7 @@ export const restorePortablePackage = (
   rows: PackageChunkRow[],
 ): PortablePackage => {
   const files = restoreFiles(rows);
-  if (!files["manifest.json"] || !files["worker.mjs"])
+  if (!files["manifest.json"])
     throw new Error("The stored plugin package is incomplete.");
   let manifestValue: unknown;
   try {
@@ -153,18 +178,48 @@ export const restorePortablePackage = (
     );
   const d1Migrations = migrations("d1");
   const postgresMigrations = migrations("postgres");
+  const supportsD1 = manifest.data.databaseDialects.includes("d1");
+  const supportsPostgres = manifest.data.databaseDialects.includes("postgres");
   if (
-    stableJson(Object.keys(d1Migrations)) !==
-    stableJson(Object.keys(postgresMigrations))
+    (supportsD1 && !Object.keys(d1Migrations).length) ||
+    (supportsPostgres && !Object.keys(postgresMigrations).length) ||
+    (!supportsD1 && Object.keys(d1Migrations).length > 0) ||
+    (!supportsPostgres && Object.keys(postgresMigrations).length > 0) ||
+    (supportsD1 &&
+      supportsPostgres &&
+      stableJson(Object.keys(d1Migrations)) !==
+        stableJson(Object.keys(postgresMigrations)))
   )
     throw new Error("The stored plugin migrations are incomplete.");
-  migrationStatements(d1Migrations, manifest.data.tablePrefix);
-  migrationStatements(postgresMigrations, manifest.data.tablePrefix);
+  if (supportsD1) migrationStatements(d1Migrations, manifest.data.tablePrefix);
+  if (supportsPostgres)
+    migrationStatements(postgresMigrations, manifest.data.tablePrefix);
+  const workerPath =
+    manifest.data.packageFormat === 2 ? "backend/worker.mjs" : "worker.mjs";
+  if (!files[workerPath])
+    throw new Error("The stored plugin package is incomplete.");
+  const represented = new Set([
+    "manifest.json",
+    workerPath,
+    ...Object.keys(files).filter((path) => migrationPath.test(path)),
+  ]);
+  const extraFiles = Object.fromEntries(
+    Object.entries(files)
+      .filter(([path]) => !represented.has(path))
+      .map(([path, content]) => {
+        if (!content.startsWith("base64:"))
+          throw new Error("The stored plugin package has an invalid encoding.");
+        return [path, content.slice("base64:".length)];
+      }),
+  );
   return {
     manifest: manifest.data,
-    worker: files["worker.mjs"],
+    worker: files[workerPath],
     d1Migrations,
     postgresMigrations,
+    ...(manifest.data.packageFormat === 2
+      ? { manifestSource: files["manifest.json"], files: extraFiles }
+      : {}),
   };
 };
 
@@ -177,6 +232,7 @@ export const verifyPortablePackage = async (
     worker: await sha256(parts.worker),
     d1: await sha256(stableJson(parts.d1Migrations)),
     postgres: await sha256(stableJson(parts.postgresMigrations)),
+    assets: await packageFilesDigest(parts.files ?? {}),
   };
   if (
     parts.manifest.id !== expected.pluginId ||
@@ -184,7 +240,8 @@ export const verifyPortablePackage = async (
     actual.manifest !== expected.manifest ||
     actual.worker !== expected.worker ||
     actual.d1 !== expected.d1 ||
-    actual.postgres !== expected.postgres
+    actual.postgres !== expected.postgres ||
+    (expected.assets !== undefined && actual.assets !== expected.assets)
   )
     throw new Error("The stored plugin package failed integrity verification.");
 };
@@ -194,7 +251,9 @@ export const portablePackageZip = (parts: PortablePackage): Uint8Array =>
     Object.fromEntries(
       Object.entries(packageFiles(parts)).map(([path, content]) => [
         path,
-        strToU8(content),
+        content.startsWith("base64:")
+          ? decodePackageFile(content.slice("base64:".length))
+          : strToU8(content),
       ]),
     ),
     { level: 9 },

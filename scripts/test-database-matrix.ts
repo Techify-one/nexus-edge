@@ -10,16 +10,6 @@ const migrationSql = (dialect: "d1" | "postgres") =>
       readFileSync(`workers/core/migrations/${dialect}/${name}`, "utf8"),
     )
     .join("\n");
-const pluginMigrationNames = (plugin: string, dialect: "d1" | "postgres") =>
-  readdirSync(`plugins/${plugin}/migrations/${dialect}`)
-    .filter((name) => name.endsWith(".sql"))
-    .sort();
-const pluginMigrationSql = (plugin: string, dialect: "d1" | "postgres") =>
-  pluginMigrationNames(plugin, dialect)
-    .map((name) =>
-      readFileSync(`plugins/${plugin}/migrations/${dialect}/${name}`, "utf8"),
-    )
-    .join("\n");
 const d1 = migrationSql("d1");
 const postgres = migrationSql("postgres");
 const tables = (sql: string) =>
@@ -61,59 +51,6 @@ for (const dialect of ["d1", "postgres"] as const) {
       throw new Error(`${dialect} permission migration is missing ${key}`);
   }
 }
-for (const dialect of ["d1", "postgres"]) {
-  const crm = readFileSync(
-    `plugins/crm/migrations/${dialect}/0001_init.sql`,
-    "utf8",
-  );
-  if (!crm.includes("crm_leads"))
-    throw new Error(`CRM migration is missing for ${dialect}`);
-  const metaAds = readFileSync(
-    `plugins/meta_ads/migrations/${dialect}/0001_init.sql`,
-    "utf8",
-  );
-  if (!metaAds.includes("meta_ads_accounts"))
-    throw new Error(`Meta Ads migration is missing for ${dialect}`);
-  const soletrando = pluginMigrationSql("soletrando", dialect);
-  for (const table of [
-    "soletrando_children",
-    "soletrando_sessions",
-    "soletrando_attempts",
-    "soletrando_settings",
-  ])
-    if (!soletrando.includes(table))
-      throw new Error(
-        `Soletrando migration is missing ${table} for ${dialect}`,
-      );
-  const meetingRecorder = pluginMigrationSql("meeting_recorder", dialect);
-  for (const table of [
-    "meeting_recorder_recordings",
-    "meeting_recorder_segments",
-    "meeting_recorder_settings",
-    "meeting_recorder_deletion_tombstones",
-    "meeting_recorder_ingest_events",
-    "meeting_recorder_telegram_configuration",
-    "meeting_recorder_telegram_user_links",
-    "meeting_recorder_telegram_link_requests",
-    "meeting_recorder_telegram_invitations",
-    "meeting_recorder_telegram_members",
-  ])
-    if (!meetingRecorder.includes(table))
-      throw new Error(
-        `Meeting Recorder migration is missing ${table} for ${dialect}`,
-      );
-}
-for (const plugin of ["crm", "meta_ads", "soletrando", "meeting_recorder"]) {
-  const d1PluginMigrations = pluginMigrationNames(plugin, "d1");
-  const postgresPluginMigrations = pluginMigrationNames(plugin, "postgres");
-  if (
-    JSON.stringify(d1PluginMigrations) !==
-    JSON.stringify(postgresPluginMigrations)
-  )
-    throw new Error(
-      `${plugin} migration parity failed. D1=${d1PluginMigrations.join(",")} PG=${postgresPluginMigrations.join(",")}`,
-    );
-}
 process.stdout.write(
-  `D1/PostgreSQL matrix: ${left.length} equivalent tables, ${d1Migrations.length} paired Core migrations, and paired CRM/Meta Ads/Soletrando/Meeting Recorder migrations.\n`,
+  `D1/PostgreSQL matrix: ${left.length} equivalent tables and ${d1Migrations.length} paired Core migrations. Plugin migrations are validated in their marketplace repositories.\n`,
 );

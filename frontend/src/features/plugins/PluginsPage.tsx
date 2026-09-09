@@ -40,6 +40,7 @@ import {
   buildPluginSupportReport,
   type PluginSupportDiagnostic,
 } from "./support-report.js";
+import { MarketplacePanels } from "./MarketplacePanels.js";
 
 type Manifest = {
   id: string;
@@ -50,6 +51,14 @@ type Manifest = {
   menu: { title: string; routeKey: string }[];
   runtimeBindings?: Array<"ai" | "r2">;
   optionalRuntimeBindings?: Array<"ai" | "r2">;
+  databaseDialects: Array<"d1" | "postgres">;
+  packageFormat?: 2;
+  resources?: Array<{
+    name: string;
+    type: "database" | "r2" | "kv" | "queue" | "durable_object" | "cron" | "ai";
+    binding: string;
+    required: boolean;
+  }>;
 };
 type Plugin = {
   id: string;
@@ -67,6 +76,22 @@ type Operation = {
   operationId: string;
   state: string;
 };
+type OperationResource = {
+  logicalName: string;
+  type: "database" | "r2" | "kv" | "queue" | "durable_object" | "cron" | "ai";
+  binding: string;
+  required: boolean;
+  status: string;
+};
+type RuntimeResources = {
+  items: Array<{
+    logicalName: string;
+    type: OperationResource["type"];
+    required: boolean;
+    status: string;
+    configured: boolean;
+  }>;
+};
 type PluginRuntimeCredential = {
   configured: boolean;
   accountId: string;
@@ -80,6 +105,7 @@ type PluginParts = {
   rawBytes: number;
   gzipBytes: number;
   file: File;
+  sourceReleaseId?: string;
 };
 
 function RuntimeCredentialGuide({
@@ -180,9 +206,25 @@ async function readPlugin(file: File): Promise<PluginParts> {
   if (!file.name.endsWith(".plugin.zip"))
     throw new Error(translate("plugins.selectPackage"));
   const bytes = new Uint8Array(await file.arrayBuffer());
-  const files = unzipSync(bytes);
+  if (bytes.byteLength === 0 || bytes.byteLength > 8 * 1024 * 1024)
+    throw new Error(translate("plugins.rawTooLarge"));
+  let expandedBytes = 0;
+  let fileCount = 0;
+  const files = unzipSync(bytes, {
+    filter(entry) {
+      fileCount += 1;
+      expandedBytes += entry.originalSize;
+      if (
+        fileCount > 25 ||
+        entry.originalSize > 6 * 1024 * 1024 ||
+        expandedBytes > 24 * 1024 * 1024
+      )
+        throw new Error(translate("plugins.expansionTooLarge"));
+      return true;
+    },
+  });
   const manifestBytes = files["manifest.json"];
-  const worker = files["worker.mjs"];
+  const worker = files["backend/worker.mjs"] ?? files["worker.mjs"];
   if (!manifestBytes || !worker)
     throw new Error(translate("plugins.packageContents"));
   const manifestText = strFromU8(manifestBytes);
@@ -205,17 +247,20 @@ async function readPlugin(file: File): Promise<PluginParts> {
     );
   const d1Migrations = migrations("d1");
   const postgresMigrations = migrations("postgres");
+  const supportsD1 = manifest.databaseDialects?.includes("d1");
+  const supportsPostgres = manifest.databaseDialects?.includes("postgres");
   if (
-    !Object.keys(d1Migrations).length ||
-    JSON.stringify(Object.keys(d1Migrations)) !==
-      JSON.stringify(Object.keys(postgresMigrations))
+    (supportsD1 && !Object.keys(d1Migrations).length) ||
+    (supportsPostgres && !Object.keys(postgresMigrations).length) ||
+    (!supportsD1 && Object.keys(d1Migrations).length > 0) ||
+    (!supportsPostgres && Object.keys(postgresMigrations).length > 0) ||
+    (supportsD1 &&
+      supportsPostgres &&
+      JSON.stringify(Object.keys(d1Migrations)) !==
+        JSON.stringify(Object.keys(postgresMigrations)))
   )
     throw new Error(translate("plugins.migrationPairs"));
-  const rawBytes =
-    manifestBytes.byteLength +
-    worker.byteLength +
-    Object.values(d1Migrations).join("").length +
-    Object.values(postgresMigrations).join("").length;
+  const rawBytes = bytes.byteLength;
   return {
     manifest,
     manifestText,
@@ -230,15 +275,8 @@ async function readPlugin(file: File): Promise<PluginParts> {
 
 const bodyFor = (parts: PluginParts) => {
   const form = new FormData();
-  form.set("manifest", parts.manifestText);
-  form.set(
-    "worker",
-    new File([parts.worker.buffer as ArrayBuffer], "worker.mjs", {
-      type: "application/javascript",
-    }),
-  );
-  form.set("d1Migrations", JSON.stringify(parts.d1Migrations));
-  form.set("postgresMigrations", JSON.stringify(parts.postgresMigrations));
+  form.set("package", parts.file);
+  if (parts.sourceReleaseId) form.set("sourceReleaseId", parts.sourceReleaseId);
   return form;
 };
 
@@ -275,6 +313,43 @@ export default function PluginsPage() {
       (plugins.data?.items ?? []).find((plugin) => plugin.id === manifest.id)
         ?.runtimeStorageStatus !== "ready",
     );
+  const requiredExternalResources = (manifest: Manifest) =>
+    (manifest.resources ?? []).filter(
+      (resource) =>
+        resource.required && ["r2", "kv", "queue"].includes(resource.type),
+    );
+  const requiresResourceProvisioning = (manifest: Manifest): boolean =>
+    requiredExternalResources(manifest).length > 0;
+  const selectedInstalledPlugin = parts
+    ? (plugins.data?.items ?? []).find(
+        (plugin) =>
+          plugin.id === parts.manifest.id && plugin.status === "installed",
+      )
+    : undefined;
+  const installedRuntimeResources = useQuery({
+    queryKey: ["plugin-runtime-resources", parts?.manifest.id],
+    queryFn: () =>
+      api<RuntimeResources>(
+        `/api/v1/plugins/${encodeURIComponent(parts!.manifest.id)}/runtime-resources`,
+      ),
+    enabled: Boolean(
+      parts &&
+      selectedInstalledPlugin &&
+      requiresResourceProvisioning(parts.manifest),
+    ),
+  });
+  const requiresResourceToken = parts
+    ? requiredExternalResources(parts.manifest).some(
+        (declaration) =>
+          !selectedInstalledPlugin ||
+          !installedRuntimeResources.data?.items.some(
+            (resource) =>
+              resource.logicalName === declaration.name &&
+              resource.type === declaration.type &&
+              resource.configured,
+          ),
+      )
+    : false;
   const runtimeCredential = useQuery({
     queryKey: ["plugin-runtime-credential"],
     queryFn: () =>
@@ -305,7 +380,7 @@ export default function PluginsPage() {
       ),
     [plugins.data, search],
   );
-  const choose = async (file?: File) => {
+  const choose = async (file?: File, sourceReleaseId?: string) => {
     if (!file) return;
     try {
       const selectedParts = await readPlugin(file);
@@ -321,7 +396,10 @@ export default function PluginsPage() {
         (operationType === "install" && !canCreate)
       )
         throw new Error(t("plugins.permissionRequired"));
-      setParts(selectedParts);
+      setParts({
+        ...selectedParts,
+        ...(sourceReleaseId ? { sourceReleaseId } : {}),
+      });
       setOperation(null);
       setSupportReport(null);
       setRuntimeToken("");
@@ -336,17 +414,43 @@ export default function PluginsPage() {
     mutationFn: async (packageParts: PluginParts) => {
       setSupportReport(null);
       let current: Operation | null = null;
-      const requiresR2 = requiresR2Provisioning(packageParts.manifest);
+      const requiredResources = requiredExternalResources(
+        packageParts.manifest,
+      );
+      const installedPlugin = (plugins.data?.items ?? []).find(
+        (plugin) =>
+          plugin.id === packageParts.manifest.id &&
+          plugin.status === "installed",
+      );
+      const existingResources =
+        installedPlugin && requiredResources.length > 0
+          ? await api<RuntimeResources>(
+              `/api/v1/plugins/${encodeURIComponent(packageParts.manifest.id)}/runtime-resources`,
+            )
+          : null;
+      const requiresGenericResources = requiredResources.some(
+        (declaration) =>
+          !existingResources?.items.some(
+            (resource) =>
+              resource.logicalName === declaration.name &&
+              resource.type === declaration.type &&
+              resource.configured,
+          ),
+      );
+      const requiresR2 =
+        !requiresGenericResources &&
+        requiresR2Provisioning(packageParts.manifest);
+      const requiresProvisioning = requiresGenericResources || requiresR2;
       const temporaryR2Token = r2Token.trim();
       try {
-        if (packageParts.rawBytes > 4 * 1024 * 1024)
+        if (packageParts.rawBytes > 8 * 1024 * 1024)
           throw new Error(t("plugins.rawTooLarge"));
         if (packageParts.gzipBytes > 3 * 1024 * 1024)
           throw new Error(t("plugins.gzipTooLarge"));
-        if (requiresR2 && temporaryR2Token.length < 40)
-          throw new Error(t("plugins.r2TokenRequired"));
-        const r2Reauth = requiresR2
-          ? await recentReauthHeaders(t("plugins.r2ReauthPassword"))
+        if (requiresProvisioning && temporaryR2Token.length < 40)
+          throw new Error(t("plugins.resourceTokenRequired"));
+        const r2Reauth = requiresProvisioning
+          ? await recentReauthHeaders(t("plugins.resourceReauthPassword"))
           : {};
         current = await api<Operation>("/api/v1/plugin-operations", {
           method: "POST",
@@ -358,23 +462,51 @@ export default function PluginsPage() {
         setOperation(current);
         while (!terminal.has(current.state)) {
           if (current.state === "provisioning") {
-            if (!requiresR2 || temporaryR2Token.length < 40)
-              throw new Error(t("plugins.r2TokenRequired"));
-            current = await api<Operation>(
-              `/api/v1/plugin-operations/${current.operationId}/provision-r2`,
-              {
-                method: "POST",
-                headers: {
-                  ...r2Reauth,
-                  "Idempotency-Key": `r2-${current.operationId}`,
+            if (temporaryR2Token.length < 40)
+              throw new Error(t("plugins.resourceTokenRequired"));
+            if (requiresGenericResources) {
+              const resourcePlan: { items: OperationResource[] } = await api<{
+                items: OperationResource[];
+              }>(`/api/v1/plugin-operations/${current.operationId}/resources`);
+              const nextResource: OperationResource | undefined =
+                resourcePlan.items.find(
+                  (resource: OperationResource) =>
+                    resource.required &&
+                    resource.status !== "ready" &&
+                    ["r2", "kv", "queue"].includes(resource.type),
+                );
+              if (!nextResource)
+                throw new Error(t("plugins.resourcePlanInvalid"));
+              current = await api<Operation>(
+                `/api/v1/plugin-operations/${current.operationId}/resources/${encodeURIComponent(nextResource.logicalName)}/provision`,
+                {
+                  method: "POST",
+                  headers: {
+                    ...r2Reauth,
+                    "Idempotency-Key": `resource-${current.operationId}-${nextResource.logicalName}`,
+                  },
+                  body: JSON.stringify({
+                    token: temporaryR2Token,
+                    mode: "create",
+                  }),
                 },
-                body: JSON.stringify({
-                  token: temporaryR2Token,
-                  mode: "create",
-                }),
-              },
-            );
-            setR2Token("");
+              );
+            } else {
+              current = await api<Operation>(
+                `/api/v1/plugin-operations/${current.operationId}/provision-r2`,
+                {
+                  method: "POST",
+                  headers: {
+                    ...r2Reauth,
+                    "Idempotency-Key": `r2-${current.operationId}`,
+                  },
+                  body: JSON.stringify({
+                    token: temporaryR2Token,
+                    mode: "create",
+                  }),
+                },
+              );
+            }
             setOperation(current);
             continue;
           }
@@ -451,6 +583,8 @@ export default function PluginsPage() {
       setSupportReport(null);
       setR2Token("");
       void client.invalidateQueries({ queryKey: ["plugins"] });
+      void client.invalidateQueries({ queryKey: ["plugin-runtime"] });
+      void client.invalidateQueries({ queryKey: ["plugin-catalog"] });
       void client.invalidateQueries({ queryKey: ["me", "ability"] });
       void client.invalidateQueries({
         queryKey: ["me", "plugin-navigation"],
@@ -521,6 +655,8 @@ export default function PluginsPage() {
       );
       setSelected(null);
       void client.invalidateQueries({ queryKey: ["plugins"] });
+      void client.invalidateQueries({ queryKey: ["plugin-runtime"] });
+      void client.invalidateQueries({ queryKey: ["plugin-catalog"] });
       void client.invalidateQueries({ queryKey: ["me", "ability"] });
       void client.invalidateQueries({
         queryKey: ["me", "plugin-navigation"],
@@ -602,213 +738,227 @@ export default function PluginsPage() {
           ) : undefined
         }
       />
-      <input
-        ref={inputRef}
-        type="file"
-        accept=".zip,.plugin.zip"
-        className="hidden"
-        onChange={(event) => void choose(event.target.files?.[0])}
-      />
-      <Modal
-        open={
-          runtimeCredentialSetupOpen &&
-          Boolean(runtimeCredential.data && !runtimeCredential.data.configured)
-        }
-        onOpenChange={(open) => {
-          if (!runtimeCredentialBusy) {
-            setRuntimeCredentialSetupOpen(open);
-            if (!open) setRuntimeToken("");
-          }
-        }}
-        title={t("plugins.runtimeCredentialTitle")}
-        description={t("plugins.runtimeCredentialBody")}
-        contentClassName="sm:max-w-2xl"
+      <MarketplacePanels onSelectPackage={choose} />
+      <section
+        aria-labelledby="installed-plugins-heading"
+        className="space-y-4"
       >
-        {runtimeCredential.data && !runtimeCredential.data.configured && (
-          <form
-            className="space-y-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void configureRuntimeCredential();
-            }}
-          >
-            <RuntimeCredentialGuide
-              accountId={runtimeCredential.data.accountId}
-              inputId="plugin-runtime-token-setup"
-              token={runtimeToken}
-              onTokenChange={setRuntimeToken}
-            />
-            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={runtimeCredentialBusy}
-                onClick={() => {
-                  setRuntimeCredentialSetupOpen(false);
-                  setRuntimeToken("");
-                }}
-              >
-                {t("plugins.runtimeCredentialLater")}
-              </Button>
-              <Button
-                busy={runtimeCredentialBusy}
-                disabled={
-                  runtimeCredentialBusy || runtimeToken.trim().length < 40
-                }
-              >
-                <UploadCloud className="h-4 w-4" />
-                {t("plugins.runtimeCredentialSave")}
-              </Button>
-            </div>
-          </form>
-        )}
-      </Modal>
-      <input
-        ref={archiveInputRef}
-        type="file"
-        accept=".zip,.plugin.zip"
-        className="hidden"
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          const plugin = archiveTargetRef.current;
-          event.target.value = "";
-          if (file && plugin) archivePackage.mutate({ plugin, file });
-        }}
-      />
-      <div className="relative mb-4 max-w-md">
-        <Search className="absolute left-3 top-3 h-5 w-5 text-slate-400" />
-        <Input
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          className="pl-10"
-          placeholder={t("plugins.search")}
-          aria-label={t("plugins.search")}
+        <h2 id="installed-plugins-heading" className="text-lg font-semibold">
+          {t("plugins.installedSection")}
+        </h2>
+        <input
+          ref={inputRef}
+          type="file"
+          accept=".zip,.plugin.zip"
+          className="hidden"
+          onChange={(event) => void choose(event.target.files?.[0])}
         />
-      </div>
-      {plugins.isPending ? (
-        <Skeleton className="h-72" />
-      ) : (
-        <ConfigurableDataTable
-          tableId="core.plugins"
-          rows={rows}
-          onOpen={setSelected}
-          columns={[
-            {
-              key: "name",
-              label: t("common.name"),
-              size: 260,
-              minSize: 140,
-              maxSize: 600,
-              sortValue: (row) => row.name,
-              render: (row) => <span className="font-medium">{row.name}</span>,
-            },
-            {
-              key: "version",
-              label: t("common.version"),
-              size: 140,
-              minSize: 96,
-              maxSize: 240,
-              sortValue: (row) => row.installedVersion,
-              render: (row) => row.installedVersion,
-            },
-            {
-              key: "provider",
-              label: t("plugins.database"),
-              size: 140,
-              minSize: 96,
-              maxSize: 240,
-              sortValue: (row) => row.databaseProvider,
-              render: (row) => row.databaseProvider,
-            },
-            {
-              key: "worker",
-              label: t("plugins.worker"),
-              size: 280,
-              minSize: 160,
-              maxSize: 600,
-              sortValue: (row) => row.workerName,
-              render: (row) => <code>{row.workerName}</code>,
-            },
-            {
-              key: "status",
-              label: t("common.status"),
-              size: 160,
-              minSize: 110,
-              maxSize: 280,
-              sortValue: (row) => row.status,
-              render: (row) => (
-                <Badge
-                  tone={row.status === "installed" ? "success" : "warning"}
-                >
-                  {stateLabel(row.status)}
-                </Badge>
-              ),
-            },
-          ]}
-          actions={
-            canExport || canUpdate || canDelete
-              ? (row) => (
-                  <div className="flex justify-end gap-1">
-                    {canExport && row.status === "installed" && (
-                      <Button
-                        variant="ghost"
-                        className="px-2"
-                        disabled={
-                          downloadPackage.isPending || archivePackage.isPending
-                        }
-                        onClick={() => requestPackageDownload(row)}
-                        aria-label={`${t("plugins.downloadPackage")} ${row.name}`}
-                        title={
-                          Boolean(row.packageAvailable)
-                            ? t("plugins.downloadPackage")
-                            : t("plugins.downloadUnavailable")
-                        }
-                      >
-                        <Download className="h-4 w-4" />
-                      </Button>
-                    )}
-                    {canUpdate && row.status === "installed" && (
-                      <Button
-                        variant="ghost"
-                        className="px-2"
-                        onClick={() => setSelected(row)}
-                        aria-label={`${t("common.edit")} ${row.name}`}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                    )}
-                    {canDelete && (
-                      <Button
-                        variant="ghost"
-                        className="px-2 text-red-600"
-                        onClick={() =>
-                          confirm(
-                            t(
-                              row.status === "uninstalled"
-                                ? "plugins.deleteRecordConfirm"
-                                : "plugins.uninstallConfirm",
-                              {
-                                name: row.name,
-                                version: row.installedVersion,
-                              },
-                            ),
-                          ) && remove.mutate(row)
-                        }
-                        aria-label={`${t(
-                          row.status === "uninstalled"
-                            ? "common.delete"
-                            : "plugins.uninstall",
-                        )} ${row.name}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                )
-              : undefined
+        <Modal
+          open={
+            runtimeCredentialSetupOpen &&
+            Boolean(
+              runtimeCredential.data && !runtimeCredential.data.configured,
+            )
           }
+          onOpenChange={(open) => {
+            if (!runtimeCredentialBusy) {
+              setRuntimeCredentialSetupOpen(open);
+              if (!open) setRuntimeToken("");
+            }
+          }}
+          title={t("plugins.runtimeCredentialTitle")}
+          description={t("plugins.runtimeCredentialBody")}
+          contentClassName="sm:max-w-2xl"
+        >
+          {runtimeCredential.data && !runtimeCredential.data.configured && (
+            <form
+              className="space-y-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void configureRuntimeCredential();
+              }}
+            >
+              <RuntimeCredentialGuide
+                accountId={runtimeCredential.data.accountId}
+                inputId="plugin-runtime-token-setup"
+                token={runtimeToken}
+                onTokenChange={setRuntimeToken}
+              />
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={runtimeCredentialBusy}
+                  onClick={() => {
+                    setRuntimeCredentialSetupOpen(false);
+                    setRuntimeToken("");
+                  }}
+                >
+                  {t("plugins.runtimeCredentialLater")}
+                </Button>
+                <Button
+                  busy={runtimeCredentialBusy}
+                  disabled={
+                    runtimeCredentialBusy || runtimeToken.trim().length < 40
+                  }
+                >
+                  <UploadCloud className="h-4 w-4" />
+                  {t("plugins.runtimeCredentialSave")}
+                </Button>
+              </div>
+            </form>
+          )}
+        </Modal>
+        <input
+          ref={archiveInputRef}
+          type="file"
+          accept=".zip,.plugin.zip"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            const plugin = archiveTargetRef.current;
+            event.target.value = "";
+            if (file && plugin) archivePackage.mutate({ plugin, file });
+          }}
         />
-      )}
+        <div className="relative mb-4 max-w-md">
+          <Search className="absolute left-3 top-3 h-5 w-5 text-slate-400" />
+          <Input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            className="pl-10"
+            placeholder={t("plugins.search")}
+            aria-label={t("plugins.search")}
+          />
+        </div>
+        {plugins.isPending ? (
+          <Skeleton className="h-72" />
+        ) : (
+          <ConfigurableDataTable
+            tableId="core.plugins"
+            rows={rows}
+            onOpen={setSelected}
+            columns={[
+              {
+                key: "name",
+                label: t("common.name"),
+                size: 260,
+                minSize: 140,
+                maxSize: 600,
+                sortValue: (row) => row.name,
+                render: (row) => (
+                  <span className="font-medium">{row.name}</span>
+                ),
+              },
+              {
+                key: "version",
+                label: t("common.version"),
+                size: 140,
+                minSize: 96,
+                maxSize: 240,
+                sortValue: (row) => row.installedVersion,
+                render: (row) => row.installedVersion,
+              },
+              {
+                key: "provider",
+                label: t("plugins.database"),
+                size: 140,
+                minSize: 96,
+                maxSize: 240,
+                sortValue: (row) => row.databaseProvider,
+                render: (row) => row.databaseProvider,
+              },
+              {
+                key: "worker",
+                label: t("plugins.worker"),
+                size: 280,
+                minSize: 160,
+                maxSize: 600,
+                sortValue: (row) => row.workerName,
+                render: (row) => <code>{row.workerName}</code>,
+              },
+              {
+                key: "status",
+                label: t("common.status"),
+                size: 160,
+                minSize: 110,
+                maxSize: 280,
+                sortValue: (row) => row.status,
+                render: (row) => (
+                  <Badge
+                    tone={row.status === "installed" ? "success" : "warning"}
+                  >
+                    {stateLabel(row.status)}
+                  </Badge>
+                ),
+              },
+            ]}
+            actions={
+              canExport || canUpdate || canDelete
+                ? (row) => (
+                    <div className="flex justify-end gap-1">
+                      {canExport && row.status === "installed" && (
+                        <Button
+                          variant="ghost"
+                          className="px-2"
+                          disabled={
+                            downloadPackage.isPending ||
+                            archivePackage.isPending
+                          }
+                          onClick={() => requestPackageDownload(row)}
+                          aria-label={`${t("plugins.downloadPackage")} ${row.name}`}
+                          title={
+                            Boolean(row.packageAvailable)
+                              ? t("plugins.downloadPackage")
+                              : t("plugins.downloadUnavailable")
+                          }
+                        >
+                          <Download className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {canUpdate && row.status === "installed" && (
+                        <Button
+                          variant="ghost"
+                          className="px-2"
+                          onClick={() => setSelected(row)}
+                          aria-label={`${t("common.edit")} ${row.name}`}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {canDelete && (
+                        <Button
+                          variant="ghost"
+                          className="px-2 text-red-600"
+                          onClick={() =>
+                            confirm(
+                              t(
+                                row.status === "uninstalled"
+                                  ? "plugins.deleteRecordConfirm"
+                                  : "plugins.uninstallConfirm",
+                                {
+                                  name: row.name,
+                                  version: row.installedVersion,
+                                },
+                              ),
+                            ) && remove.mutate(row)
+                          }
+                          aria-label={`${t(
+                            row.status === "uninstalled"
+                              ? "common.delete"
+                              : "plugins.uninstall",
+                          )} ${row.name}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  )
+                : undefined
+            }
+          />
+        )}
+      </section>
       <Modal
         open={Boolean(parts)}
         onOpenChange={(open) => {
@@ -889,35 +1039,66 @@ export default function PluginsPage() {
                 onTokenChange={setRuntimeToken}
               />
             )}
-            {requiresR2Provisioning(parts.manifest) && (
+            {(requiresR2Provisioning(parts.manifest) ||
+              requiresResourceToken) && (
               <section className="space-y-3 rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm">
                 <h3 className="font-semibold text-slate-900">
-                  {t("plugins.r2ProvisioningTitle")}
+                  {requiresResourceToken
+                    ? t("plugins.resourceProvisioningTitle")
+                    : t("plugins.r2ProvisioningTitle")}
                 </h3>
                 <p className="text-slate-700">
-                  {t("plugins.r2ProvisioningDescription")}
+                  {requiresResourceToken
+                    ? t("plugins.resourceProvisioningDescription")
+                    : t("plugins.r2ProvisioningDescription")}
                 </p>
                 <ol className="list-decimal space-y-1 pl-5 text-slate-700">
-                  <li>{t("plugins.r2ProvisioningStepPermission")}</li>
-                  <li>{t("plugins.r2ProvisioningStepPaste")}</li>
-                  <li>{t("plugins.r2ProvisioningStepRevoke")}</li>
+                  <li>
+                    {t(
+                      requiresResourceToken
+                        ? "plugins.resourceProvisioningStepPermission"
+                        : "plugins.r2ProvisioningStepPermission",
+                    )}
+                  </li>
+                  <li>
+                    {t(
+                      requiresResourceToken
+                        ? "plugins.resourceProvisioningStepPaste"
+                        : "plugins.r2ProvisioningStepPaste",
+                    )}
+                  </li>
+                  <li>
+                    {t(
+                      requiresResourceToken
+                        ? "plugins.resourceProvisioningStepRevoke"
+                        : "plugins.r2ProvisioningStepRevoke",
+                    )}
+                  </li>
                 </ol>
                 {runtimeCredential.data?.accountId && (
                   <a
                     className="inline-flex items-center gap-1 font-medium text-indigo-700 underline"
-                    href={cloudflareR2TokenTemplateUrl(
-                      runtimeCredential.data.accountId,
-                    )}
+                    href={
+                      requiredExternalResources(parts.manifest).every(
+                        (resource) => resource.type === "r2",
+                      )
+                        ? cloudflareR2TokenTemplateUrl(
+                            runtimeCredential.data.accountId,
+                          )
+                        : cloudflareAccountTokensUrl(
+                            runtimeCredential.data.accountId,
+                          )
+                    }
                     target="_blank"
                     rel="noreferrer noopener"
                   >
-                    {t("plugins.r2OpenTokens")}
+                    {t("plugins.resourceOpenTokens")}
                     <ExternalLink className="h-3.5 w-3.5" />
                   </a>
                 )}
                 <div>
                   <Label htmlFor="plugin-r2-token">
-                    {t("plugins.r2TokenLabel")}
+                    {t("plugins.resourceTokenLabel")}
                   </Label>
                   <Input
                     id="plugin-r2-token"
@@ -927,12 +1108,12 @@ export default function PluginsPage() {
                     maxLength={2048}
                     value={r2Token}
                     onChange={(event) => setR2Token(event.target.value)}
-                    placeholder={t("plugins.r2TokenPlaceholder")}
+                    placeholder={t("plugins.resourceTokenPlaceholder")}
                     required
                   />
                 </div>
                 <p className="text-xs text-slate-600">
-                  {t("plugins.r2TokenPrivacy")}
+                  {t("plugins.resourceTokenPrivacy")}
                 </p>
               </section>
             )}
@@ -1009,7 +1190,8 @@ export default function PluginsPage() {
                   runtimeCredential.isPending ||
                   runtimeCredential.isError ||
                   runtimeCredentialBusy ||
-                  (requiresR2Provisioning(parts.manifest) &&
+                  ((requiresR2Provisioning(parts.manifest) ||
+                    requiresResourceToken) &&
                     r2Token.trim().length < 40)
                 }
               >

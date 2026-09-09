@@ -1,8 +1,8 @@
 {
-  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "$schema": "node_modules/wrangler/config-schema.json",
   "name": "app-plugin-template",
   "main": "src/index.ts",
-  "compatibility_date": "2026-08-21",
+  "compatibility_date": "2026-09-08",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": false,
   "preview_urls": false,
