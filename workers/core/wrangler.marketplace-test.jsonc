@@ -50,5 +50,6 @@
       },
     ],
   },
-  "triggers": { "crons": ["* * * * *"] },
+  // The shared Cloudflare Free account is already at its five-cron limit.
+  // Scheduled plugin execution stays covered by CI; production keeps its cron.
 }
