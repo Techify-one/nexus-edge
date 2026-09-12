@@ -111,9 +111,48 @@ jobs:
       - name: Verify staging installer is reachable
         env:
           INSTALLER_STAGING_URL: ${{ vars.INSTALLER_STAGING_URL }}
+          EXPECTED_CORE_VERSION: ${{ inputs.version }}
+          EXPECTED_SOURCE_COMMIT: ${{ github.sha }}
         run: |
-          curl --fail --silent --show-error "$INSTALLER_STAGING_URL/health" >/dev/null
-          curl --fail --silent --show-error "$INSTALLER_STAGING_URL/api/releases/stable" >/dev/null
+          if [[ -z "$EXPECTED_CORE_VERSION" ]]; then
+            export EXPECTED_CORE_VERSION="${GITHUB_REF_NAME#core-distribution-v}"
+          fi
+          node --input-type=module <<'NODE'
+          const baseUrl = process.env.INSTALLER_STAGING_URL;
+          const expectedVersion = process.env.EXPECTED_CORE_VERSION;
+          const expectedCommit = process.env.EXPECTED_SOURCE_COMMIT;
+          const eventually = async (path, predicate) => {
+            let detail = "no response";
+            for (let attempt = 1; attempt <= 12; attempt += 1) {
+              try {
+                const response = await fetch(`${baseUrl}${path}`, {
+                  headers: { "Cache-Control": "no-cache" },
+                });
+                const body = await response.text();
+                if (response.ok) {
+                  const parsed = JSON.parse(body);
+                  if (predicate(parsed)) return;
+                  detail = `unexpected response: ${body}`;
+                } else {
+                  detail = `HTTP ${response.status}: ${body}`;
+                }
+              } catch (error) {
+                detail = error instanceof Error ? error.message : String(error);
+              }
+              if (attempt < 12)
+                await new Promise((resolve) => setTimeout(resolve, 5_000));
+            }
+            throw new Error(`${path} unavailable: ${detail}`);
+          };
+          await eventually("/health", (health) => health.ok === true);
+          await eventually(
+            "/api/releases/stable",
+            (release) =>
+              release.version === expectedVersion &&
+              release.sourceCommit === expectedCommit &&
+              Boolean(release.manifestHash),
+          );
+          NODE
       - name: Record protected canary approval
         run: echo "Canary evidence reviewed by protected-environment approver."
 
