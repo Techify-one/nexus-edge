@@ -171,8 +171,10 @@ New plugin packages must follow `docs/PLUGIN-DEVELOPMENT.md`. In particular,
 build the Worker with Wrangler dry-run and package it with the public SDK.
 
 1. Sign in as an administrator.
-2. Open `/app/plugins`.
-3. Trust and synchronize the marketplace, then click **Install** on a catalog entry.
+2. Open `/app/plugins/marketplaces` and add the GitHub marketplace.
+3. The Core verifies the signed catalog and pins its first valid key
+   automatically. Open `/app/plugins/catalog`, inspect the entry, then click
+   **Install**.
 4. Review the version, sizes, migrations, menus, and permissions.
 5. Confirm the installation. The interface advances one stage per request and displays the persisted state.
 6. Open the plugin at `/app/p/<plugin-id>`, exercise its API, and inspect `/app/audit`.

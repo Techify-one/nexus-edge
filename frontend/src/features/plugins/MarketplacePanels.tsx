@@ -1,5 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { DownloadCloud, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
+import {
+  Copy,
+  DownloadCloud,
+  Pencil,
+  Plus,
+  Power,
+  PowerOff,
+  RefreshCw,
+  Search,
+  Trash2,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ConfigurableDataTable } from "../../components/ui/configurable-data-table.js";
@@ -13,7 +23,7 @@ import {
 } from "../../components/ui/index.js";
 import { useI18n } from "../../i18n/index.js";
 import { can } from "../../lib/ability.js";
-import { api, recentReauthHeaders } from "../../lib/api/core-client.js";
+import { api } from "../../lib/api/core-client.js";
 
 type Marketplace = {
   id: string;
@@ -41,18 +51,9 @@ type CatalogRelease = {
   compatibilityReason: string | null;
   packageBytes: number | null;
   installedVersion: string | null;
+  installedStatus: string | null;
   updateAvailable: boolean;
   sourceMatches: boolean;
-};
-
-type MarketplaceSyncResult = {
-  id: string;
-  requiresTrust?: boolean;
-  publisherId?: string;
-  publisherName?: string;
-  keyId?: string;
-  publicKey?: string;
-  fingerprint?: string;
 };
 
 export function MarketplacePanels({
@@ -74,18 +75,13 @@ export function MarketplacePanels({
   const [name, setName] = useState("");
   const [repository, setRepository] = useState("");
   const [catalogSearch, setCatalogSearch] = useState("");
-  const [pendingTrust, setPendingTrust] = useState<Required<
-    Pick<
-      MarketplaceSyncResult,
-      | "id"
-      | "publisherId"
-      | "publisherName"
-      | "keyId"
-      | "publicKey"
-      | "fingerprint"
-    >
-  > | null>(null);
-  const [fingerprintConfirmation, setFingerprintConfirmation] = useState("");
+  const [selectedRelease, setSelectedRelease] = useState<CatalogRelease | null>(
+    null,
+  );
+  const [selectedSource, setSelectedSource] = useState<Marketplace | null>(
+    null,
+  );
+  const [editedSourceName, setEditedSourceName] = useState("");
   const defaultSyncAttempted = useRef(false);
   const sources = useQuery({
     queryKey: ["plugin-marketplaces"],
@@ -100,27 +96,6 @@ export function MarketplacePanels({
     void queryClient.invalidateQueries({ queryKey: ["plugin-marketplaces"] });
     void queryClient.invalidateQueries({ queryKey: ["plugin-catalog"] });
   };
-  const requestTrust = (result: MarketplaceSyncResult): boolean => {
-    if (
-      !result.requiresTrust ||
-      !result.publisherId ||
-      !result.publisherName ||
-      !result.keyId ||
-      !result.publicKey ||
-      !result.fingerprint
-    )
-      return false;
-    setPendingTrust({
-      id: result.id,
-      publisherId: result.publisherId,
-      publisherName: result.publisherName,
-      keyId: result.keyId,
-      publicKey: result.publicKey,
-      fingerprint: result.fingerprint,
-    });
-    setFingerprintConfirmation("");
-    return true;
-  };
   const createSource = useMutation({
     mutationFn: () =>
       api<{ id: string }>("/api/v1/plugin-marketplaces", {
@@ -132,11 +107,11 @@ export function MarketplacePanels({
       setName("");
       setRepository("");
       try {
-        const result = await api<MarketplaceSyncResult>(
+        await api(
           `/api/v1/plugin-marketplaces/${encodeURIComponent(created.id)}/sync`,
           { method: "POST" },
         );
-        if (!requestTrust(result)) toast.success(t("plugins.marketplaceAdded"));
+        toast.success(t("plugins.marketplaceAdded"));
       } catch (error) {
         toast.error(
           error instanceof Error
@@ -151,60 +126,28 @@ export function MarketplacePanels({
   });
   const syncSource = useMutation({
     mutationFn: (source: Marketplace) =>
-      api<MarketplaceSyncResult>(
-        `/api/v1/plugin-marketplaces/${encodeURIComponent(source.id)}/sync`,
-        {
-          method: "POST",
-        },
-      ),
-    onSuccess: (result) => {
+      api(`/api/v1/plugin-marketplaces/${encodeURIComponent(source.id)}/sync`, {
+        method: "POST",
+      }),
+    onSuccess: () => {
       refresh();
-      if (!requestTrust(result)) toast.success(t("plugins.marketplaceSynced"));
+      toast.success(t("plugins.marketplaceSynced"));
     },
     onError: (error: Error) => {
       refresh();
       toast.error(error.message);
     },
   });
-  const trustSource = useMutation({
-    mutationFn: async () => {
-      if (!pendingTrust) throw new Error(t("plugins.marketplaceTrustInvalid"));
-      const headers = await recentReauthHeaders(
-        t("plugins.marketplaceTrustReauthPassword"),
-      );
-      await api(
-        `/api/v1/plugin-marketplaces/${encodeURIComponent(pendingTrust.id)}/trust-key`,
-        {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
-            publicKey: pendingTrust.publicKey,
-            keyId: pendingTrust.keyId,
-            publisherId: pendingTrust.publisherId,
-            expectedFingerprint: fingerprintConfirmation.trim(),
-          }),
-        },
-      );
-      return pendingTrust.id;
-    },
-    onSuccess: async (marketplaceId) => {
-      setPendingTrust(null);
-      setFingerprintConfirmation("");
-      try {
-        await api(
-          `/api/v1/plugin-marketplaces/${encodeURIComponent(marketplaceId)}/sync`,
-          { method: "POST" },
-        );
-        toast.success(t("plugins.marketplaceTrusted"));
-      } catch (error) {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : t("plugins.marketplaceDownloadFailed"),
-        );
-      } finally {
-        refresh();
-      }
+  const updateSource = useMutation({
+    mutationFn: (source: Marketplace) =>
+      api(`/api/v1/plugin-marketplaces/${encodeURIComponent(source.id)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ name: editedSourceName.trim() }),
+      }),
+    onSuccess: () => {
+      setSelectedSource(null);
+      refresh();
+      toast.success(t("plugins.marketplaceUpdated"));
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -214,7 +157,14 @@ export function MarketplacePanels({
         method: "PATCH",
         body: JSON.stringify({ enabled: !Boolean(source.enabled) }),
       }),
-    onSuccess: refresh,
+    onSuccess: (_result, source) => {
+      setSelectedSource((current) =>
+        current?.id === source.id
+          ? { ...current, enabled: !Boolean(source.enabled) }
+          : current,
+      );
+      refresh();
+    },
     onError: (error: Error) => toast.error(error.message),
   });
   const removeSource = useMutation({
@@ -223,6 +173,7 @@ export function MarketplacePanels({
         method: "DELETE",
       }),
     onSuccess: () => {
+      setSelectedSource(null);
       refresh();
       toast.success(t("plugins.marketplaceRemoved"));
     },
@@ -251,6 +202,7 @@ export function MarketplacePanels({
         }),
         releaseId,
       );
+      setSelectedRelease(null);
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -281,9 +233,16 @@ export function MarketplacePanels({
     );
   }, [catalog.data, catalogSearch]);
   const canUseRelease = (release: CatalogRelease): boolean =>
-    release.installedVersion
-      ? canUpdatePlugin && release.updateAvailable && release.sourceMatches
-      : canCreatePlugin;
+    release.installedStatus === "disabled"
+      ? false
+      : release.installedVersion
+        ? canUpdatePlugin && release.updateAvailable && release.sourceMatches
+        : canCreatePlugin;
+  const copy = (value: string) =>
+    void navigator.clipboard
+      .writeText(value)
+      .then(() => toast.success(t("plugins.copied")))
+      .catch(() => toast.error(t("plugins.copyFailed")));
 
   return (
     <div>
@@ -318,9 +277,7 @@ export function MarketplacePanels({
           <ConfigurableDataTable
             tableId="core.plugin-catalog"
             rows={catalogRows}
-            onOpen={(release) =>
-              canUseRelease(release) && download.mutate(release)
-            }
+            onOpen={setSelectedRelease}
             columns={[
               {
                 key: "name",
@@ -366,6 +323,35 @@ export function MarketplacePanels({
                 render: (row) => row.version,
               },
               {
+                key: "installation",
+                label: t("plugins.installationStatus"),
+                size: 160,
+                minSize: 120,
+                maxSize: 260,
+                sortValue: (row) => row.installedStatus ?? "available",
+                render: (row) => (
+                  <Badge
+                    tone={
+                      row.installedStatus === "installed"
+                        ? row.updateAvailable
+                          ? "warning"
+                          : "success"
+                        : row.installedStatus === "disabled"
+                          ? "warning"
+                          : "neutral"
+                    }
+                  >
+                    {row.installedStatus === "disabled"
+                      ? t("plugins.state.disabled")
+                      : row.installedVersion
+                        ? row.updateAvailable
+                          ? t("plugins.updateAvailable")
+                          : t("plugins.alreadyInstalled")
+                        : t("plugins.available")}
+                  </Badge>
+                ),
+              },
+              {
                 key: "compatibility",
                 label: t("plugins.compatibility"),
                 size: 150,
@@ -392,6 +378,8 @@ export function MarketplacePanels({
                 >
                   <DownloadCloud className="h-4 w-4" />
                 </Button>
+              ) : row.installedVersion ? (
+                <Badge tone="neutral">{t("plugins.alreadyInstalled")}</Badge>
               ) : null
             }
           />
@@ -433,7 +421,10 @@ export function MarketplacePanels({
             <ConfigurableDataTable
               tableId="core.plugin-marketplaces"
               rows={sources.data?.items ?? []}
-              onOpen={(source) => canUpdateSource && syncSource.mutate(source)}
+              onOpen={(source) => {
+                setSelectedSource(source);
+                setEditedSourceName(source.name);
+              }}
               columns={[
                 {
                   key: "name",
@@ -443,7 +434,7 @@ export function MarketplacePanels({
                   maxSize: 420,
                   sortValue: (row) => row.name,
                   render: (row) => (
-                    <span className="font-medium">
+                    <span className="select-text font-medium">
                       {row.name}
                       {Boolean(row.isDefault)
                         ? ` · ${t("plugins.defaultMarketplace")}`
@@ -459,7 +450,7 @@ export function MarketplacePanels({
                   maxSize: 500,
                   sortValue: (row) => `${row.owner}/${row.repository}`,
                   render: (row) => (
-                    <code>
+                    <code className="select-text">
                       {row.owner}/{row.repository}
                     </code>
                   ),
@@ -526,27 +517,24 @@ export function MarketplacePanels({
                         onClick={() => toggleSource.mutate(row)}
                         aria-label={`${Boolean(row.enabled) ? t("common.deactivate") : t("common.activate")} ${row.name}`}
                       >
-                        {Boolean(row.enabled)
-                          ? t("common.deactivate")
-                          : t("common.activate")}
+                        {Boolean(row.enabled) ? (
+                          <PowerOff className="h-4 w-4" />
+                        ) : (
+                          <Power className="h-4 w-4" />
+                        )}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        className="px-2"
+                        onClick={() => {
+                          setSelectedSource(row);
+                          setEditedSourceName(row.name);
+                        }}
+                        aria-label={`${t("common.edit")} ${row.name}`}
+                      >
+                        <Pencil className="h-4 w-4" />
                       </Button>
                     </>
-                  )}
-                  {canDeleteSource && (
-                    <Button
-                      variant="ghost"
-                      className="px-2 text-red-600"
-                      onClick={() =>
-                        confirm(
-                          t("plugins.removeMarketplaceConfirm", {
-                            name: row.name,
-                          }),
-                        ) && removeSource.mutate(row)
-                      }
-                      aria-label={`${t("common.delete")} ${row.name}`}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
                   )}
                 </div>
               )}
@@ -602,66 +590,207 @@ export function MarketplacePanels({
         </form>
       </Modal>
       <Modal
-        open={Boolean(pendingTrust)}
+        open={Boolean(selectedRelease)}
         onOpenChange={(open) => {
-          if (!open && !trustSource.isPending) {
-            setPendingTrust(null);
-            setFingerprintConfirmation("");
-          }
+          if (!open && !download.isPending) setSelectedRelease(null);
         }}
-        title={t("plugins.marketplaceTrustTitle")}
-        description={t("plugins.marketplaceTrustDescription")}
+        title={selectedRelease?.pluginId ?? t("plugins.pluginDetails")}
+        description={
+          selectedRelease
+            ? `${selectedRelease.publisherName} · ${selectedRelease.marketplaceName}`
+            : undefined
+        }
       >
-        {pendingTrust && (
-          <form
-            className="space-y-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-              trustSource.mutate();
-            }}
-          >
-            <p className="text-sm text-slate-700">
-              {pendingTrust.publisherName} ({pendingTrust.publisherId})
-            </p>
-            <div>
-              <Label htmlFor="marketplace-fingerprint">
-                {t("plugins.marketplaceFingerprint")}
-              </Label>
-              <code className="mt-1 block break-all rounded-lg bg-slate-100 p-3 text-xs">
-                {pendingTrust.fingerprint}
-              </code>
+        {selectedRelease && (
+          <div className="space-y-4">
+            <div className="grid gap-3 rounded-xl border bg-slate-50 p-4 text-sm sm:grid-cols-2">
+              <div>
+                <span className="text-slate-500">ID</span>
+                <p className="font-medium">{selectedRelease.pluginId}</p>
+              </div>
+              <div>
+                <span className="text-slate-500">{t("common.version")}</span>
+                <p>{selectedRelease.version}</p>
+              </div>
+              <div>
+                <span className="text-slate-500">{t("plugins.publisher")}</span>
+                <p>{selectedRelease.publisherName}</p>
+              </div>
+              <div>
+                <span className="text-slate-500">
+                  {t("plugins.marketplace")}
+                </span>
+                <p>{selectedRelease.marketplaceName}</p>
+              </div>
+              <div>
+                <span className="text-slate-500">
+                  {t("plugins.installationStatus")}
+                </span>
+                <p>
+                  {selectedRelease.installedStatus === "disabled"
+                    ? t("plugins.state.disabled")
+                    : selectedRelease.installedVersion
+                      ? selectedRelease.updateAvailable
+                        ? t("plugins.updateAvailable")
+                        : t("plugins.alreadyInstalled")
+                      : t("plugins.available")}
+                </p>
+              </div>
+              <div>
+                <span className="text-slate-500">
+                  {t("plugins.packageSize")}
+                </span>
+                <p>
+                  {selectedRelease.packageBytes === null
+                    ? "—"
+                    : `${(selectedRelease.packageBytes / 1024).toFixed(1)} KiB`}
+                </p>
+              </div>
             </div>
-            <div>
-              <Label htmlFor="marketplace-fingerprint-confirmation">
-                {t("plugins.marketplaceFingerprintConfirmation")}
-              </Label>
-              <Input
-                id="marketplace-fingerprint-confirmation"
-                value={fingerprintConfirmation}
-                onChange={(event) =>
-                  setFingerprintConfirmation(event.target.value)
-                }
-                autoComplete="off"
-                required
-              />
-            </div>
+            <section>
+              <h3 className="text-sm font-semibold">
+                {t("common.description")}
+              </h3>
+              <p className="mt-2 whitespace-pre-wrap break-words text-sm text-slate-700">
+                {selectedRelease.description || "—"}
+              </p>
+            </section>
             <div className="flex justify-end gap-2">
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => setPendingTrust(null)}
-                disabled={trustSource.isPending}
+                onClick={() => setSelectedRelease(null)}
+                disabled={download.isPending}
               >
-                {t("common.cancel")}
+                {t("common.close")}
               </Button>
-              <Button
-                busy={trustSource.isPending}
-                disabled={
-                  fingerprintConfirmation.trim() !== pendingTrust.fingerprint
-                }
-              >
-                {t("plugins.marketplaceTrustConfirm")}
-              </Button>
+              {canUseRelease(selectedRelease) && (
+                <Button
+                  busy={download.isPending}
+                  disabled={!Boolean(selectedRelease.compatible)}
+                  onClick={() => download.mutate(selectedRelease)}
+                >
+                  <DownloadCloud className="h-4 w-4" />
+                  {selectedRelease.installedVersion
+                    ? t("plugins.update")
+                    : t("plugins.install")}
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
+      <Modal
+        open={Boolean(selectedSource)}
+        onOpenChange={(open) => {
+          if (!open && !updateSource.isPending) setSelectedSource(null);
+        }}
+        title={selectedSource?.name ?? t("plugins.marketplace")}
+        description={t("plugins.marketplaceDetails")}
+      >
+        {selectedSource && (
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              updateSource.mutate(selectedSource);
+            }}
+          >
+            <div>
+              <Label htmlFor="marketplace-edit-name">{t("common.name")}</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="marketplace-edit-name"
+                  className="select-text"
+                  value={editedSourceName}
+                  onChange={(event) => setEditedSourceName(event.target.value)}
+                  readOnly={!canUpdateSource}
+                  required
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="px-3"
+                  onClick={() => copy(editedSourceName)}
+                  aria-label={t("plugins.copyMarketplaceName")}
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            <div>
+              <Label>{t("plugins.repository")}</Label>
+              <div className="flex gap-2">
+                <code className="min-w-0 flex-1 select-text break-all rounded-xl border bg-slate-50 px-3 py-3 text-sm">
+                  {selectedSource.owner}/{selectedSource.repository}
+                </code>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="px-3"
+                  onClick={() =>
+                    copy(`${selectedSource.owner}/${selectedSource.repository}`)
+                  }
+                  aria-label={t("plugins.copyMarketplaceRepository")}
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            <div className="flex flex-wrap justify-between gap-2">
+              <div className="flex flex-wrap gap-2">
+                {canUpdateSource && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => toggleSource.mutate(selectedSource)}
+                    busy={toggleSource.isPending}
+                  >
+                    {Boolean(selectedSource.enabled) ? (
+                      <PowerOff className="h-4 w-4" />
+                    ) : (
+                      <Power className="h-4 w-4" />
+                    )}
+                    {Boolean(selectedSource.enabled)
+                      ? t("common.deactivate")
+                      : t("common.activate")}
+                  </Button>
+                )}
+                {canDeleteSource && (
+                  <Button
+                    type="button"
+                    variant="danger"
+                    busy={removeSource.isPending}
+                    onClick={() =>
+                      confirm(
+                        t("plugins.removeMarketplaceConfirm", {
+                          name: selectedSource.name,
+                        }),
+                      ) && removeSource.mutate(selectedSource)
+                    }
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    {t("common.delete")}
+                  </Button>
+                )}
+              </div>
+              <div className="ml-auto flex gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setSelectedSource(null)}
+                >
+                  {t("common.cancel")}
+                </Button>
+                {canUpdateSource && (
+                  <Button
+                    busy={updateSource.isPending}
+                    disabled={editedSourceName.trim().length < 2}
+                  >
+                    {t("common.save")}
+                  </Button>
+                )}
+              </div>
             </div>
           </form>
         )}

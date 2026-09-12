@@ -67,11 +67,10 @@ prazo, limites de resposta, timeout e backoff de rate limit. Catálogo expirado
 continua registrado para diagnóstico, mas não autoriza uma instalação nova.
 Plugins instalados funcionam offline a partir dos assets/Worker locais.
 
-O primeiro sync apresenta a chave e o fingerprint, mas ainda não libera
-releases. O administrador confirma o fingerprint completo com reautenticação;
-só então o Core fixa a chave e sincroniza o catálogo. Essa confiança inicial é
-TOFU porque chave e repositório têm a mesma origem. Mudança posterior nunca é
-aceita silenciosamente.
+O primeiro sync valida a assinatura e fixa automaticamente a primeira chave
+pública válida (TOFU), liberando o catálogo no mesmo fluxo e sem confirmação
+manual de fingerprint. Mudança posterior de chave nunca é aceita
+silenciosamente.
 
 ## Rotação e revogação
 
@@ -100,15 +99,23 @@ executa código, apaga recursos ou desinstala automaticamente versões existente
 
 ## Operação do painel
 
-1. Cadastre `owner/repository` em **Plugins → Marketplaces**.
-2. Confira estado de confiança, fingerprint e último sync.
-3. Em **Explorar**, revise publisher, origem, versão, compatibilidade,
+1. Cadastre `owner/repository` em **Plugins → Market Places**. O primeiro sync
+   valida e fixa a chave automaticamente.
+2. Confira estado da assinatura, fingerprint e último sync.
+3. Em **Novos Plugins**, clique na linha para revisar descrição completa,
+   publisher, origem, versão, compatibilidade,
    permissões e recursos.
 4. Clique **Instalar** ou **Atualizar**. O navegador transporta o ZIP verificado
    entre as duas APIs internas; o usuário não precisa baixar ou fazer upload
    manual.
 5. Forneça apenas os tokens Cloudflare temporários solicitados pelo plano de
    recursos. Eles não são persistidos.
+
+As abas têm URLs permanentes: `/app/plugins/installed`,
+`/app/plugins/catalog` e `/app/plugins/marketplaces`. Um marketplace pode ser
+desativado sem ser removido. Um plugin pode ser desativado e reativado sem
+apagar Worker, bindings, recursos, tabelas ou histórico; desinstalar continua
+sendo uma ação separada e preserva as tabelas conforme a política do Core.
 
 Repositórios privados ficam reservados para integração futura por credencial de
 leitura/GitHub App; a primeira versão aceita fontes públicas e não recebe PAT do

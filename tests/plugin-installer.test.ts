@@ -435,6 +435,84 @@ describe("CRM plugin installer", () => {
     );
   });
 
+  it("deactivates and reactivates a plugin without uninstalling it", async () => {
+    const deactivateStatements: SqlStatement[] = [];
+    const environment = {
+      WEBHOOK_QUEUE: { send: vi.fn(async () => undefined) },
+    } as unknown as CoreEnv;
+    const executionContext = {
+      waitUntil: () => undefined,
+      passThroughOnException: () => undefined,
+    } as unknown as ExecutionContext;
+    const deactivate = await installerApp({
+      atomicStatements: deactivateStatements,
+      plugin: {
+        workerName: "app-plugin-crm",
+        status: "installed",
+        packageFormat: 1,
+      },
+    }).fetch(
+      new Request("https://app.example/plugins/crm", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: false }),
+      }),
+      environment,
+      executionContext,
+    );
+
+    expect(deactivate.status).toBe(200);
+    await expect(deactivate.json()).resolves.toEqual({
+      id: "crm",
+      status: "disabled",
+    });
+    expect(deactivateStatements).toContainEqual(
+      expect.objectContaining({
+        sql: expect.stringContaining("UPDATE plugins SET status"),
+        params: expect.arrayContaining(["disabled", "crm"]),
+      }),
+    );
+    expect(deactivateStatements).toContainEqual(
+      expect.objectContaining({
+        sql: expect.stringContaining("UPDATE plugin_assets"),
+        params: [false, "crm"],
+      }),
+    );
+    expect(deactivateStatements).not.toContainEqual(
+      expect.objectContaining({ sql: expect.stringContaining("DELETE FROM") }),
+    );
+
+    const activateStatements: SqlStatement[] = [];
+    const activate = await installerApp({
+      atomicStatements: activateStatements,
+      plugin: {
+        workerName: "app-plugin-crm",
+        status: "disabled",
+        packageFormat: 1,
+      },
+    }).fetch(
+      new Request("https://app.example/plugins/crm", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: true }),
+      }),
+      environment,
+      executionContext,
+    );
+
+    expect(activate.status).toBe(200);
+    await expect(activate.json()).resolves.toEqual({
+      id: "crm",
+      status: "installed",
+    });
+    expect(activateStatements).toContainEqual(
+      expect.objectContaining({
+        sql: expect.stringContaining("UPDATE plugin_contributions"),
+        params: [true, "crm"],
+      }),
+    );
+  });
+
   it("downloads only a verified portable package without Nexus data or credentials", async () => {
     const parts = crmPackageParts();
     const operationId = "pop_export";

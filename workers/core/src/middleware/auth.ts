@@ -18,7 +18,7 @@ async function consumePrincipalRateLimit(
       ? Math.max(1, Math.min(ceiling, Math.floor(parsed)))
       : fallback;
   };
-  const max = bounded(c.env.API_RATE_LIMIT_MAX, 120, 10_000);
+  const max = bounded(c.env.API_RATE_LIMIT_MAX, 600, 10_000);
   const windowSeconds = bounded(
     c.env.API_RATE_LIMIT_WINDOW_SECONDS,
     60,

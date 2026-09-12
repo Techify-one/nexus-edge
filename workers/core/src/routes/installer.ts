@@ -1069,7 +1069,7 @@ installerRoutes.get(
                   p.installed_at AS "installedAt", p.updated_at AS "updatedAt",
                   (SELECT pr.status FROM plugin_runtime_resources pr
                     WHERE pr.plugin_id = p.id AND pr.binding_name = 'STORAGE') AS "runtimeStorageStatus",
-                  CASE WHEN p.status = 'installed' AND EXISTS (
+                  CASE WHEN p.status IN ('installed','disabled') AND EXISTS (
                     SELECT 1 FROM plugin_operations po
                     JOIN plugin_package_chunks pc ON pc.operation_id = po.operation_id
                     WHERE po.plugin_id = p.id AND po.target_version = p.installed_version AND po.state = 'installed'
@@ -1121,6 +1121,131 @@ installerRoutes.put(
       { secretName: target.secretName },
     );
     return c.json({ configured: true }, 200, noStore);
+  },
+);
+
+installerRoutes.patch(
+  "/plugins/:pluginId",
+  requirePermission("core.plugin.update"),
+  async (c) => {
+    const pluginId = c.req.param("pluginId");
+    const body = (await c.req.json().catch(() => null)) as {
+      enabled?: unknown;
+    } | null;
+    if (typeof body?.enabled !== "boolean")
+      throw new AppError(
+        422,
+        "PLUGIN_ENABLED_INVALID",
+        "The enabled field must be a boolean.",
+      );
+    const plugin = await c.get("db").first<{
+      workerName: string;
+      status: string;
+      packageFormat: number | string;
+    }>(
+      `SELECT worker_name AS "workerName", status,
+              package_format AS "packageFormat"
+         FROM plugins WHERE id = ?`,
+      [pluginId],
+    );
+    if (!plugin)
+      throw new AppError(404, "PLUGIN_NOT_FOUND", "Plugin not found.");
+    const targetStatus = body.enabled ? "installed" : "disabled";
+    if (plugin.status === targetStatus)
+      return c.json({ id: pluginId, status: targetStatus }, 200, noStore);
+    if (!["installed", "disabled"].includes(plugin.status))
+      throw new AppError(
+        409,
+        "PLUGIN_STATE_CONFLICT",
+        `The plugin cannot be changed while its status is ${plugin.status}.`,
+      );
+
+    if (body.enabled) {
+      const missingDependency = await c.get("db").first<{ id: string }>(
+        `SELECT l.dependency_plugin_id AS id
+           FROM plugin_dependency_locks l
+           LEFT JOIN plugins p ON p.id = l.dependency_plugin_id
+            AND p.status = 'installed'
+          WHERE l.plugin_id = ? AND p.id IS NULL LIMIT 1`,
+        [pluginId],
+      );
+      if (missingDependency)
+        throw new AppError(
+          409,
+          "PLUGIN_DEPENDENCY_DISABLED",
+          `Activate dependency ${missingDependency.id} first.`,
+        );
+    } else {
+      const activeDependent = await c.get("db").first<{ id: string }>(
+        `SELECT l.plugin_id AS id
+           FROM plugin_dependency_locks l
+           JOIN plugins p ON p.id = l.plugin_id AND p.status = 'installed'
+          WHERE l.dependency_plugin_id = ? LIMIT 1`,
+        [pluginId],
+      );
+      if (activeDependent)
+        throw new AppError(
+          409,
+          "PLUGIN_REQUIRED_BY_DEPENDENT",
+          `Deactivate dependent plugin ${activeDependent.id} first.`,
+        );
+    }
+
+    if (Number(plugin.packageFormat) === 2) {
+      const resources = await readResourceRows(c, pluginId, {
+        includePreserved: true,
+      });
+      if (body.enabled) {
+        await configurePluginQueueConsumers(
+          c.env,
+          plugin.workerName,
+          resources,
+        );
+        await configurePluginWorkerSchedules(
+          c.env,
+          plugin.workerName,
+          resources,
+        );
+      } else {
+        await removePluginQueueConsumers(c.env, plugin.workerName, resources);
+        await configurePluginWorkerSchedules(c.env, plugin.workerName, []);
+      }
+    }
+
+    const now = dbTime(c.get("db"));
+    await commitWithEvent(
+      c,
+      [
+        {
+          sql: "UPDATE plugins SET status = ?, updated_at = ? WHERE id = ?",
+          params: [targetStatus, now, pluginId],
+        },
+        {
+          sql: "UPDATE plugin_assets SET active = ? WHERE plugin_id = ?",
+          params: [body.enabled, pluginId],
+        },
+        {
+          sql: "UPDATE plugin_contributions SET active = ? WHERE plugin_id = ?",
+          params: [body.enabled, pluginId],
+        },
+      ],
+      {
+        eventType: body.enabled
+          ? "core.plugin.activated"
+          : "core.plugin.deactivated",
+        resourceType: "core.plugin",
+        resourceId: pluginId,
+        data: { status: targetStatus },
+      },
+    );
+    await audit(
+      c,
+      body.enabled ? "core.plugin.activated" : "core.plugin.deactivated",
+      "core.plugin",
+      pluginId,
+      {},
+    );
+    return c.json({ id: pluginId, status: targetStatus }, 200, noStore);
   },
 );
 
@@ -1258,20 +1383,27 @@ installerRoutes.post("/plugin-operations", async (c) => {
   }
   const installed = await c.get("db").first<{
     installedVersion: string;
+    status: string;
     packageFormat: number | string;
     marketplaceId: string | null;
     publisherId: string | null;
     releaseHash: string | null;
   }>(
-    `SELECT installed_version AS "installedVersion",
+    `SELECT installed_version AS "installedVersion", status,
             package_format AS "packageFormat",
             marketplace_id AS "marketplaceId",
             publisher_id AS "publisherId",
             release_hash AS "releaseHash"
            FROM plugins
-          WHERE id = ? AND status = 'installed'`,
+          WHERE id = ? AND status IN ('installed','disabled')`,
     [parts.manifest.id],
   );
+  if (installed?.status === "disabled")
+    throw new AppError(
+      409,
+      "PLUGIN_DISABLED_ACTIVATE_FIRST",
+      "Activate this plugin before updating it.",
+    );
   if (
     installed &&
     semver.lt(parts.manifest.version, installed.installedVersion)
@@ -2956,7 +3088,10 @@ installerRoutes.get(
       );
     if (!plugin)
       throw new AppError(404, "PLUGIN_NOT_FOUND", "Plugin not found.");
-    if (plugin.status !== "installed" || !plugin.installedVersion)
+    if (
+      !["installed", "disabled"].includes(plugin.status) ||
+      !plugin.installedVersion
+    )
       throw new AppError(
         409,
         "PLUGIN_PACKAGE_EXPORT_NOT_INSTALLED",
@@ -3045,7 +3180,10 @@ installerRoutes.post(
       );
     if (!plugin)
       throw new AppError(404, "PLUGIN_NOT_FOUND", "Plugin not found.");
-    if (plugin.status !== "installed" || !plugin.installedVersion)
+    if (
+      !["installed", "disabled"].includes(plugin.status) ||
+      !plugin.installedVersion
+    )
       throw new AppError(
         409,
         "PLUGIN_PACKAGE_EXPORT_NOT_INSTALLED",
@@ -3191,7 +3329,7 @@ installerRoutes.delete(
       });
       return c.body(null, 204);
     }
-    if (plugin.status !== "installed")
+    if (!["installed", "disabled"].includes(plugin.status))
       throw new AppError(
         409,
         "PLUGIN_STATE_CONFLICT",
@@ -3200,7 +3338,7 @@ installerRoutes.delete(
     const dependent = await c.get("db").first<{ id: string }>(
       `SELECT l.plugin_id AS id
          FROM plugin_dependency_locks l
-         JOIN plugins p ON p.id = l.plugin_id AND p.status = 'installed'
+         JOIN plugins p ON p.id = l.plugin_id AND p.status IN ('installed','disabled')
         WHERE l.dependency_plugin_id = ? LIMIT 1`,
       [pluginId],
     );

@@ -20,6 +20,7 @@ const ptBR = {
   "common.cancel": "Cancelar",
   "common.close": "Fechar",
   "common.copy": "Copiar",
+  "common.description": "Descrição",
   "common.created": "Criado",
   "common.date": "Data",
   "common.delete": "Excluir",
@@ -44,6 +45,7 @@ const ptBR = {
   "common.operationCancelled": "Operação cancelada.",
   "common.confirmPassword": "Confirme sua senha",
   "common.search": "Buscar",
+  "common.retry": "Tentar novamente",
   "common.noRecords": "Nenhum registro",
   "common.noRecordsDescription": "Adicione o primeiro registro para começar.",
   "common.showPassword": "Mostrar senha",
@@ -66,6 +68,9 @@ const ptBR = {
     "A aplicação pode ter sido atualizada. Recarregue para usar a versão mais recente.",
   "errors.reloadPage": "Recarregar página",
   "errors.reloadGuarded": "Finalize a atividade em andamento e atualize",
+  "errors.sessionUnavailable": "Não foi possível verificar sua sessão",
+  "errors.RATE_LIMITED":
+    "Muitas requisições foram feitas em pouco tempo. Aguarde um instante e tente novamente; sua sessão continua ativa.",
   "errors.META_RATE_LIMITED":
     "A Meta limitou temporariamente as consultas desta conta. Aguarde alguns minutos e tente novamente.",
   "errors.META_TOKEN_INVALID":
@@ -411,8 +416,14 @@ const ptBR = {
   "plugins.publisher": "Editor",
   "plugins.marketplace": "Marketplace",
   "plugins.compatibility": "Compatibilidade",
+  "plugins.installationStatus": "Instalação",
   "plugins.compatible": "Compatível",
   "plugins.incompatible": "Incompatível",
+  "plugins.available": "Disponível",
+  "plugins.alreadyInstalled": "Já instalado",
+  "plugins.updateAvailable": "Atualização disponível",
+  "plugins.packageSize": "Tamanho do pacote",
+  "plugins.pluginDetails": "Detalhes do plugin",
   "plugins.catalogEmpty":
     "Nenhum plugin está disponível. Sincronize um marketplace para carregar o catálogo.",
   "plugins.marketplaces": "Marketplaces",
@@ -425,13 +436,20 @@ const ptBR = {
   "plugins.lastSync": "Última sincronização",
   "plugins.syncMarketplace": "Sincronizar marketplace",
   "plugins.marketplaceAdded": "Marketplace adicionado.",
+  "plugins.marketplaceUpdated": "Marketplace atualizado.",
   "plugins.marketplaceSynced":
     "Marketplace sincronizado e assinatura validada.",
   "plugins.marketplaceRemoved":
     "Marketplace removido; os plugins já instalados foram preservados.",
   "plugins.removeMarketplaceConfirm": "Remover o marketplace {{name}}?",
   "plugins.marketplaceTrustNotice":
-    "Ao sincronizar pela primeira vez, a chave pública assinante deste repositório será fixada nesta instalação.",
+    "O catálogo será sincronizado automaticamente. A assinatura é validada e a primeira chave pública válida fica protegida nesta instalação, sem confirmação manual.",
+  "plugins.marketplaceDetails":
+    "Edite o nome, copie os dados ou altere a disponibilidade deste marketplace.",
+  "plugins.copyMarketplaceName": "Copiar nome do marketplace",
+  "plugins.copyMarketplaceRepository": "Copiar repositório do marketplace",
+  "plugins.copied": "Copiado.",
+  "plugins.copyFailed": "Não foi possível copiar.",
   "plugins.marketplaceDownloadFailed":
     "Não foi possível baixar e verificar o pacote do marketplace.",
   "plugins.recoveryModeTitle": "Modo de recuperação do Core",
@@ -521,6 +539,10 @@ const ptBR = {
   "plugins.supportReportCopyFailed":
     "Não foi possível copiar o relatório. Selecione o texto manualmente.",
   "plugins.installed": "Plugin instalado.",
+  "plugins.activated": "Plugin ativado.",
+  "plugins.deactivated": "Plugin desativado sem ser desinstalado.",
+  "plugins.activateBeforeUpdate":
+    "Este plugin está desativado. Ative-o antes de atualizar.",
   "plugins.uninstalled": "Plugin desinstalado; as tabelas foram preservadas.",
   "plugins.uninstallConfirm": "Desinstalar {{name}} {{version}}?",
   "plugins.recordDeleted":
@@ -535,6 +557,7 @@ const ptBR = {
   "plugins.state.binding": "Vinculando",
   "plugins.state.registering": "Registrando",
   "plugins.state.installed": "Instalado",
+  "plugins.state.disabled": "Desativado",
   "plugins.state.failed": "Falhou",
   "plugins.r2ProvisioningTitle": "Armazenamento privado R2",
   "plugins.r2ProvisioningDescription":
@@ -647,6 +670,7 @@ const en: Record<TranslationKey, string> = {
   "common.cancel": "Cancel",
   "common.close": "Close",
   "common.copy": "Copy",
+  "common.description": "Description",
   "common.created": "Created",
   "common.date": "Date",
   "common.delete": "Delete",
@@ -671,6 +695,7 @@ const en: Record<TranslationKey, string> = {
   "common.operationCancelled": "Operation cancelled.",
   "common.confirmPassword": "Confirm your password",
   "common.search": "Search",
+  "common.retry": "Try again",
   "common.noRecords": "No records",
   "common.noRecordsDescription": "Add the first record to get started.",
   "common.showPassword": "Show password",
@@ -693,6 +718,9 @@ const en: Record<TranslationKey, string> = {
     "The application may have been updated. Reload to use the latest version.",
   "errors.reloadPage": "Reload page",
   "errors.reloadGuarded": "Finish the active task and update",
+  "errors.sessionUnavailable": "Your session could not be verified",
+  "errors.RATE_LIMITED":
+    "Too many requests were made in a short time. Wait a moment and try again; your session remains active.",
   "errors.META_RATE_LIMITED":
     "Meta temporarily limited requests for this ad account. Wait a few minutes and try again.",
   "errors.META_TOKEN_INVALID":
@@ -1022,8 +1050,14 @@ const en: Record<TranslationKey, string> = {
   "plugins.publisher": "Publisher",
   "plugins.marketplace": "Marketplace",
   "plugins.compatibility": "Compatibility",
+  "plugins.installationStatus": "Installation",
   "plugins.compatible": "Compatible",
   "plugins.incompatible": "Incompatible",
+  "plugins.available": "Available",
+  "plugins.alreadyInstalled": "Already installed",
+  "plugins.updateAvailable": "Update available",
+  "plugins.packageSize": "Package size",
+  "plugins.pluginDetails": "Plugin details",
   "plugins.catalogEmpty":
     "No plugins are available. Sync a marketplace to load the catalog.",
   "plugins.marketplaces": "Marketplaces",
@@ -1036,12 +1070,19 @@ const en: Record<TranslationKey, string> = {
   "plugins.lastSync": "Last sync",
   "plugins.syncMarketplace": "Sync marketplace",
   "plugins.marketplaceAdded": "Marketplace added.",
+  "plugins.marketplaceUpdated": "Marketplace updated.",
   "plugins.marketplaceSynced": "Marketplace synced and signature verified.",
   "plugins.marketplaceRemoved":
     "Marketplace removed; installed plugins were preserved.",
   "plugins.removeMarketplaceConfirm": "Remove marketplace {{name}}?",
   "plugins.marketplaceTrustNotice":
-    "On the first sync, this repository's signing public key will be pinned to this installation.",
+    "The catalog will sync automatically. Its signature is verified and the first valid public key is secured in this installation without manual confirmation.",
+  "plugins.marketplaceDetails":
+    "Edit the name, copy its details, or change this marketplace's availability.",
+  "plugins.copyMarketplaceName": "Copy marketplace name",
+  "plugins.copyMarketplaceRepository": "Copy marketplace repository",
+  "plugins.copied": "Copied.",
+  "plugins.copyFailed": "Unable to copy.",
   "plugins.marketplaceDownloadFailed":
     "The marketplace package could not be downloaded and verified.",
   "plugins.recoveryModeTitle": "Core recovery mode",
@@ -1130,6 +1171,10 @@ const en: Record<TranslationKey, string> = {
   "plugins.supportReportCopyFailed":
     "The report could not be copied. Select the text manually.",
   "plugins.installed": "Plugin installed.",
+  "plugins.activated": "Plugin activated.",
+  "plugins.deactivated": "Plugin deactivated without uninstalling.",
+  "plugins.activateBeforeUpdate":
+    "This plugin is disabled. Activate it before updating.",
   "plugins.uninstalled": "Plugin uninstalled; database tables were preserved.",
   "plugins.uninstallConfirm": "Uninstall {{name}} {{version}}?",
   "plugins.recordDeleted":
@@ -1144,6 +1189,7 @@ const en: Record<TranslationKey, string> = {
   "plugins.state.binding": "Binding",
   "plugins.state.registering": "Registering",
   "plugins.state.installed": "Installed",
+  "plugins.state.disabled": "Disabled",
   "plugins.state.failed": "Failed",
   "plugins.r2ProvisioningTitle": "Private R2 storage",
   "plugins.r2ProvisioningDescription":

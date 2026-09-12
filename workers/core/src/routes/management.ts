@@ -462,7 +462,7 @@ managementRoutes.post("/me/api-keys", async (c) => {
       permissions: permissionRecord(input.scopes),
       rateLimitEnabled: true,
       rateLimitTimeWindow: 60_000,
-      rateLimitMax: 120,
+      rateLimitMax: 600,
     },
   });
   await audit(c, "core.api_key.created", "core.api_key", created.id, {

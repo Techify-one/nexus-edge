@@ -72,7 +72,7 @@ const coreModules = [
     id: "core.plugins",
     title: "nav.plugins",
     description: "dashboard.pluginsDescription",
-    to: "/app/plugins",
+    to: "/app/plugins/installed",
     icon: Package,
     permission: "core.plugin.read",
   },

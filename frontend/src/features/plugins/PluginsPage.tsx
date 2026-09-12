@@ -6,11 +6,14 @@ import {
   ExternalLink,
   PackagePlus,
   Pencil,
+  Power,
+  PowerOff,
   Search,
   Trash2,
   UploadCloud,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { ConfigurableDataTable } from "../../components/ui/configurable-data-table.js";
 import { Modal } from "../../components/ui/modal.js";
@@ -201,6 +204,7 @@ const stateKeys: Record<string, TranslationKey> = {
   binding: "plugins.state.binding",
   registering: "plugins.state.registering",
   installed: "plugins.state.installed",
+  disabled: "plugins.state.disabled",
   failed: "plugins.state.failed",
 };
 
@@ -284,6 +288,8 @@ const bodyFor = (parts: PluginParts) => {
 
 export default function PluginsPage() {
   const { t } = useI18n();
+  const navigate = useNavigate();
+  const { tab } = useParams<{ tab?: string }>();
   const canCreate = can("core.plugin.create");
   const canUpdate = can("core.plugin.update");
   const canDelete = can("core.plugin.delete");
@@ -295,7 +301,13 @@ export default function PluginsPage() {
   const archiveInputRef = useRef<HTMLInputElement>(null);
   const archiveTargetRef = useRef<Plugin | null>(null);
   const [search, setSearch] = useState("");
-  const [activeTab, setActiveTab] = useState<PluginTab>("installed");
+  const activeTab: PluginTab = [
+    "installed",
+    "catalog",
+    "marketplaces",
+  ].includes(tab ?? "")
+    ? (tab as PluginTab)
+    : "installed";
   const [selected, setSelected] = useState<Plugin | null>(null);
   const [parts, setParts] = useState<PluginParts | null>(null);
   const [operation, setOperation] = useState<Operation | null>(null);
@@ -310,6 +322,10 @@ export default function PluginsPage() {
     queryKey: ["plugins"],
     queryFn: () => api<{ items: Plugin[] }>("/api/v1/plugins"),
   });
+  useEffect(() => {
+    if (tab !== activeTab)
+      navigate(`/app/plugins/${activeTab}`, { replace: true });
+  }, [activeTab, navigate, tab]);
   const requiresR2Provisioning = (manifest: Manifest): boolean =>
     Boolean(
       manifest.runtimeBindings?.includes("r2") &&
@@ -387,6 +403,12 @@ export default function PluginsPage() {
     if (!file) return;
     try {
       const selectedParts = await readPlugin(file);
+      const disabledPlugin = (plugins.data?.items ?? []).find(
+        (plugin) =>
+          plugin.id === selectedParts.manifest.id &&
+          plugin.status === "disabled",
+      );
+      if (disabledPlugin) throw new Error(t("plugins.activateBeforeUpdate"));
       const operationType = (plugins.data?.items ?? []).some(
         (plugin) =>
           plugin.id === selectedParts.manifest.id &&
@@ -667,6 +689,35 @@ export default function PluginsPage() {
     },
     onError: (error: Error) => toast.error(error.message),
   });
+  const togglePlugin = useMutation({
+    mutationFn: (plugin: Plugin) =>
+      api<{ id: string; status: string }>(
+        `/api/v1/plugins/${encodeURIComponent(plugin.id)}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ enabled: plugin.status !== "installed" }),
+        },
+      ),
+    onSuccess: (result, plugin) => {
+      const next = { ...plugin, status: result.status };
+      setSelected((current) => (current?.id === plugin.id ? next : current));
+      toast.success(
+        t(
+          result.status === "installed"
+            ? "plugins.activated"
+            : "plugins.deactivated",
+        ),
+      );
+      void client.invalidateQueries({ queryKey: ["plugins"] });
+      void client.invalidateQueries({ queryKey: ["plugin-runtime"] });
+      void client.invalidateQueries({ queryKey: ["plugin-catalog"] });
+      void client.invalidateQueries({ queryKey: ["me", "ability"] });
+      void client.invalidateQueries({
+        queryKey: ["me", "plugin-navigation"],
+      });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
   const downloadPackage = useMutation({
     mutationFn: async (plugin: Plugin) => ({
       plugin,
@@ -759,7 +810,7 @@ export default function PluginsPage() {
                 ? "border-indigo-600 text-indigo-600"
                 : "border-transparent text-slate-500 hover:text-slate-800"
             }`}
-            onClick={() => setActiveTab(tab)}
+            onClick={() => navigate(`/app/plugins/${tab}`)}
           >
             {t(`plugins.tabs.${tab}`)}
           </button>
@@ -935,35 +986,46 @@ export default function PluginsPage() {
               canExport || canUpdate || canDelete
                 ? (row) => (
                     <div className="flex justify-end gap-1">
-                      {canExport && row.status === "installed" && (
-                        <Button
-                          variant="ghost"
-                          className="px-2"
-                          disabled={
-                            downloadPackage.isPending ||
-                            archivePackage.isPending
-                          }
-                          onClick={() => requestPackageDownload(row)}
-                          aria-label={`${t("plugins.downloadPackage")} ${row.name}`}
-                          title={
-                            Boolean(row.packageAvailable)
-                              ? t("plugins.downloadPackage")
-                              : t("plugins.downloadUnavailable")
-                          }
-                        >
-                          <Download className="h-4 w-4" />
-                        </Button>
-                      )}
-                      {canUpdate && row.status === "installed" && (
-                        <Button
-                          variant="ghost"
-                          className="px-2"
-                          onClick={() => setSelected(row)}
-                          aria-label={`${t("common.edit")} ${row.name}`}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                      )}
+                      {canExport &&
+                        ["installed", "disabled"].includes(row.status) && (
+                          <Button
+                            variant="ghost"
+                            className="px-2"
+                            disabled={
+                              downloadPackage.isPending ||
+                              archivePackage.isPending
+                            }
+                            onClick={() => requestPackageDownload(row)}
+                            aria-label={`${t("plugins.downloadPackage")} ${row.name}`}
+                            title={
+                              Boolean(row.packageAvailable)
+                                ? t("plugins.downloadPackage")
+                                : t("plugins.downloadUnavailable")
+                            }
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        )}
+                      {canUpdate &&
+                        ["installed", "disabled"].includes(row.status) && (
+                          <Button
+                            variant="ghost"
+                            className="px-2"
+                            busy={togglePlugin.isPending}
+                            onClick={() => togglePlugin.mutate(row)}
+                            aria-label={`${
+                              row.status === "installed"
+                                ? t("common.deactivate")
+                                : t("common.activate")
+                            } ${row.name}`}
+                          >
+                            {row.status === "installed" ? (
+                              <PowerOff className="h-4 w-4" />
+                            ) : (
+                              <Power className="h-4 w-4" />
+                            )}
+                          </Button>
+                        )}
                       {canDelete && (
                         <Button
                           variant="ghost"
@@ -1279,21 +1341,22 @@ export default function PluginsPage() {
               </div>
             </dl>
             <div className="flex justify-end gap-2">
-              {canExport && selected.status === "installed" && (
-                <Button
-                  variant="secondary"
-                  busy={downloadPackage.isPending || archivePackage.isPending}
-                  title={
-                    Boolean(selected.packageAvailable)
-                      ? t("plugins.downloadPackage")
-                      : t("plugins.downloadUnavailable")
-                  }
-                  onClick={() => requestPackageDownload(selected)}
-                >
-                  <Download className="h-4 w-4" />
-                  {t("plugins.downloadPackage")}
-                </Button>
-              )}
+              {canExport &&
+                ["installed", "disabled"].includes(selected.status) && (
+                  <Button
+                    variant="secondary"
+                    busy={downloadPackage.isPending || archivePackage.isPending}
+                    title={
+                      Boolean(selected.packageAvailable)
+                        ? t("plugins.downloadPackage")
+                        : t("plugins.downloadUnavailable")
+                    }
+                    onClick={() => requestPackageDownload(selected)}
+                  >
+                    <Download className="h-4 w-4" />
+                    {t("plugins.downloadPackage")}
+                  </Button>
+                )}
               {canUpdate && selected.status === "installed" && (
                 <Button
                   variant="secondary"
@@ -1307,6 +1370,23 @@ export default function PluginsPage() {
                   {t("plugins.update")}
                 </Button>
               )}
+              {canUpdate &&
+                ["installed", "disabled"].includes(selected.status) && (
+                  <Button
+                    variant="secondary"
+                    busy={togglePlugin.isPending}
+                    onClick={() => togglePlugin.mutate(selected)}
+                  >
+                    {selected.status === "installed" ? (
+                      <PowerOff className="h-4 w-4" />
+                    ) : (
+                      <Power className="h-4 w-4" />
+                    )}
+                    {selected.status === "installed"
+                      ? t("common.deactivate")
+                      : t("common.activate")}
+                  </Button>
+                )}
               {canDelete && (
                 <Button
                   variant="danger"

@@ -20,6 +20,47 @@ afterEach(() => {
 });
 
 describe("configurable data table", () => {
+  it("does not open a row while the user is selecting text", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({ tableId: "core.users", config: null, updatedAt: null }),
+      ),
+    );
+    vi.spyOn(window, "getSelection").mockReturnValue({
+      toString: () => "Alice",
+    } as Selection);
+    const onOpen = vi.fn();
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <I18nProvider>
+          <ConfigurableDataTable
+            tableId="core.users"
+            rows={[{ id: "1", name: "Alice", email: "alice@example.com" }]}
+            onOpen={onOpen}
+            columns={[
+              {
+                key: "name",
+                label: "Name",
+                size: 200,
+                minSize: 80,
+                maxSize: 800,
+                render: (row) => row.name,
+                sortValue: (row) => row.name,
+              },
+            ]}
+          />
+        </I18nProvider>
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click((await screen.findByText("Alice")).closest("tr")!);
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
   it("reports controlled sorting without reordering a server-sorted page", async () => {
     vi.stubGlobal(
       "fetch",

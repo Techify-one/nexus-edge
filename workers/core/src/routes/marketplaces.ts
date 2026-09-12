@@ -617,6 +617,7 @@ marketplacesRoutes.post(
       const fingerprint = await publisherKeyFingerprint(
         catalog.publisher.publicKey,
       );
+      const trustedOnFirstUse = !source.trustedPublicKey;
       const knownKey = await c
         .get("db")
         .first<{ status: string; publicKey: string }>(
@@ -631,37 +632,6 @@ marketplacesRoutes.post(
       )
         throw new Error("MARKETPLACE_SIGNING_KEY_REJECTED");
       const now = dbTime(c.get("db"));
-      if (!source.trustedPublicKey) {
-        await c.get("db").execute(
-          `UPDATE plugin_marketplaces
-              SET name = ?, trust_state = 'pending',
-                  key_fingerprint = ?, etag = NULL, catalog_json = NULL,
-                  catalog_expires_at = NULL, last_error_code = NULL,
-                  updated_at = ?
-            WHERE id = ?`,
-          [catalog.name, fingerprint, now, source.id],
-        );
-        await audit(
-          c,
-          "core.marketplace.key_confirmation_requested",
-          "core.marketplace",
-          source.id,
-          { keyId: catalog.publisher.keyId, fingerprint },
-        );
-        return c.json(
-          {
-            id: source.id,
-            requiresTrust: true,
-            publisherId: catalog.publisher.id,
-            publisherName: catalog.publisher.name,
-            keyId: catalog.publisher.keyId,
-            publicKey: catalog.publisher.publicKey,
-            fingerprint,
-          },
-          200,
-          noStore,
-        );
-      }
       const catalogSha = await sha256(stableJson(catalog));
       const previousReleases = await c.get("db").query<{
         pluginId: string;
@@ -784,6 +754,18 @@ marketplacesRoutes.post(
           });
         }
       await c.get("db").atomic(statements);
+      if (trustedOnFirstUse)
+        await audit(
+          c,
+          "core.marketplace.key_trusted_on_first_use",
+          "core.marketplace",
+          source.id,
+          {
+            keyId: catalog.publisher.keyId,
+            publisherId: catalog.publisher.id,
+            fingerprint,
+          },
+        );
       await audit(c, "core.marketplace.synced", "core.marketplace", source.id, {
         revision: catalog.revision,
         plugins: catalog.plugins.length,
@@ -844,6 +826,7 @@ marketplacesRoutes.get(
       compatibilityReason: string | null;
       packageBytes: number | string | null;
       installedVersion: string | null;
+      installedStatus: string | null;
       installedMarketplaceId: string | null;
       trustState: string;
       catalogExpiresAt: unknown;
@@ -854,10 +837,11 @@ marketplacesRoutes.get(
               r.manifest_json AS manifest, r.compatible,
               r.compatibility_reason AS "compatibilityReason", r.package_bytes AS "packageBytes",
               m.trust_state AS "trustState", m.catalog_expires_at AS "catalogExpiresAt",
-              p.installed_version AS "installedVersion", p.marketplace_id AS "installedMarketplaceId"
+              p.installed_version AS "installedVersion", p.status AS "installedStatus",
+              p.marketplace_id AS "installedMarketplaceId"
          FROM plugin_releases r
          JOIN plugin_marketplaces m ON m.id = r.marketplace_id
-         LEFT JOIN plugins p ON p.id = r.plugin_id AND p.status = 'installed'
+         LEFT JOIN plugins p ON p.id = r.plugin_id AND p.status IN ('installed','disabled')
         WHERE m.enabled = ? AND m.removed_at IS NULL
         ORDER BY r.plugin_id, r.channel, r.version`,
       [true],
@@ -1030,8 +1014,9 @@ marketplacesRoutes.post("/plugin-catalog/:releaseId/package", async (c) => {
     );
   const installed = await c
     .get("db")
-    .first<{ version: string }>(
-      `SELECT installed_version AS version FROM plugins WHERE id = ? AND status = 'installed'`,
+    .first<{ version: string; status: string }>(
+      `SELECT installed_version AS version, status FROM plugins
+        WHERE id = ? AND status IN ('installed','disabled')`,
       [release.pluginId],
     );
   const permission = installed ? "core.plugin.update" : "core.plugin.create";
@@ -1052,6 +1037,18 @@ marketplacesRoutes.post("/plugin-catalog/:releaseId/package", async (c) => {
       409,
       "PLUGIN_RELEASE_UNAVAILABLE",
       "This plugin release is not available for this Core.",
+    );
+  if (installed?.status === "disabled")
+    throw new AppError(
+      409,
+      "PLUGIN_DISABLED_ACTIVATE_FIRST",
+      "Activate this plugin before updating it.",
+    );
+  if (installed && semver.eq(release.version, installed.version))
+    throw new AppError(
+      409,
+      "PLUGIN_ALREADY_INSTALLED",
+      "This plugin version is already installed.",
     );
   if (installed && semver.lt(release.version, installed.version))
     throw new AppError(

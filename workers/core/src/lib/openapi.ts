@@ -552,6 +552,29 @@ const CORE_OPENAPI_DOCUMENT = {
       },
     },
     "/api/v1/plugins/{pluginId}": {
+      patch: {
+        parameters: [{ name: "pluginId", in: "path", required: true }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["enabled"],
+                properties: { enabled: { type: "boolean" } },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": { description: "Plugin activated or deactivated" },
+          "404": { description: "Plugin record not found" },
+          "409": {
+            description: "Plugin state or dependency prevents the change",
+          },
+          "422": { description: "Invalid activation request" },
+        },
+      },
       delete: {
         parameters: [{ name: "pluginId", in: "path", required: true }],
         responses: {

@@ -648,7 +648,10 @@ export function ConfigurableDataTable<T extends { id: string }>({
                   key={row.id}
                   tabIndex={0}
                   onKeyDown={(event) => keyOpen(event, row.original)}
-                  onClick={() => onOpen(row.original)}
+                  onClick={() => {
+                    if (window.getSelection()?.toString()) return;
+                    onOpen(row.original);
+                  }}
                   className="app-table-row group h-14 cursor-pointer border-t transition"
                 >
                   {row.getVisibleCells().map((cell) => (

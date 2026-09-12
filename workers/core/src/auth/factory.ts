@@ -68,7 +68,7 @@ export function createAuth(env: CoreEnv, db: DatabasePort) {
         requireName: true,
         startingCharactersConfig: { shouldStore: true, charactersLength: 12 },
         keyExpiration: API_KEY_EXPIRATION,
-        rateLimit: { enabled: true, timeWindow: 60_000, maxRequests: 120 },
+        rateLimit: { enabled: true, timeWindow: 60_000, maxRequests: 600 },
       }),
     ],
   });

@@ -247,7 +247,10 @@ export default function GeneralSettingsPage() {
           {!data.credentialConfigured && (
             <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
               {t("settings.credentialRequired")}{" "}
-              <a className="font-semibold underline" href="/app/plugins">
+              <a
+                className="font-semibold underline"
+                href="/app/plugins/installed"
+              >
                 {t("settings.openPlugins")}
               </a>
             </p>

@@ -130,7 +130,7 @@ const router = createBrowserRouter([
           { path: "groups", element: lazyElement(GroupsPage) },
           { path: "settings/api-keys", element: lazyElement(ApiKeysPage) },
           { path: "settings/webhooks", element: lazyElement(WebhooksPage) },
-          { path: "plugins", element: lazyElement(PluginsPage) },
+          { path: "plugins/:tab?", element: lazyElement(PluginsPage) },
           { path: "audit", element: lazyElement(AuditPage) },
           { path: "p/:pluginId/*", element: <PluginPageHost /> },
           {

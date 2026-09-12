@@ -18,6 +18,8 @@ export const CORE_EVENT_TYPES = [
   "core.plugin.installation_started",
   "core.plugin.installation_succeeded",
   "core.plugin.installation_failed",
+  "core.plugin.activated",
+  "core.plugin.deactivated",
   "core.plugin.uninstalled",
   "core.webhook_endpoint.created",
   "core.webhook_endpoint.updated",

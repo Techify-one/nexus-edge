@@ -105,7 +105,7 @@ export function PluginPageHost() {
         <p className="mt-2 text-sm">{t("plugins.recoveryModeDescription")}</p>
         <Button
           className="mt-4"
-          onClick={() => navigate("/app/plugins", { replace: true })}
+          onClick={() => navigate("/app/plugins/installed", { replace: true })}
         >
           {t("nav.plugins")}
         </Button>
