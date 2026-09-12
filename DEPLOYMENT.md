@@ -26,8 +26,9 @@ Installer secrets from GitHub environment secrets, invokes `pnpm deploy:core`,
 and smoke-tests the Core origin.
 
 Signed, one-click customer updates use a separate beta prerelease workflow.
-Follow [docs/CORE-UPDATES.md](./docs/CORE-UPDATES.md); never create or replace
-its three GitHub release assets manually.
+That workflow also promotes the same signed Core version to the independent
+Installer's stable channel. Follow [docs/CORE-UPDATES.md](./docs/CORE-UPDATES.md);
+never create or replace its GitHub or R2 release objects manually.
 
 Do not run `pnpm deploy:core`, `pnpm deploy:direct`, or `wrangler deploy`
 locally for an ordinary production release. Those commands are retained as

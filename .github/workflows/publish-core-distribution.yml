@@ -1,13 +1,19 @@
-name: Publish installer release
+name: Publish Core distribution
 
 on:
   push:
     tags:
-      - "installer-v*"
+      - "core-distribution-v*"
+  workflow_call:
+    inputs:
+      version:
+        description: Exact Core version from package.json
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       version:
-        description: Semantic release version
+        description: Exact Core version from package.json
         required: true
         type: string
 
@@ -15,7 +21,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: installer-release-${{ github.ref }}
+  group: core-distribution-${{ inputs.version || github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -35,16 +41,21 @@ jobs:
       - name: Resolve release version
         shell: bash
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          if [[ -n "${{ inputs.version }}" ]]; then
             release_version="${{ inputs.version }}"
           else
-            release_version="${GITHUB_REF_NAME#installer-v}"
+            release_version="${GITHUB_REF_NAME#core-distribution-v}"
           fi
           if [[ ! "$release_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
             echo "Invalid semantic version" >&2
             exit 1
           fi
-          echo "INSTALLER_RELEASE_VERSION=$release_version" >> "$GITHUB_ENV"
+          package_version="$(node -p "JSON.parse(require('fs').readFileSync('package.json', 'utf8')).version")"
+          if [[ "$release_version" != "$package_version" ]]; then
+            echo "package.json is $package_version, not $release_version" >&2
+            exit 1
+          fi
+          echo "CORE_DISTRIBUTION_VERSION=$release_version" >> "$GITHUB_ENV"
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm test:matrix
@@ -52,11 +63,11 @@ jobs:
       - run: pnpm build
       - run: pnpm verify:artifacts
       - run: pnpm verify:bundle
-      - run: pnpm installer:release:build
+      - run: pnpm core:distribution:build
       - uses: actions/upload-artifact@v7
         with:
-          name: installer-release-${{ env.INSTALLER_RELEASE_VERSION }}
-          path: installer/release-build
+          name: core-distribution-${{ env.CORE_DISTRIBUTION_VERSION }}
+          path: artifacts/core-distribution
           if-no-files-found: error
           retention-days: 7
 
@@ -76,21 +87,21 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - uses: actions/download-artifact@v7
         with:
-          pattern: installer-release-*
-          path: installer/release-build
+          pattern: core-distribution-*
+          path: artifacts/core-distribution
           merge-multiple: true
       - name: Upload immutable objects to staging
         env:
-          INSTALLER_RELEASE_BUCKET: ${{ vars.INSTALLER_STAGING_RELEASE_BUCKET }}
-        run: pnpm installer:release:publish-objects
+          CORE_DISTRIBUTION_BUCKET: ${{ vars.INSTALLER_STAGING_RELEASE_BUCKET }}
+        run: pnpm core:distribution:publish-objects
       - name: Promote staging for canary
         env:
-          INSTALLER_RELEASE_BUCKET: ${{ vars.INSTALLER_STAGING_RELEASE_BUCKET }}
-        run: pnpm installer:release:promote
+          CORE_DISTRIBUTION_BUCKET: ${{ vars.INSTALLER_STAGING_RELEASE_BUCKET }}
+        run: pnpm core:distribution:promote
       - name: Upload immutable objects to production
         env:
-          INSTALLER_RELEASE_BUCKET: ${{ vars.INSTALLER_PRODUCTION_RELEASE_BUCKET }}
-        run: pnpm installer:release:publish-objects
+          CORE_DISTRIBUTION_BUCKET: ${{ vars.INSTALLER_PRODUCTION_RELEASE_BUCKET }}
+        run: pnpm core:distribution:publish-objects
 
   canary-gate:
     needs: publish-immutable
@@ -113,7 +124,7 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      INSTALLER_RELEASE_BUCKET: ${{ vars.INSTALLER_PRODUCTION_RELEASE_BUCKET }}
+      CORE_DISTRIBUTION_BUCKET: ${{ vars.INSTALLER_PRODUCTION_RELEASE_BUCKET }}
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -123,7 +134,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - uses: actions/download-artifact@v7
         with:
-          pattern: installer-release-*
-          path: installer/release-build
+          pattern: core-distribution-*
+          path: artifacts/core-distribution
           merge-multiple: true
-      - run: pnpm installer:release:promote
+      - run: pnpm core:distribution:promote

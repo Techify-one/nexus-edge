@@ -6,10 +6,14 @@ const repositoryRoot = resolve(import.meta.dirname, "..");
 const packageJson = JSON.parse(
   await readFile(join(repositoryRoot, "package.json"), "utf8"),
 ) as { version: string };
-const version = process.env.INSTALLER_RELEASE_VERSION ?? packageJson.version;
+const version =
+  process.env.CORE_DISTRIBUTION_VERSION ??
+  process.env.INSTALLER_RELEASE_VERSION ??
+  packageJson.version;
 const releaseRoot = resolve(
-  process.env.INSTALLER_RELEASE_OUTPUT ??
-    join(repositoryRoot, "installer/release-build"),
+  process.env.CORE_DISTRIBUTION_OUTPUT ??
+    process.env.INSTALLER_RELEASE_OUTPUT ??
+    join(repositoryRoot, "artifacts/core-distribution"),
 );
 const versionRoot = join(releaseRoot, "releases", version);
 const outputRoot = resolve(

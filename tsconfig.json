@@ -9,8 +9,6 @@
     { "path": "./packages/installer-release-schema" },
     { "path": "./packages/plugin-sdk" },
     { "path": "./workers/core" },
-    { "path": "./installer/worker" },
-    { "path": "./installer/frontend" },
     { "path": "./plugins/template" },
     { "path": "./frontend" }
   ]

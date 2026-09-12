@@ -41,7 +41,11 @@ Uma release beta nunca deve ser montada manualmente no painel do GitHub.
 5. Espere o workflow repetir todas as validações, criar o pacote
    determinístico, assinar o manifesto no environment `core-update-release` e
    publicar a prerelease `nexus-v<VERSÃO>` com os três assets fixos.
-6. Em uma instalação de teste numa versão anterior, abra **Configurações
+6. O mesmo workflow chama **Publish Core distribution**, publica os objetos
+   imutáveis usados pelo Installer e, depois do gate de canário, atualiza
+   `stable.json`. Assim, toda nova instalação passa a usar essa mesma versão do
+   Core sem que o Installer precise ser republicado.
+7. Em uma instalação de teste numa versão anterior, abra **Configurações
    gerais**, confira as notas e clique **Atualizar agora**. Confirme `/health`,
    login, plugins, Queue e auditoria depois da conclusão.
 

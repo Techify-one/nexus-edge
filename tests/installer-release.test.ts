@@ -63,7 +63,7 @@ describe("installer release contract", () => {
   it("packages the current Vite Core environment, never the obsolete bundle", () => {
     const repositoryRoot = resolve(import.meta.dirname, "..");
     for (const path of [
-      "scripts/build-installer-release.ts",
+      "scripts/build-core-distribution.ts",
       "scripts/direct-deploy.mjs",
     ]) {
       const source = readFileSync(resolve(repositoryRoot, path), "utf8");

@@ -36,12 +36,8 @@ Development uses the Core `wrangler.jsonc` through Cloudflare's official Vite pl
 
 ```text
 frontend/          shared React SPA shell and Core pages
-installer/         browser-based signed Cloudflare installer
 packages/          shared contracts, schemas, and database port
-plugins/           complete plugin packages: Worker, UI, migrations, and ZIP
-  crm/             complete CRM plugin
-  meta_ads/        complete Meta Ads plugin
-  template/        complete base for new plugins
+plugins/           compatibility template for plugin package validation
 workers/core/      Core, auth, API, gateway, webhooks, and installer
 scripts/           provisioning, packaging, and safe deployment
 tests/             contracts, security, and migrations
@@ -59,20 +55,20 @@ Follow [docs/INTERNATIONALIZATION.md](./docs/INTERNATIONALIZATION.md) to add lan
 Follow [docs/CORE-UPDATES.md](./docs/CORE-UPDATES.md) to publish signed beta
 releases for the in-app updater.
 
-The browser installer has a separate
-[architecture](./docs/INSTALLER-ARCHITECTURE.md),
-[operations runbook](./docs/INSTALLER-OPERATIONS.md), and
-[privacy policy](./docs/INSTALLER-PRIVACY.md). It installs the prebuilt D1
-release in a customer's Cloudflare account without requiring local developer
-tools.
+The browser installer is maintained independently in
+[`Techify-one/nexus-edge-installer`](https://github.com/Techify-one/nexus-edge-installer).
+It installs the newest signed D1 Core distribution in a customer's Cloudflare
+account without requiring local developer tools.
 
 Follow [docs/DATA-TABLE-STANDARD.md](./docs/DATA-TABLE-STANDARD.md) whenever
 creating a table or changing an existing record-list table. The repository rules
 make this configurable, per-user table contract mandatory for every
 implementation workflow.
 
-Follow [docs/PLUGIN-DEVELOPMENT.md](./docs/PLUGIN-DEVELOPMENT.md) and then copy
-[plugins/template](./plugins/template) when creating a plugin.
+Follow [docs/PLUGIN-DEVELOPMENT.md](./docs/PLUGIN-DEVELOPMENT.md) and use the
+SDK and templates in
+[`Techify-one/nexus-edge-plugins`](https://github.com/Techify-one/nexus-edge-plugins)
+when creating a plugin.
 The guide defines the required Wrangler build, manifest, paired migrations,
 private Service Binding, package layout, frontend registration, retry behavior,
 and release checks. Plugin tables use the same component, layout, behavior, and

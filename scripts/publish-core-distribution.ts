@@ -5,19 +5,24 @@ import { stableReleasePointerSchema } from "@app/installer-release-schema";
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
 const releaseRoot = resolve(
-  process.env.INSTALLER_RELEASE_OUTPUT ??
-    join(repositoryRoot, "installer/release-build"),
+  process.env.CORE_DISTRIBUTION_OUTPUT ??
+    process.env.INSTALLER_RELEASE_OUTPUT ??
+    join(repositoryRoot, "artifacts/core-distribution"),
 );
-const bucket = process.env.INSTALLER_RELEASE_BUCKET;
-if (!bucket) throw new Error("INSTALLER_RELEASE_BUCKET is required");
-const mode = process.env.INSTALLER_RELEASE_PUBLISH_MODE ?? "all";
+const bucket =
+  process.env.CORE_DISTRIBUTION_BUCKET ?? process.env.INSTALLER_RELEASE_BUCKET;
+if (!bucket) throw new Error("CORE_DISTRIBUTION_BUCKET is required");
+const mode =
+  process.env.CORE_DISTRIBUTION_PUBLISH_MODE ??
+  process.env.INSTALLER_RELEASE_PUBLISH_MODE ??
+  "all";
 if (
   !(["objects", "promote", "all"] as const).includes(
     mode as "objects" | "promote" | "all",
   )
 )
   throw new Error(
-    "INSTALLER_RELEASE_PUBLISH_MODE must be objects, promote, or all",
+    "CORE_DISTRIBUTION_PUBLISH_MODE must be objects, promote, or all",
   );
 
 async function files(root: string): Promise<string[]> {

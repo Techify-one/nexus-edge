@@ -1,6 +1,6 @@
 {
   "name": "nexus-edge",
-  "version": "1.1.0-beta.8",
+  "version": "1.1.0-beta.9",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.19.0",
@@ -8,14 +8,12 @@
     "node": ">=24"
   },
   "scripts": {
-    "build": "pnpm --filter @nexus/plugin-sdk build && pnpm build:frontend && pnpm build:installer && pnpm build:plugins",
+    "build": "pnpm --filter @nexus/plugin-sdk build && pnpm build:frontend && pnpm build:plugins",
     "build:frontend": "pnpm --filter @app/frontend build",
-    "build:installer": "pnpm --filter @app/installer-frontend build && pnpm --filter @app/installer-worker build",
     "build:plugins": "pnpm --filter @app/plugin-template build",
     "verify:artifacts": "node --import tsx scripts/verify-artifacts.ts",
-    "typecheck": "tsc -b --pretty false && tsc -p installer/worker/tests/tsconfig.json --noEmit --pretty false",
-    "test": "vitest run && pnpm test:installer",
-    "test:installer": "pnpm --dir installer/worker exec vitest run --config vitest.config.ts",
+    "typecheck": "tsc -b --pretty false",
+    "test": "vitest run",
     "test:watch": "vitest",
     "test:matrix": "node --import tsx scripts/test-database-matrix.ts",
     "lint": "tsc -b --pretty false",
@@ -30,12 +28,11 @@
     "verify:bundle": "node --import tsx scripts/verify-bundles.ts",
     "openapi:check": "node --import tsx scripts/check-openapi.ts",
     "cf-typegen": "wrangler types --config workers/core/wrangler.jsonc workers/core/worker-configuration.d.ts",
-    "installer:cf-typegen": "pnpm --filter @app/installer-worker cf-typegen",
-    "installer:release:build": "pnpm build:frontend && node --import tsx scripts/build-installer-release.ts",
-    "installer:release:publish": "node --import tsx scripts/publish-installer-release.ts",
-    "installer:release:publish-objects": "INSTALLER_RELEASE_PUBLISH_MODE=objects node --import tsx scripts/publish-installer-release.ts",
-    "installer:release:promote": "INSTALLER_RELEASE_PUBLISH_MODE=promote node --import tsx scripts/publish-installer-release.ts",
-    "core:update:release:build": "pnpm build:frontend && node --import tsx scripts/build-installer-release.ts && node --import tsx scripts/package-core-update-release.ts",
+    "core:distribution:build": "pnpm build:frontend && node --import tsx scripts/build-core-distribution.ts",
+    "core:distribution:publish": "node --import tsx scripts/publish-core-distribution.ts",
+    "core:distribution:publish-objects": "CORE_DISTRIBUTION_PUBLISH_MODE=objects node --import tsx scripts/publish-core-distribution.ts",
+    "core:distribution:promote": "CORE_DISTRIBUTION_PUBLISH_MODE=promote node --import tsx scripts/publish-core-distribution.ts",
+    "core:update:release:build": "pnpm build:frontend && node --import tsx scripts/build-core-distribution.ts && node --import tsx scripts/package-core-update-release.ts",
     "marketplace:generate": "pnpm --filter @nexus/plugin-sdk build && node --import tsx scripts/generate-marketplace.ts"
   },
   "dependencies": {
