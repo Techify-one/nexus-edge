@@ -1,7 +1,13 @@
 /* @vitest-environment jsdom */
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import PluginsPage from "../frontend/src/features/plugins/PluginsPage.js";
 import { I18nProvider } from "../frontend/src/i18n/index.js";
@@ -25,7 +31,10 @@ function renderPage(configured: boolean) {
         ? { items: [] }
         : url.endsWith("/api/v1/plugin-runtime-credential")
           ? { configured, accountId }
-          : { tableId: "core.plugins", config: null, updatedAt: null };
+          : url.endsWith("/api/v1/plugin-marketplaces") ||
+              url.endsWith("/api/v1/plugin-catalog")
+            ? { items: [] }
+            : { tableId: "core.plugins", config: null, updatedAt: null };
       return Response.json(body);
     }),
   );
@@ -75,6 +84,40 @@ describe("plugin runtime credential onboarding", () => {
       screen.queryByRole("heading", {
         name: /^(Autorize a publicação do primeiro plugin|Authorize the first plugin deployment)$/,
       }),
+    ).toBeNull();
+  });
+
+  it("separates installed plugins, new plugins, and marketplaces into tabs", async () => {
+    renderPage(true);
+
+    const installed = await screen.findByRole("tab", {
+      name: /^(Instalados|Installed)$/,
+    });
+    const catalog = screen.getByRole("tab", {
+      name: /^(Novos Plugins|New Plugins)$/,
+    });
+    const marketplaces = screen.getByRole("tab", { name: "Market Places" });
+    expect(installed.getAttribute("aria-selected")).toBe("true");
+    expect(
+      screen.getByRole("heading", { name: /^(Instalados|Installed)$/ }),
+    ).toBeTruthy();
+
+    fireEvent.click(catalog);
+    expect(catalog.getAttribute("aria-selected")).toBe("true");
+    expect(
+      await screen.findByRole("heading", { name: /^(Explorar|Explore)$/ }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("heading", { name: /^(Instalados|Installed)$/ }),
+    ).toBeNull();
+
+    fireEvent.click(marketplaces);
+    expect(marketplaces.getAttribute("aria-selected")).toBe("true");
+    expect(
+      await screen.findByRole("heading", { name: "Marketplaces" }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("heading", { name: /^(Explorar|Explore)$/ }),
     ).toBeNull();
   });
 });

@@ -86,6 +86,13 @@ export const validatePluginOpenApi = (
   }
 };
 
+/** Reject Node-only environment lookups that would fail in a browser module. */
+export const validatePluginFrontend = (bytes: Uint8Array): void => {
+  const source = strFromU8(bytes);
+  if (/\bprocess\.env(?:\.|\[)/u.test(source))
+    throw new Error("PLUGIN_FRONTEND_NODE_ENV_UNRESOLVED");
+};
+
 const contentType = (path: string): string => {
   const extension = path.split(".").at(-1)?.toLowerCase();
   if (extension === "js" || extension === "mjs")
@@ -178,6 +185,8 @@ export async function buildPluginPackage(
       );
   }
   addDirectory(files, join(options.root, "dist", "frontend"), "frontend");
+  const frontendEntry = files["frontend/entry.js"];
+  if (frontendEntry) validatePluginFrontend(frontendEntry);
   addDirectory(files, join(options.root, "backend-modules"), "backend/modules");
   addDirectory(files, join(options.root, "locales"), "locales");
   addDirectory(files, join(options.root, "resources"), "resources");

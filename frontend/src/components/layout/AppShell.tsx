@@ -204,7 +204,7 @@ export function AppShell() {
           </div>
         </header>
         <main
-          className={`p-4 sm:p-6 ${location.pathname.startsWith("/app/meta-ads") ? "w-full max-w-none lg:p-5" : "mx-auto max-w-7xl lg:p-8"}`}
+          className={`p-4 sm:p-6 ${location.pathname.startsWith("/app/p/") ? "w-full max-w-none lg:p-5" : "mx-auto max-w-7xl lg:p-8"}`}
         >
           <Outlet />
         </main>

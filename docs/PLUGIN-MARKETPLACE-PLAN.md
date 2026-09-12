@@ -815,7 +815,7 @@ A ordem abaixo evitou remover o sistema antigo antes de existir um caminho compr
 | Fase                           | Entregáveis                                                                                          | Status atual                                                         | Critério de saída                                                    |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------- |
 | P0 — Provas e decisões         | Protótipos isolados de UI/SDK, assets privados, Queue, DO, limites Free e atualização                | Parcial: Core/D1/Queue reais; Cron multirrecurso bloqueado pela cota | Evidências de viabilidade e decisões de contrato registradas         |
-| P1 — Contratos e ferramentas   | Schemas v2/v1, SDK inicial, template, packager e suíte de conformidade                               | Concluído; SDK `1.1.1` e template públicos                           | Plugin externo compila e valida sem checkout do Core                 |
+| P1 — Contratos e ferramentas   | Schemas v2/v1, SDK inicial, template, packager e suíte de conformidade                               | Concluído; SDK `1.1.2` e template públicos                           | Plugin externo compila e valida sem checkout do Core                 |
 | P2 — Host dinâmico             | Rotas genéricas, loader local, tema, i18n, tabelas, páginas públicas e sessões persistentes          | Concluído; frontend CRM externo servido no ambiente isolado          | Frontend de plugin novo funciona com Core congelado                  |
 | P3 — Instalador v2             | Multimódulos, UI/assets, arquivo de pacotes, manifesto, secrets e ledger                             | Concluído; instalação e atualização reais pelo marketplace           | Instalação/atualização v2 via ZIP passam ponta a ponta               |
 | P4 — Recursos                  | D1/provider, R2, KV, Queue, DO SQLite, Cron, AI e reconciliação                                      | Implementado; prova integral real pendente por cota de Cron          | Todos os recursos prioritários funcionam sem condicionais por plugin |
@@ -882,8 +882,8 @@ O cronograma será estimado depois de P0. O projeto envolve contrato de platafor
 ## 20. Evidências e referências de execução
 
 - Repositório público do marketplace: `https://github.com/Techify-one/nexus-edge-plugins`.
-- SDK público: release `plugin-sdk-v1.1.1`; o template foi instalado em diretório vazio, sem checkout do Core, e passou em typecheck/build.
-- Plugins publicados e imutáveis: CRM `2.0.3`, Meeting Recorder `2.0.2`, Meta Ads `2.0.2`, Soletrando `2.0.2` e Platform Probe `1.0.2`.
+- SDK público: release `plugin-sdk-v1.1.2`; o template foi instalado em diretório vazio, sem checkout do Core, e passou em typecheck/build. O empacotador rejeita bundles de frontend com referências Node não resolvidas.
+- Plugins publicados e imutáveis: CRM `2.0.4`, Meeting Recorder `2.0.3`, Meta Ads `2.0.3`, Soletrando `2.0.3` e Platform Probe `1.0.2`.
 - Pipelines do marketplace: validações `34372626412`/`34374241388` e publicações assinadas `34372872158`/`34374470166`, todas concluídas com sucesso.
 - Ambiente isolado: `https://nexus-edge-marketplace-test.francisconeto.workers.dev`, Worker `nexus-edge-marketplace-test`, D1 `nexus-edge-marketplace-test-db`, fila e DLQ próprias, com nove migrations aplicadas.
 - Pipelines do Core/ambiente isolado: execuções `34372585638`, `34374136009` e `34375772523`, com typecheck, 178 testes, matriz D1/PostgreSQL, OpenAPI, build, artefatos, bundle, provisionamento, deploy e smoke concluídos.

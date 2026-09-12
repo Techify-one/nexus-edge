@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 import {
   buildPluginPackage,
+  validatePluginFrontend,
   validatePluginOpenApi,
 } from "../packages/plugin-sdk/src/package.js";
 import { generatePluginMarketplace } from "../packages/plugin-sdk/src/marketplace.js";
@@ -138,6 +139,19 @@ const packageArchive = async (): Promise<Uint8Array> => {
 };
 
 describe("plugin package format 2", () => {
+  it("rejects frontend bundles with unresolved Node environment lookups", () => {
+    expect(() =>
+      validatePluginFrontend(
+        strToU8("export const mode = process.env.NODE_ENV;"),
+      ),
+    ).toThrow("PLUGIN_FRONTEND_NODE_ENV_UNRESOLVED");
+    expect(() =>
+      validatePluginFrontend(
+        strToU8('const mode = "production"; export { mode };'),
+      ),
+    ).not.toThrow();
+  });
+
   it("keeps OpenAPI paths inside authenticated or declared public gateways", () => {
     expect(() =>
       validatePluginOpenApi(

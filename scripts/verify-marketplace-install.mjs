@@ -1,10 +1,16 @@
 const baseUrl = process.env.WORKER_URL?.replace(/\/$/u, "");
 const adminEmail = process.env.MARKETPLACE_TEST_ADMIN_EMAIL;
 const adminPassword = process.env.MARKETPLACE_TEST_ADMIN_PASSWORD;
+const targetPluginId = process.env.MARKETPLACE_TEST_PLUGIN_ID?.trim() || "crm";
 
-if (!baseUrl || !adminEmail || !adminPassword) {
+if (
+  !baseUrl ||
+  !adminEmail ||
+  !adminPassword ||
+  !/^[a-z][a-z0-9_]{1,31}$/u.test(targetPluginId)
+) {
   throw new Error(
-    "Set WORKER_URL, MARKETPLACE_TEST_ADMIN_EMAIL, and MARKETPLACE_TEST_ADMIN_PASSWORD.",
+    "Set valid WORKER_URL, MARKETPLACE_TEST_ADMIN_EMAIL, MARKETPLACE_TEST_ADMIN_PASSWORD, and optional MARKETPLACE_TEST_PLUGIN_ID values.",
   );
 }
 
@@ -220,23 +226,23 @@ if (catalog.length < 5) {
     `Expected at least five catalog plugins, received ${catalog.length}.`,
   );
 }
-const crmRelease = catalog.find(
-  (release) => release.pluginId === "crm" && release.compatible,
+const targetRelease = catalog.find(
+  (release) => release.pluginId === targetPluginId && release.compatible,
 );
-if (!crmRelease)
-  throw new Error("A compatible CRM release was not discovered.");
+if (!targetRelease)
+  throw new Error(`A compatible ${targetPluginId} release was not discovered.`);
 
 const installed = (await call("/api/v1/plugins")).body.items;
-let crm = installed.find(
+let targetPlugin = installed.find(
   (plugin) =>
-    plugin.id === "crm" &&
+    plugin.id === targetPluginId &&
     plugin.status === "installed" &&
-    plugin.installedVersion === crmRelease.version,
+    plugin.installedVersion === targetRelease.version,
 );
 
-if (!crm) {
+if (!targetPlugin) {
   const downloaded = await call(
-    `/api/v1/plugin-catalog/${encodeURIComponent(crmRelease.id)}/package`,
+    `/api/v1/plugin-catalog/${encodeURIComponent(targetRelease.id)}/package`,
     { method: "POST", expectBinary: true },
   );
   const sourceReleaseId = downloaded.response.headers.get(
@@ -249,7 +255,9 @@ if (!crm) {
     const form = new FormData();
     form.set(
       "package",
-      new File([packageBytes], "crm.plugin.zip", { type: "application/zip" }),
+      new File([packageBytes], `${targetPluginId}.plugin.zip`, {
+        type: "application/zip",
+      }),
     );
     form.set("sourceReleaseId", sourceReleaseId);
     return form;
@@ -258,8 +266,8 @@ if (!crm) {
     await call("/api/v1/plugin-operations")
   ).body.items.find(
     (operation) =>
-      operation.pluginId === "crm" &&
-      operation.targetVersion === crmRelease.version &&
+      operation.pluginId === targetPluginId &&
+      operation.targetVersion === targetRelease.version &&
       operation.state !== "installed" &&
       operation.state !== "failed",
   );
@@ -278,11 +286,13 @@ if (!crm) {
     attempt += 1
   ) {
     if (operation.state === "failed") {
-      throw new Error(`CRM installation failed: ${JSON.stringify(operation)}`);
+      throw new Error(
+        `${targetPluginId} installation failed: ${JSON.stringify(operation)}`,
+      );
     }
     if (operation.state === "provisioning") {
       throw new Error(
-        "CRM unexpectedly requested external resource provisioning.",
+        `${targetPluginId} unexpectedly requested external resource provisioning.`,
       );
     }
     if (operation.state === "registering") {
@@ -317,27 +327,40 @@ if (!crm) {
   }
   if (operation.state !== "installed") {
     throw new Error(
-      `CRM installation did not finish: ${JSON.stringify(operation)}`,
+      `${targetPluginId} installation did not finish: ${JSON.stringify(operation)}`,
     );
   }
-  crm = (await call("/api/v1/plugins")).body.items.find(
-    (plugin) => plugin.id === "crm" && plugin.status === "installed",
+  targetPlugin = (await call("/api/v1/plugins")).body.items.find(
+    (plugin) => plugin.id === targetPluginId && plugin.status === "installed",
   );
 }
 
-if (!crm)
-  throw new Error("CRM is not installed after the marketplace operation.");
-const runtime = (await call("/api/v1/plugin-runtime")).body;
-const crmRuntime = runtime.plugins.find((plugin) => plugin.pluginId === "crm");
-if (!crmRuntime)
-  throw new Error("CRM frontend was not registered in the runtime host.");
-const entry = await call(crmRuntime.entryUrl, { expectBinary: true });
-if (!entry.body.byteLength)
-  throw new Error("CRM frontend entry asset is empty.");
-const gatewayHealth = (await call("/api/v1/p/crm/health")).body;
-if (!gatewayHealth.ok || gatewayHealth.plugin !== "crm") {
+if (!targetPlugin)
   throw new Error(
-    `Unexpected CRM gateway response: ${JSON.stringify(gatewayHealth)}`,
+    `${targetPluginId} is not installed after the marketplace operation.`,
+  );
+const runtime = (await call("/api/v1/plugin-runtime")).body;
+const targetRuntime = runtime.plugins.find(
+  (plugin) => plugin.pluginId === targetPluginId,
+);
+if (!targetRuntime)
+  throw new Error(
+    `${targetPluginId} frontend was not registered in the runtime host.`,
+  );
+const entry = await call(targetRuntime.entryUrl, { expectBinary: true });
+if (!entry.body.byteLength)
+  throw new Error(`${targetPluginId} frontend entry asset is empty.`);
+const entrySource = new TextDecoder().decode(entry.body);
+if (/\bprocess\.env(?:\.|\[)/u.test(entrySource))
+  throw new Error(
+    `${targetPluginId} frontend still contains an unresolved Node environment lookup.`,
+  );
+const gatewayHealth = (
+  await call(`/api/v1/p/${encodeURIComponent(targetPluginId)}/health`)
+).body;
+if (!gatewayHealth.ok || gatewayHealth.plugin !== targetPluginId) {
+  throw new Error(
+    `Unexpected ${targetPluginId} gateway response: ${JSON.stringify(gatewayHealth)}`,
   );
 }
 
@@ -348,8 +371,12 @@ console.log(
     restoredDefault,
     catalogPlugins: catalog.length,
     catalogRevision: synchronization.revision ?? "not-modified",
-    installedPlugin: { id: crm.id, version: crm.installedVersion },
+    installedPlugin: {
+      id: targetPlugin.id,
+      version: targetPlugin.installedVersion,
+    },
     frontendEntryBytes: entry.body.byteLength,
+    browserSafeFrontend: true,
     gateway: gatewayHealth,
   }),
 );

@@ -108,6 +108,8 @@ type PluginParts = {
   sourceReleaseId?: string;
 };
 
+type PluginTab = "installed" | "catalog" | "marketplaces";
+
 function RuntimeCredentialGuide({
   accountId,
   inputId,
@@ -293,6 +295,7 @@ export default function PluginsPage() {
   const archiveInputRef = useRef<HTMLInputElement>(null);
   const archiveTargetRef = useRef<Plugin | null>(null);
   const [search, setSearch] = useState("");
+  const [activeTab, setActiveTab] = useState<PluginTab>("installed");
   const [selected, setSelected] = useState<Plugin | null>(null);
   const [parts, setParts] = useState<PluginParts | null>(null);
   const [operation, setOperation] = useState<Operation | null>(null);
@@ -724,7 +727,7 @@ export default function PluginsPage() {
         title={t("nav.plugins")}
         description={t("plugins.description")}
         action={
-          canCreate || canUpdate ? (
+          activeTab === "installed" && (canCreate || canUpdate) ? (
             <Button
               onClick={() => {
                 setOperation(null);
@@ -738,10 +741,45 @@ export default function PluginsPage() {
           ) : undefined
         }
       />
-      <MarketplacePanels onSelectPackage={choose} />
+      <div
+        className="mb-6 flex gap-1 overflow-x-auto border-b"
+        role="tablist"
+        aria-label={t("plugins.tabs.label")}
+      >
+        {(["installed", "catalog", "marketplaces"] as const).map((tab) => (
+          <button
+            key={tab}
+            id={`plugins-tab-${tab}`}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab}
+            aria-controls={`plugins-panel-${tab}`}
+            className={`shrink-0 border-b-2 px-4 py-3 text-sm font-semibold transition ${
+              activeTab === tab
+                ? "border-indigo-600 text-indigo-600"
+                : "border-transparent text-slate-500 hover:text-slate-800"
+            }`}
+            onClick={() => setActiveTab(tab)}
+          >
+            {t(`plugins.tabs.${tab}`)}
+          </button>
+        ))}
+      </div>
+      {activeTab !== "installed" && (
+        <section
+          id={`plugins-panel-${activeTab}`}
+          role="tabpanel"
+          aria-labelledby={`plugins-tab-${activeTab}`}
+        >
+          <MarketplacePanels onSelectPackage={choose} view={activeTab} />
+        </section>
+      )}
       <section
-        aria-labelledby="installed-plugins-heading"
+        id="plugins-panel-installed"
+        role="tabpanel"
+        aria-labelledby="plugins-tab-installed"
         className="space-y-4"
+        hidden={activeTab !== "installed"}
       >
         <h2 id="installed-plugins-heading" className="text-lg font-semibold">
           {t("plugins.installedSection")}

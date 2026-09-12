@@ -400,6 +400,10 @@ const ptBR = {
   "plugins.description":
     "Instale, atualize e gerencie plugins independentes e seus marketplaces.",
   "plugins.installedSection": "Instalados",
+  "plugins.tabs.label": "Seções de plugins",
+  "plugins.tabs.installed": "Instalados",
+  "plugins.tabs.catalog": "Novos Plugins",
+  "plugins.tabs.marketplaces": "Market Places",
   "plugins.explore": "Explorar",
   "plugins.exploreDescription":
     "Instale ou atualize diretamente de marketplaces GitHub verificados.",
@@ -1007,6 +1011,10 @@ const en: Record<TranslationKey, string> = {
   "plugins.description":
     "Install, update, and manage independent plugins and their marketplaces.",
   "plugins.installedSection": "Installed",
+  "plugins.tabs.label": "Plugin sections",
+  "plugins.tabs.installed": "Installed",
+  "plugins.tabs.catalog": "New Plugins",
+  "plugins.tabs.marketplaces": "Market Places",
   "plugins.explore": "Explore",
   "plugins.exploreDescription":
     "Install or update directly from verified GitHub marketplaces.",

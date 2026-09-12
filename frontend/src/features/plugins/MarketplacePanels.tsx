@@ -57,8 +57,10 @@ type MarketplaceSyncResult = {
 
 export function MarketplacePanels({
   onSelectPackage,
+  view,
 }: {
   onSelectPackage: (file: File, releaseId: string) => Promise<void>;
+  view: "catalog" | "marketplaces";
 }) {
   const { t, formatDateTime } = useI18n();
   const queryClient = useQueryClient();
@@ -284,8 +286,12 @@ export function MarketplacePanels({
       : canCreatePlugin;
 
   return (
-    <div className="mb-8 space-y-8">
-      <section aria-labelledby="plugin-catalog-heading" className="space-y-4">
+    <div>
+      <section
+        aria-labelledby="plugin-catalog-heading"
+        className="space-y-4"
+        hidden={view !== "catalog"}
+      >
         <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
           <div>
             <h2 id="plugin-catalog-heading" className="text-lg font-semibold">
@@ -400,6 +406,7 @@ export function MarketplacePanels({
         <section
           aria-labelledby="plugin-marketplaces-heading"
           className="space-y-4"
+          hidden={view !== "marketplaces"}
         >
           <div className="flex items-center justify-between gap-3">
             <div>
