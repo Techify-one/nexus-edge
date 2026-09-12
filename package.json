@@ -12,7 +12,7 @@
     "build:frontend": "pnpm --filter @app/frontend build",
     "build:plugins": "pnpm --filter @app/plugin-template build",
     "verify:artifacts": "node --import tsx scripts/verify-artifacts.ts",
-    "typecheck": "tsc -b --pretty false",
+    "typecheck": "pnpm --filter @nexus/plugin-sdk build && tsc -b --pretty false",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:matrix": "node --import tsx scripts/test-database-matrix.ts",
