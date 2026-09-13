@@ -1061,8 +1061,21 @@ installerRoutes.put(
 installerRoutes.get(
   "/plugins",
   requirePermission("core.plugin.read"),
-  async (c) =>
-    c.json({
+  async (c) => {
+    let runtimeCredential: ReturnType<
+      typeof pluginRuntimeCredentialStatus
+    > | null = null;
+    try {
+      runtimeCredential = pluginRuntimeCredentialStatus(c.env);
+    } catch (error) {
+      if (!(
+        error instanceof PluginRuntimeCredentialError &&
+        error.code === "target_missing"
+      ))
+        throw error;
+    }
+    return c.json({
+      runtimeCredential,
       items: await c.get("db").query(
         `SELECT p.id, p.name, p.installed_version AS "installedVersion", p.api_version AS "apiVersion",
                   p.active_database_provider AS "databaseProvider", p.worker_name AS "workerName", p.status,
@@ -1076,7 +1089,8 @@ installerRoutes.get(
                   ) THEN 1 ELSE 0 END AS "packageAvailable"
              FROM plugins p ORDER BY p.name`,
       ),
-    }),
+    });
+  },
 );
 
 installerRoutes.get(

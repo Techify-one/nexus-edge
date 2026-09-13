@@ -11,12 +11,7 @@ export function AuthenticatedLayout() {
   const { t } = useI18n();
   const session = useQuery({
     queryKey: ["me"],
-    queryFn: () => api("/api/v1/me"),
-  });
-  const rules = useQuery({
-    queryKey: ["me", "ability"],
-    queryFn: () => api<{ rules: unknown }>("/api/v1/me/ability"),
-    enabled: session.isSuccess,
+    queryFn: () => api<{ rules: unknown }>("/api/v1/me"),
   });
   if (session.isError) {
     if (session.error instanceof ApiError && session.error.status === 401)
@@ -35,14 +30,14 @@ export function AuthenticatedLayout() {
       </main>
     );
   }
-  if (session.isPending || rules.isPending)
+  if (session.isPending)
     return (
       <main className="mx-auto max-w-6xl space-y-4 p-8">
         <Skeleton className="h-16" />
         <Skeleton className="h-80" />
       </main>
     );
-  if (rules.data) updateAbility(rules.data.rules);
+  if (session.data) updateAbility(session.data.rules);
   return (
     <PersistentPluginSurfaceHost>
       <AppShell />

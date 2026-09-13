@@ -15,10 +15,12 @@ afterEach(() => {
 
 describe("users page compatibility", () => {
   it("renders legacy users when profile and table-preference routes are absent", async () => {
+    const requests: string[] = [];
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {
         const url = String(input);
+        requests.push(url);
         if (url.startsWith("/api/v1/users?"))
           return Response.json({
             items: [
@@ -64,5 +66,7 @@ describe("users page compatibility", () => {
     expect(await screen.findByText("Usuário legado")).toBeTruthy();
     expect(screen.getByText("legacy@example.com")).toBeTruthy();
     expect(screen.getByText(/^(Ativo|Active)$/)).toBeTruthy();
+    expect(requests).not.toContain("/api/v1/groups");
+    expect(requests).not.toContain("/api/v1/users/profile-options");
   });
 });

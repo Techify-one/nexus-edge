@@ -12,7 +12,7 @@
     "run_worker_first": ["/api/*", "/health"],
   },
   "vars": {
-    "APP_VERSION": "1.1.0-beta.10",
+    "APP_VERSION": "1.1.0-beta.11",
     "CORE_UPDATE_PUBLIC_KEY": "MCowBQYDK2VwAyEAxuOKnkDa5oHc4zGhCxV6GIUU6LhZ7bStR3CgoS9adGo=",
     "APP_INSTALLATION_ID": "install_marketplace_test_14fba1f8103248daadaf2c95ac5e0f7f",
     "DATABASE_PROVIDER": "d1",
@@ -31,6 +31,13 @@
       "database_name": "nexus-edge-marketplace-test-db",
       "database_id": "00000000-0000-0000-0000-000000000000",
       "migrations_dir": "migrations/d1",
+    },
+  ],
+  "ratelimits": [
+    {
+      "name": "API_RATE_LIMITER",
+      "namespace_id": "729050644",
+      "simple": { "limit": 600, "period": 60 },
     },
   ],
   "queues": {

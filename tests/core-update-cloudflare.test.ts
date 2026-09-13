@@ -119,6 +119,12 @@ describe("Core self deployment", () => {
           name: "APP_VERSION",
           text: "1.1.0-beta.2",
         },
+        {
+          type: "ratelimit",
+          name: "API_RATE_LIMITER",
+          namespace_id: "729050644",
+          simple: { limit: 600, period: 60 },
+        },
       ]),
     );
     expect(JSON.stringify(metadata)).not.toContain("runtime-token");

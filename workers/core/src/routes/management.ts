@@ -172,15 +172,10 @@ export const managementRoutes = new Hono<HonoEnv>();
 
 managementRoutes.get("/me", async (c) => {
   const principal = c.get("principal");
-  const user = await c.get("db").first<{
-    id: string;
-    name: string;
-    email: string;
-    active: number | boolean;
-  }>('SELECT id, name, email, active FROM "user" WHERE id = ?', [principal.userId]);
   return c.json(
     {
-      user,
+      user: c.get("currentUser"),
+      rules: packRules(c.get("ability").rules),
       principal: {
         authMethod: principal.authMethod,
         credentialId: principal.credentialId,
@@ -487,21 +482,28 @@ managementRoutes.get(
   async (c) => {
     const query = listQuerySchema.parse(c.req.query());
     const rows = await c.get("db").query<Record<string, unknown>>(
-      `SELECT u.id, u.name, u.email, u.active, u.created_at AS "createdAt",
-              p.phone, p.telegram_id AS "telegramId", p.job_title AS "jobTitle",
-              p.birth_date AS "birthDate", p.cpf, p.tags_json AS "tagsJson",
-              p.sectors_json AS "sectorsJson", p.notes,
-              COALESCE(p.status, CASE WHEN u.active THEN 'active' ELSE 'inactive' END) AS status,
-              s.daily_hours_json AS "dailyHoursJson", s.entry_times_json AS "entryTimesJson",
-              s.effective_at AS "scheduleEffectiveAt"
-       FROM "user" u
-       LEFT JOIN user_profiles p ON p.user_id = u.id
-       LEFT JOIN user_work_schedules s ON s.id = (
-         SELECT ws.id FROM user_work_schedules ws WHERE ws.user_id = u.id
-          ORDER BY ws.effective_at DESC, ws.created_at DESC LIMIT 1
+      `WITH selected_users AS (
+         SELECT u.id, u.name, u.email, u.active, u.created_at AS "createdAt",
+                p.phone, p.telegram_id AS "telegramId", p.job_title AS "jobTitle",
+                p.birth_date AS "birthDate", p.cpf, p.tags_json AS "tagsJson",
+                p.sectors_json AS "sectorsJson", p.notes,
+                COALESCE(p.status, CASE WHEN u.active THEN 'active' ELSE 'inactive' END) AS status,
+                s.daily_hours_json AS "dailyHoursJson", s.entry_times_json AS "entryTimesJson",
+                s.effective_at AS "scheduleEffectiveAt"
+           FROM "user" u
+           LEFT JOIN user_profiles p ON p.user_id = u.id
+           LEFT JOIN user_work_schedules s ON s.id = (
+             SELECT ws.id FROM user_work_schedules ws WHERE ws.user_id = u.id
+              ORDER BY ws.effective_at DESC, ws.created_at DESC LIMIT 1
+           )
+          WHERE (? IS NULL OR lower(u.name) LIKE lower(?) OR lower(u.email) LIKE lower(?))
+          ORDER BY u.created_at DESC, u.id DESC LIMIT ?
        )
-      WHERE (? IS NULL OR lower(u.name) LIKE lower(?) OR lower(u.email) LIKE lower(?))
-      ORDER BY u.created_at DESC, u.id DESC LIMIT ?`,
+       SELECT selected_users.*, gm.group_id AS "groupId", g.name AS "groupName"
+         FROM selected_users
+         LEFT JOIN group_members gm ON gm.user_id = selected_users.id
+         LEFT JOIN groups g ON g.id = gm.group_id
+        ORDER BY selected_users."createdAt" DESC, selected_users.id DESC, g.name`,
       [
         query.search ?? null,
         query.search ? `%${query.search}%` : null,
@@ -509,35 +511,41 @@ managementRoutes.get(
         query.limit,
       ],
     );
-    const memberships = await c
-      .get("db")
-      .query<{ userId: string; groupId: string; groupName: string }>(
-        `SELECT gm.user_id AS "userId", g.id AS "groupId", g.name AS "groupName" FROM group_members gm JOIN groups g ON g.id = gm.group_id`,
-      );
+    const users = new Map<string, Record<string, unknown>>();
+    for (const row of rows) {
+      const id = String(row.id);
+      let user = users.get(id);
+      if (!user) {
+        user = {
+          ...row,
+          tags: parseJson<string[]>(row.tagsJson, []),
+          sectors: parseJson<string[]>(row.sectorsJson, []),
+          schedule: row.dailyHoursJson
+            ? {
+                dailyHours: parseJson<string[]>(row.dailyHoursJson, []),
+                entryTimes: parseJson<string[]>(row.entryTimesJson, []),
+                effectiveAt: row.scheduleEffectiveAt,
+              }
+            : null,
+          tagsJson: undefined,
+          sectorsJson: undefined,
+          dailyHoursJson: undefined,
+          entryTimesJson: undefined,
+          scheduleEffectiveAt: undefined,
+          groupId: undefined,
+          groupName: undefined,
+          groups: [],
+        };
+        users.set(id, user);
+      }
+      if (row.groupId && row.groupName)
+        (user.groups as Array<{ id: string; name: string }>).push({
+          id: String(row.groupId),
+          name: String(row.groupName),
+        });
+    }
     return c.json({
-      items: rows.map((row) => ({
-        ...row,
-        tags: parseJson<string[]>(row.tagsJson, []),
-        sectors: parseJson<string[]>(row.sectorsJson, []),
-        schedule: row.dailyHoursJson
-          ? {
-              dailyHours: parseJson<string[]>(row.dailyHoursJson, []),
-              entryTimes: parseJson<string[]>(row.entryTimesJson, []),
-              effectiveAt: row.scheduleEffectiveAt,
-            }
-          : null,
-        tagsJson: undefined,
-        sectorsJson: undefined,
-        dailyHoursJson: undefined,
-        entryTimesJson: undefined,
-        scheduleEffectiveAt: undefined,
-        groups: memberships
-          .filter((membership) => membership.userId === row.id)
-          .map((membership) => ({
-            id: membership.groupId,
-            name: membership.groupName,
-          })),
-      })),
+      items: [...users.values()],
       nextCursor: null,
     });
   },
@@ -1139,34 +1147,35 @@ managementRoutes.get(
   "/groups",
   requirePermission("core.group.read"),
   async (c) => {
-    const groups = await c.get("db").query<Record<string, unknown>>(
+    const rows = await c.get("db").query<Record<string, unknown>>(
       `SELECT g.id, g.name, g.is_admin AS "isAdmin", g.created_at AS "createdAt",
-            (SELECT COUNT(*) FROM group_members gm WHERE gm.group_id = g.id) AS "memberCount"
-       FROM groups g ORDER BY g.name`,
+              (SELECT COUNT(*) FROM group_members gm WHERE gm.group_id = g.id) AS "memberCount",
+              p.key AS "permissionKey"
+         FROM groups g
+         LEFT JOIN group_permissions gp ON gp.group_id = g.id
+         LEFT JOIN permissions p ON p.id = gp.permission_id AND (
+           p.key LIKE 'core.%'
+           OR EXISTS (
+             SELECT 1 FROM plugins installed
+              WHERE installed.status = 'installed'
+                AND p.key LIKE installed.id || '.%'
+           )
+         )
+        ORDER BY g.name, p.key`,
     );
-    const [permissions, availablePermissions] = await Promise.all([
-      c.get("db").query<{ groupId: string; key: string }>(
-        `SELECT gp.group_id AS "groupId", p.key
-             FROM group_permissions gp
-             JOIN permissions p ON p.id = gp.permission_id
-            ORDER BY p.key`,
-      ),
-      availablePermissionRows(c.get("db")),
-    ]);
-    const availableKeys = new Set(
-      availablePermissions.map((permission) => permission.key),
-    );
+    const groups = new Map<string, Record<string, unknown>>();
+    for (const row of rows) {
+      const id = String(row.id);
+      let group = groups.get(id);
+      if (!group) {
+        group = { ...row, permissionKey: undefined, permissionKeys: [] };
+        groups.set(id, group);
+      }
+      if (row.permissionKey)
+        (group.permissionKeys as string[]).push(String(row.permissionKey));
+    }
     return c.json({
-      items: groups.map((group) => ({
-        ...group,
-        permissionKeys: permissions
-          .filter(
-            (permission) =>
-              permission.groupId === group.id &&
-              availableKeys.has(permission.key),
-          )
-          .map((p) => p.key),
-      })),
+      items: [...groups.values()],
     });
   },
 );

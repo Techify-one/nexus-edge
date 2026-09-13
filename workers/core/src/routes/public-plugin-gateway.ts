@@ -40,7 +40,17 @@ async function consumePublicRateLimit(
   const now = Date.now();
   const cutoff = now - windowSeconds * 1_000;
   const address = c.req.header("CF-Connecting-IP") ?? "unknown";
-  const key = `public:${pluginId}:${await hashToken(`${address}:${routeIdentity}`)}`;
+  const key = `${c.env.APP_INSTALLATION_ID}:public:${pluginId}:${await hashToken(`${address}:${routeIdentity}`)}`;
+  if (c.env.API_RATE_LIMITER) {
+    const result = await c.env.API_RATE_LIMITER.limit({ key });
+    if (result.success) return;
+    c.header("Retry-After", String(windowSeconds));
+    throw new AppError(
+      429,
+      "RATE_LIMITED",
+      "Too many requests. Try again shortly.",
+    );
+  }
   const result = await c.get("db").execute(
     `INSERT INTO "rateLimit"(id,key,count,last_request) VALUES (?, ?, 1, ?)
      ON CONFLICT(key) DO UPDATE SET

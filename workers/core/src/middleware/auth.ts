@@ -2,7 +2,7 @@ import type { MiddlewareHandler } from "hono";
 import { createId, type RequestPrincipal } from "@app/core-contract";
 import type { HonoEnv } from "../env.js";
 import { AppError } from "../lib/http.js";
-import { buildAbility, canPermission } from "../lib/ability.js";
+import { canPermission, loadPrincipalAccess } from "../lib/ability.js";
 
 async function consumePrincipalRateLimit(
   c: Parameters<MiddlewareHandler<HonoEnv>>[0],
@@ -26,7 +26,17 @@ async function consumePrincipalRateLimit(
   );
   const now = Date.now();
   const cutoff = now - windowSeconds * 1_000;
-  const key = `app:${principal.authMethod}:${principal.credentialId ?? principal.userId}`;
+  const key = `${c.env.APP_INSTALLATION_ID}:app:${principal.authMethod}:${principal.credentialId ?? principal.userId}`;
+  if (c.env.API_RATE_LIMITER) {
+    const result = await c.env.API_RATE_LIMITER.limit({ key });
+    if (result.success) return;
+    c.header("Retry-After", String(windowSeconds));
+    throw new AppError(
+      429,
+      "RATE_LIMITED",
+      "Too many requests. Try again shortly.",
+    );
+  }
   const result = await c.get("db").execute(
     `INSERT INTO "rateLimit"(id,key,count,last_request) VALUES (?, ?, 1, ?)
      ON CONFLICT(key) DO UPDATE SET
@@ -74,18 +84,15 @@ export const requirePrincipal: MiddlewareHandler<HonoEnv> = async (c, next) => {
   }
 
   const auth = c.get("auth");
-  const session = await auth.api.getSession({ headers: c.req.raw.headers });
+  const sessionResult = await auth.api.getSession({
+    headers: c.req.raw.headers,
+    returnHeaders: true,
+  });
+  for (const cookie of sessionResult.headers.getSetCookie())
+    c.header("Set-Cookie", cookie, { append: true });
+  const session = sessionResult.response;
   if (!session?.user?.id)
     throw new AppError(401, "UNAUTHENTICATED", "Authentication is required.");
-
-  const active = await c
-    .get("db")
-    .first<{ active: number | boolean }>(
-      'SELECT active FROM "user" WHERE id = ?',
-      [session.user.id],
-    );
-  if (!active || !Boolean(active.active))
-    throw new AppError(401, "USER_INACTIVE", "The account is inactive.");
 
   const principal: RequestPrincipal = {
     userId: session.user.id,
@@ -102,9 +109,15 @@ export const requirePrincipal: MiddlewareHandler<HonoEnv> = async (c, next) => {
     if (record?.id) principal.credentialId = record.id;
     principal.credentialScopes = parseStoredPermissions(record?.permissions);
   }
-  await consumePrincipalRateLimit(c, principal);
+  const [access] = await Promise.all([
+    loadPrincipalAccess(c.get("db"), principal),
+    consumePrincipalRateLimit(c, principal),
+  ]);
+  if (!access || !Boolean(access.user.active))
+    throw new AppError(401, "USER_INACTIVE", "The account is inactive.");
   c.set("principal", principal);
-  c.set("ability", await buildAbility(c.get("db"), principal));
+  c.set("currentUser", access.user);
+  c.set("ability", access.ability);
   await next();
 };
 

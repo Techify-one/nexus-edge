@@ -6,6 +6,8 @@ import { publicPluginGatewayRoutes } from "../workers/core/src/routes/public-plu
 
 describe("public plugin gateway", () => {
   it("keeps the Worker private while stripping credentials and sending bounded context", async () => {
+    const rateLimit = vi.fn(async () => ({ success: true }));
+    const execute = vi.fn(async () => ({ rowsAffected: 1 }));
     const pluginFetch = vi.fn(async (request: Request) => {
       expect(new URL(request.url).pathname).toBe(
         "/public/play/abcdefghijklmnopqrstuvwxyzABCDEFG1234567890",
@@ -26,7 +28,7 @@ describe("public plugin gateway", () => {
         packageFormat: 2,
         manifest: JSON.stringify({ publicRoutes: ["/play"] }),
       }),
-      execute: async () => ({ rowsAffected: 1 }),
+      execute,
       atomic: async () => [],
       close: async () => undefined,
     } as DatabasePort;
@@ -49,8 +51,10 @@ describe("public plugin gateway", () => {
       },
       {
         DATABASE_PROVIDER: "d1",
+        APP_INSTALLATION_ID: "install_public_test",
         API_RATE_LIMIT_MAX: "120",
         API_RATE_LIMIT_WINDOW_SECONDS: "60",
+        API_RATE_LIMITER: { limit: rateLimit },
         PLUGIN_SOLETRANDO: { fetch: pluginFetch },
       } as never,
     );
@@ -58,5 +62,7 @@ describe("public plugin gateway", () => {
     expect(await response.json()).toEqual({ ok: true });
     expect(response.headers.get("Cache-Control")).toBe("private, no-store");
     expect(pluginFetch).toHaveBeenCalledOnce();
+    expect(rateLimit).toHaveBeenCalledOnce();
+    expect(execute).not.toHaveBeenCalled();
   });
 });

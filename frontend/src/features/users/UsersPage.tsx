@@ -304,7 +304,7 @@ export default function UsersPage() {
   const groups = useQuery({
     queryKey: ["groups"],
     queryFn: () => api<{ items: Group[] }>("/api/v1/groups"),
-    enabled: canReadGroups,
+    enabled: canReadGroups && (selected !== null || inviteOpen),
   });
   const profileOptions = useQuery({
     queryKey: ["user-profile-options"],
@@ -320,10 +320,12 @@ export default function UsersPage() {
         throw error;
       }
     },
+    enabled: selected !== null,
   });
   const invitations = useQuery({
     queryKey: ["invitations"],
     queryFn: () => api<{ items: Invitation[] }>("/api/v1/invitations"),
+    enabled: users.isSuccess,
   });
   const scheduleHistory = useQuery({
     queryKey: ["user-schedule-history", current?.id],
@@ -418,7 +420,7 @@ export default function UsersPage() {
       toast.success(t(variables.id ? "users.updated" : "users.created"));
       void client.invalidateQueries({ queryKey: ["users"] });
       void client.invalidateQueries({ queryKey: ["user-profile-options"] });
-      void client.invalidateQueries({ queryKey: ["me", "ability"] });
+      void client.invalidateQueries({ queryKey: ["me"] });
       void client.invalidateQueries({ queryKey: ["user-schedule-history"] });
       setSelected(null);
     },

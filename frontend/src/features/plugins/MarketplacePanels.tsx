@@ -91,6 +91,7 @@ export function MarketplacePanels({
   const catalog = useQuery({
     queryKey: ["plugin-catalog"],
     queryFn: () => api<{ items: CatalogRelease[] }>("/api/v1/plugin-catalog"),
+    enabled: view === "catalog",
   });
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ["plugin-marketplaces"] });

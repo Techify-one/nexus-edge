@@ -18,7 +18,8 @@ Cloudflare com D1. PostgreSQL continua com o fluxo operacional de
    arquivo que reutilize o ID de uma migração com hash diferente.
 5. Publica o Worker e a interface com `bindings_inherit=strict`, substituindo
    somente os módulos, assets e `APP_VERSION`. Bindings de banco, Queue,
-   plugins e secrets são herdados.
+   plugins e secrets são herdados; o binding nativo `API_RATE_LIMITER` é
+   acrescentado quando ainda não existe, sem alterar os dados da instalação.
 6. Verifica a versão ativa e os bindings essenciais antes de liberar o lock.
 
 O usuário precisa ter `core.settings.update`, confirmar a senha e já ter

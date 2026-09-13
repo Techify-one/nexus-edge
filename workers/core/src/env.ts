@@ -1,6 +1,7 @@
 import type { DatabasePort } from "@app/database";
 import type { MongoAbility } from "@casl/ability";
 import type { RequestPrincipal } from "@app/core-contract";
+import type { CurrentUser } from "./lib/ability.js";
 
 export type CoreEnv = {
   APP_VERSION: string;
@@ -17,6 +18,7 @@ export type CoreEnv = {
   WEBHOOK_ALLOWED_DOMAINS?: string;
   API_RATE_LIMIT_MAX?: string;
   API_RATE_LIMIT_WINDOW_SECONDS?: string;
+  API_RATE_LIMITER?: RateLimit;
   CF_API_TOKEN?: string;
   CF_ACCOUNT_ID?: string;
   CORE_WORKER_NAME: string;
@@ -39,6 +41,7 @@ export type Variables = {
   db: DatabasePort;
   auth: ReturnType<typeof import("./auth/factory.js").createAuth>;
   principal: RequestPrincipal;
+  currentUser: CurrentUser;
   ability: AppAbility;
 };
 

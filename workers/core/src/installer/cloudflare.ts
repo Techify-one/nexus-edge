@@ -991,6 +991,13 @@ export async function deployCoreUpdate(
     { type: "assets", name: "ASSETS" },
     { type: "plain_text", name: "APP_VERSION", text: release.appVersion },
   );
+  if (!currentBindings.some((binding) => binding.name === "API_RATE_LIMITER"))
+    bindings.push({
+      type: "ratelimit",
+      name: "API_RATE_LIMITER",
+      namespace_id: "729050644",
+      simple: { limit: 600, period: 60 },
+    });
   const body = new FormData();
   body.set(
     "metadata",
@@ -1047,6 +1054,7 @@ export async function verifyCoreUpdateBindings(env: CoreEnv): Promise<void> {
     "ASSETS",
     "DB",
     "WEBHOOK_QUEUE",
+    "API_RATE_LIMITER",
     "APP_VERSION",
     "BETTER_AUTH_SECRET",
     "WEBHOOK_ENCRYPTION_KEY",

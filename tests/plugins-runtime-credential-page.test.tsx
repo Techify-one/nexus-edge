@@ -42,7 +42,10 @@ function renderPage(
       const url = String(input);
       requests.push(url);
       const body = url.endsWith("/api/v1/plugins")
-        ? { items: options.plugins ?? [] }
+        ? {
+            items: options.plugins ?? [],
+            runtimeCredential: { configured, accountId },
+          }
         : url.endsWith("/api/v1/plugin-runtime-credential")
           ? { configured, accountId }
           : url.endsWith("/api/v1/plugin-marketplaces")
@@ -82,7 +85,7 @@ function renderPage(
 }
 
 describe("plugin runtime credential onboarding", () => {
-  it("checks the credential on page entry and opens the guided setup when absent", async () => {
+  it("uses the bundled credential status and opens guided setup without another request", async () => {
     const { accountId, requests } = renderPage(false);
 
     expect(
@@ -90,7 +93,7 @@ describe("plugin runtime credential onboarding", () => {
         name: /^(Autorize a publicação do primeiro plugin|Authorize the first plugin deployment)$/,
       }),
     ).toBeTruthy();
-    expect(requests).toContain("/api/v1/plugin-runtime-credential");
+    expect(requests).not.toContain("/api/v1/plugin-runtime-credential");
 
     const createLink = screen.getByRole("link", {
       name: /^(Criar token na Cloudflare|Create token in Cloudflare)$/,

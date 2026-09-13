@@ -17,20 +17,21 @@ export async function availablePermissionRows(
 ): Promise<PermissionRow[]> {
   const uniqueKeys = keys ? [...new Set(keys)] : undefined;
   if (uniqueKeys?.length === 0) return [];
-  const filter = uniqueKeys
-    ? ` WHERE key IN (${uniqueKeys.map(() => "?").join(",")})`
+  const keyFilter = uniqueKeys
+    ? `p.key IN (${uniqueKeys.map(() => "?").join(",")}) AND `
     : "";
-  const [permissions, plugins] = await Promise.all([
-    db.query<PermissionRow>(
-      `SELECT id, key FROM permissions${filter} ORDER BY key`,
-      uniqueKeys ?? [],
-    ),
-    db.query<{ id: string }>(
-      "SELECT id FROM plugins WHERE status = 'installed' ORDER BY id",
-    ),
-  ]);
-  const installedPluginIds = new Set(plugins.map(({ id }) => id));
-  return permissions.filter(({ key }) =>
-    isPermissionAvailable(key, installedPluginIds),
+  return db.query<PermissionRow>(
+    `SELECT p.id, p.key
+       FROM permissions p
+      WHERE ${keyFilter}(
+        p.key LIKE 'core.%'
+        OR EXISTS (
+          SELECT 1 FROM plugins installed
+           WHERE installed.status = 'installed'
+             AND p.key LIKE installed.id || '.%'
+        )
+      )
+      ORDER BY p.key`,
+    uniqueKeys ?? [],
   );
 }

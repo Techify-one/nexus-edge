@@ -46,7 +46,11 @@ export function createAuth(env: CoreEnv, db: DatabasePort) {
       expiresIn: 60 * 60 * 24 * 7,
       updateAge: 60 * 60 * 24,
       freshAge: 60 * 10,
-      cookieCache: { enabled: false },
+      cookieCache: {
+        enabled: true,
+        maxAge: 60,
+        strategy: "compact",
+      },
     },
     advanced: {
       useSecureCookies: env.BETTER_AUTH_URL.startsWith("https://"),

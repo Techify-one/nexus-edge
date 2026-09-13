@@ -4,28 +4,59 @@ import type { DatabasePort } from "@app/database";
 import type { RequestPrincipal } from "@app/core-contract";
 import type { AppAbility } from "../env.js";
 
-type PermissionRow = { key: string | null; isAdmin: number | boolean };
+type AccessRow = {
+  id: string;
+  name: string;
+  email: string;
+  active: number | boolean;
+  key: string | null;
+  isAdmin: number | boolean;
+};
 
-export async function buildAbility(
+export type CurrentUser = {
+  id: string;
+  name: string;
+  email: string;
+  active: number | boolean;
+};
+
+export type PrincipalAccess = {
+  user: CurrentUser;
+  ability: AppAbility;
+};
+
+export async function loadPrincipalAccess(
   db: DatabasePort,
   principal: RequestPrincipal,
-): Promise<AppAbility> {
-  const rows = await db.query<PermissionRow>(
-    `SELECT p.key AS key, g.is_admin AS "isAdmin"
-       FROM group_members gm
-       JOIN groups g ON g.id = gm.group_id
+): Promise<PrincipalAccess | null> {
+  const rows = await db.query<AccessRow>(
+    `SELECT u.id, u.name, u.email, u.active, p.key AS key,
+            COALESCE(g.is_admin, ?) AS "isAdmin"
+       FROM "user" u
+       LEFT JOIN group_members gm ON gm.user_id = u.id
+       LEFT JOIN groups g ON g.id = gm.group_id
        LEFT JOIN group_permissions gp ON gp.group_id = g.id
        LEFT JOIN permissions p ON p.id = gp.permission_id
-      WHERE gm.user_id = ?`,
-    [principal.userId],
+      WHERE u.id = ?`,
+    [false, principal.userId],
   );
+  const first = rows[0];
+  if (!first) return null;
   const isAdministrator = rows.some((row) => Boolean(row.isAdmin));
   const assigned = new Set(rows.flatMap((row) => (row.key ? [row.key] : [])));
 
   if (principal.authMethod !== "api_key" && isAdministrator) {
-    return createMongoAbility<[string, string]>([
-      { action: "manage", subject: "all" },
-    ]);
+    return {
+      user: {
+        id: first.id,
+        name: first.name,
+        email: first.email,
+        active: first.active,
+      },
+      ability: createMongoAbility<[string, string]>([
+        { action: "manage", subject: "all" },
+      ]),
+    };
   }
 
   const permitted =
@@ -34,9 +65,17 @@ export async function buildAbility(
           (key) => isAdministrator || assigned.has(key),
         )
       : [...assigned];
-  return createMongoAbility<[string, string]>(
-    permitted.map((key) => parsePermission(key)),
-  );
+  return {
+    user: {
+      id: first.id,
+      name: first.name,
+      email: first.email,
+      active: first.active,
+    },
+    ability: createMongoAbility<[string, string]>(
+      permitted.map((key) => parsePermission(key)),
+    ),
+  };
 }
 
 export async function concretePermissionsForNamespace(

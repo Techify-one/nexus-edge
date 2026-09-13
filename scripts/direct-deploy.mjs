@@ -192,6 +192,12 @@ const metadata = {
     { type: "assets", name: "ASSETS" },
     { type: "d1", name: "DB", database_id: d1Id },
     { type: "queue", name: "WEBHOOK_QUEUE", queue_name: queueName },
+    {
+      type: "ratelimit",
+      name: "API_RATE_LIMITER",
+      namespace_id: "729050644",
+      simple: { limit: 600, period: 60 },
+    },
     { type: "plain_text", name: "APP_VERSION", text: appVersion },
     {
       type: "plain_text",
@@ -209,7 +215,7 @@ const metadata = {
     { type: "plain_text", name: "CORE_WORKER_NAME", text: workerName },
     { type: "plain_text", name: "D1_DATABASE_ID", text: d1Id },
     { type: "plain_text", name: "WEBHOOK_ALLOWED_DOMAINS", text: "" },
-    { type: "plain_text", name: "API_RATE_LIMIT_MAX", text: "120" },
+    { type: "plain_text", name: "API_RATE_LIMIT_MAX", text: "600" },
     {
       type: "plain_text",
       name: "API_RATE_LIMIT_WINDOW_SECONDS",

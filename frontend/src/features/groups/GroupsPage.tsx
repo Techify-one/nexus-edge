@@ -47,6 +47,7 @@ export default function GroupsPage() {
   const permissions = useQuery({
     queryKey: ["permissions"],
     queryFn: () => api<{ items: Permission[] }>("/api/v1/permissions"),
+    enabled: selected !== null,
   });
   const rows = useMemo(
     () =>
@@ -74,7 +75,7 @@ export default function GroupsPage() {
       toast.success(t("groups.saved"));
       setSelected(null);
       void client.invalidateQueries({ queryKey: ["groups"] });
-      void client.invalidateQueries({ queryKey: ["me", "ability"] });
+      void client.invalidateQueries({ queryKey: ["me"] });
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -88,7 +89,7 @@ export default function GroupsPage() {
       toast.success(t("groups.deleted"));
       setSelected(null);
       void client.invalidateQueries({ queryKey: ["groups"] });
-      void client.invalidateQueries({ queryKey: ["me", "ability"] });
+      void client.invalidateQueries({ queryKey: ["me"] });
     },
     onError: (error: Error) => toast.error(error.message),
   });

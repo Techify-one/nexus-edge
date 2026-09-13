@@ -320,7 +320,11 @@ export default function PluginsPage() {
   const runtimeCredentialPrompted = useRef(false);
   const plugins = useQuery({
     queryKey: ["plugins"],
-    queryFn: () => api<{ items: Plugin[] }>("/api/v1/plugins"),
+    queryFn: () =>
+      api<{
+        items: Plugin[];
+        runtimeCredential: PluginRuntimeCredential | null;
+      }>("/api/v1/plugins"),
   });
   useEffect(() => {
     if (tab !== activeTab)
@@ -369,27 +373,28 @@ export default function PluginsPage() {
           ),
       )
     : false;
-  const runtimeCredential = useQuery({
+  const runtimeCredentialQuery = useQuery({
     queryKey: ["plugin-runtime-credential"],
     queryFn: () =>
       api<PluginRuntimeCredential>("/api/v1/plugin-runtime-credential"),
-    enabled: canCreate || canUpdate,
+    enabled:
+      Boolean(parts) &&
+      !plugins.data?.runtimeCredential &&
+      (canCreate || canUpdate),
     staleTime: 30_000,
   });
+  const runtimeCredential =
+    runtimeCredentialQuery.data ?? plugins.data?.runtimeCredential;
   useEffect(() => {
-    if (runtimeCredential.data?.configured) {
+    if (runtimeCredential?.configured) {
       setRuntimeCredentialSetupOpen(false);
       return;
     }
-    if (
-      canCreate &&
-      runtimeCredential.data &&
-      !runtimeCredentialPrompted.current
-    ) {
+    if (canCreate && runtimeCredential && !runtimeCredentialPrompted.current) {
       runtimeCredentialPrompted.current = true;
       setRuntimeCredentialSetupOpen(true);
     }
-  }, [canCreate, runtimeCredential.data]);
+  }, [canCreate, runtimeCredential]);
   const rows = useMemo(
     () =>
       (plugins.data?.items ?? []).filter((plugin) =>
@@ -610,7 +615,7 @@ export default function PluginsPage() {
       void client.invalidateQueries({ queryKey: ["plugins"] });
       void client.invalidateQueries({ queryKey: ["plugin-runtime"] });
       void client.invalidateQueries({ queryKey: ["plugin-catalog"] });
-      void client.invalidateQueries({ queryKey: ["me", "ability"] });
+      void client.invalidateQueries({ queryKey: ["me"] });
       void client.invalidateQueries({
         queryKey: ["me", "plugin-navigation"],
       });
@@ -682,7 +687,7 @@ export default function PluginsPage() {
       void client.invalidateQueries({ queryKey: ["plugins"] });
       void client.invalidateQueries({ queryKey: ["plugin-runtime"] });
       void client.invalidateQueries({ queryKey: ["plugin-catalog"] });
-      void client.invalidateQueries({ queryKey: ["me", "ability"] });
+      void client.invalidateQueries({ queryKey: ["me"] });
       void client.invalidateQueries({
         queryKey: ["me", "plugin-navigation"],
       });
@@ -711,7 +716,7 @@ export default function PluginsPage() {
       void client.invalidateQueries({ queryKey: ["plugins"] });
       void client.invalidateQueries({ queryKey: ["plugin-runtime"] });
       void client.invalidateQueries({ queryKey: ["plugin-catalog"] });
-      void client.invalidateQueries({ queryKey: ["me", "ability"] });
+      void client.invalidateQueries({ queryKey: ["me"] });
       void client.invalidateQueries({
         queryKey: ["me", "plugin-navigation"],
       });
@@ -845,9 +850,7 @@ export default function PluginsPage() {
         <Modal
           open={
             runtimeCredentialSetupOpen &&
-            Boolean(
-              runtimeCredential.data && !runtimeCredential.data.configured,
-            )
+            Boolean(runtimeCredential && !runtimeCredential.configured)
           }
           onOpenChange={(open) => {
             if (!runtimeCredentialBusy) {
@@ -859,7 +862,7 @@ export default function PluginsPage() {
           description={t("plugins.runtimeCredentialBody")}
           contentClassName="sm:max-w-2xl"
         >
-          {runtimeCredential.data && !runtimeCredential.data.configured && (
+          {runtimeCredential && !runtimeCredential.configured && (
             <form
               className="space-y-4"
               onSubmit={(event) => {
@@ -868,7 +871,7 @@ export default function PluginsPage() {
               }}
             >
               <RuntimeCredentialGuide
-                accountId={runtimeCredential.data.accountId}
+                accountId={runtimeCredential.accountId}
                 inputId="plugin-runtime-token-setup"
                 token={runtimeToken}
                 onTokenChange={setRuntimeToken}
@@ -1080,8 +1083,8 @@ export default function PluginsPage() {
             className="space-y-4"
             onSubmit={(event) => {
               event.preventDefault();
-              if (runtimeCredential.data?.configured) install.mutate(parts);
-              else if (runtimeCredential.data)
+              if (runtimeCredential?.configured) install.mutate(parts);
+              else if (runtimeCredential)
                 void configureRuntimeCredential(parts);
             }}
           >
@@ -1117,23 +1120,25 @@ export default function PluginsPage() {
                 <p>{parts.manifest.permissions.length}</p>
               </div>
             </div>
-            {runtimeCredential.isPending && <Skeleton className="h-36" />}
-            {runtimeCredential.isError && (
+            {!runtimeCredential && runtimeCredentialQuery.isPending && (
+              <Skeleton className="h-36" />
+            )}
+            {runtimeCredentialQuery.isError && (
               <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
                 <p>{t("plugins.runtimeCredentialLoadFailed")}</p>
                 <Button
                   type="button"
                   variant="secondary"
                   className="mt-3"
-                  onClick={() => void runtimeCredential.refetch()}
+                  onClick={() => void runtimeCredentialQuery.refetch()}
                 >
                   {t("plugins.runtimeCredentialRetry")}
                 </Button>
               </div>
             )}
-            {runtimeCredential.data && !runtimeCredential.data.configured && (
+            {runtimeCredential && !runtimeCredential.configured && (
               <RuntimeCredentialGuide
-                accountId={runtimeCredential.data.accountId}
+                accountId={runtimeCredential.accountId}
                 inputId="plugin-runtime-token-install"
                 token={runtimeToken}
                 onTokenChange={setRuntimeToken}
@@ -1175,7 +1180,7 @@ export default function PluginsPage() {
                     )}
                   </li>
                 </ol>
-                {runtimeCredential.data?.accountId && (
+                {runtimeCredential?.accountId && (
                   <a
                     className="inline-flex items-center gap-1 font-medium text-indigo-700 underline"
                     href={
@@ -1183,10 +1188,10 @@ export default function PluginsPage() {
                         (resource) => resource.type === "r2",
                       )
                         ? cloudflareR2TokenTemplateUrl(
-                            runtimeCredential.data.accountId,
+                            runtimeCredential.accountId,
                           )
                         : cloudflareAccountTokensUrl(
-                            runtimeCredential.data.accountId,
+                            runtimeCredential.accountId,
                           )
                     }
                     target="_blank"
@@ -1287,8 +1292,8 @@ export default function PluginsPage() {
               <Button
                 busy={install.isPending || runtimeCredentialBusy}
                 disabled={
-                  runtimeCredential.isPending ||
-                  runtimeCredential.isError ||
+                  (!runtimeCredential && runtimeCredentialQuery.isPending) ||
+                  runtimeCredentialQuery.isError ||
                   runtimeCredentialBusy ||
                   ((requiresR2Provisioning(parts.manifest) ||
                     requiresResourceToken) &&
@@ -1296,7 +1301,7 @@ export default function PluginsPage() {
                 }
               >
                 <UploadCloud className="h-4 w-4" />
-                {runtimeCredential.data?.configured
+                {runtimeCredential?.configured
                   ? rows.some(
                       (row) =>
                         row.id === parts.manifest.id &&
