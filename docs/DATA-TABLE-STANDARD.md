@@ -44,10 +44,15 @@ that are at least 768 px tall, target the top edge of the table, loading state,
 or empty state within the first 20% of the viewport and never below 25% when
 the standard controls fit on one line.
 
-- Use the shared `PageHeader`; keep the title and short description inline on
-  desktop.
-- Put page-level tabs in the `PageHeader` `navigation` slot instead of a second
-  full-width row below the header.
+- Use the shared `PageHeader` on non-tabbed list pages and keep its title and
+  short description inline on desktop. On a tabbed list page, use the route
+  title in the authenticated app bar and do not repeat that title or a
+  decorative description inside the content.
+- Use the shared `PageTabBar` for page-level tabs. Keep tabs left-aligned
+  immediately below the app bar and put the contextual primary action in its
+  right-side `action` slot.
+- Put search or filters in the row immediately after `PageTabBar` and before
+  the table.
 - Keep search, filters, and primary actions in one compact row whenever their
   labels remain usable. Use the shared `SingleLineFilterBar` for multi-filter
   plugin pages.

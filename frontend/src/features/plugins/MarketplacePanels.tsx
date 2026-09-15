@@ -3,7 +3,6 @@ import {
   Copy,
   DownloadCloud,
   Pencil,
-  Plus,
   Power,
   PowerOff,
   RefreshCw,
@@ -59,19 +58,21 @@ type CatalogRelease = {
 export function MarketplacePanels({
   onSelectPackage,
   view,
+  sourceModalOpen,
+  onSourceModalOpenChange,
 }: {
   onSelectPackage: (file: File, releaseId: string) => Promise<void>;
   view: "catalog" | "marketplaces";
+  sourceModalOpen: boolean;
+  onSourceModalOpenChange: (open: boolean) => void;
 }) {
   const { t, formatDateTime } = useI18n();
   const queryClient = useQueryClient();
   const canReadSources = can("core.marketplace.read");
-  const canCreateSource = can("core.marketplace.create");
   const canUpdateSource = can("core.marketplace.update");
   const canDeleteSource = can("core.marketplace.delete");
   const canCreatePlugin = can("core.plugin.create");
   const canUpdatePlugin = can("core.plugin.update");
-  const [sourceModal, setSourceModal] = useState(false);
   const [name, setName] = useState("");
   const [repository, setRepository] = useState("");
   const [catalogSearch, setCatalogSearch] = useState("");
@@ -105,7 +106,7 @@ export function MarketplacePanels({
         body: JSON.stringify({ name, repository }),
       }),
     onSuccess: async (created) => {
-      setSourceModal(false);
+      onSourceModalOpenChange(false);
       setName("");
       setRepository("");
       try {
@@ -287,28 +288,18 @@ export function MarketplacePanels({
         className="space-y-3"
         hidden={view !== "catalog"}
       >
-        <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
-          <div className="min-w-0 sm:flex sm:items-baseline sm:gap-2">
-            <h2
-              id="plugin-catalog-heading"
-              className="shrink-0 text-base font-semibold"
-            >
-              {t("plugins.explore")}
-            </h2>
-            <p className="min-w-0 text-sm text-slate-500 sm:truncate">
-              {t("plugins.exploreDescription")}
-            </p>
-          </div>
-          <div className="relative w-full shrink-0 sm:w-80">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <Input
-              value={catalogSearch}
-              onChange={(event) => setCatalogSearch(event.target.value)}
-              className="pl-9"
-              placeholder={t("plugins.searchMarketplace")}
-              aria-label={t("plugins.searchMarketplace")}
-            />
-          </div>
+        <h2 id="plugin-catalog-heading" className="sr-only">
+          {t("plugins.explore")}
+        </h2>
+        <div className="relative w-full max-w-md">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Input
+            value={catalogSearch}
+            onChange={(event) => setCatalogSearch(event.target.value)}
+            className="pl-9"
+            placeholder={t("plugins.searchMarketplace")}
+            aria-label={t("plugins.searchMarketplace")}
+          />
         </div>
         {catalog.isPending ? (
           <Skeleton className="h-44" />
@@ -432,28 +423,11 @@ export function MarketplacePanels({
       {canReadSources && (
         <section
           aria-labelledby="plugin-marketplaces-heading"
-          className="space-y-3"
           hidden={view !== "marketplaces"}
         >
-          <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
-            <div className="min-w-0 sm:flex sm:items-baseline sm:gap-2">
-              <h2
-                id="plugin-marketplaces-heading"
-                className="shrink-0 text-base font-semibold"
-              >
-                {t("plugins.marketplaces")}
-              </h2>
-              <p className="min-w-0 text-sm text-slate-500 sm:truncate">
-                {t("plugins.marketplacesDescription")}
-              </p>
-            </div>
-            {canCreateSource && (
-              <Button variant="secondary" onClick={() => setSourceModal(true)}>
-                <Plus className="h-4 w-4" />
-                {t("plugins.addMarketplace")}
-              </Button>
-            )}
-          </div>
+          <h2 id="plugin-marketplaces-heading" className="sr-only">
+            {t("plugins.marketplaces")}
+          </h2>
           {sources.isPending ? (
             <Skeleton className="h-44" />
           ) : (
@@ -583,8 +557,10 @@ export function MarketplacePanels({
       )}
 
       <Modal
-        open={sourceModal}
-        onOpenChange={(open) => !createSource.isPending && setSourceModal(open)}
+        open={sourceModalOpen}
+        onOpenChange={(open) =>
+          !createSource.isPending && onSourceModalOpenChange(open)
+        }
         title={t("plugins.addMarketplace")}
         description={t("plugins.marketplaceTrustNotice")}
       >
@@ -620,7 +596,7 @@ export function MarketplacePanels({
             <Button
               type="button"
               variant="secondary"
-              onClick={() => setSourceModal(false)}
+              onClick={() => onSourceModalOpenChange(false)}
             >
               {t("common.cancel")}
             </Button>

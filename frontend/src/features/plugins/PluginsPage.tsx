@@ -6,6 +6,7 @@ import {
   ExternalLink,
   PackagePlus,
   Pencil,
+  Plus,
   Power,
   PowerOff,
   Search,
@@ -22,7 +23,7 @@ import {
   Button,
   Input,
   Label,
-  PageHeader,
+  PageTabBar,
   Skeleton,
 } from "../../components/ui/index.js";
 import {
@@ -294,6 +295,7 @@ export default function PluginsPage() {
   const canUpdate = can("core.plugin.update");
   const canDelete = can("core.plugin.delete");
   const canExport = can("core.plugin.export");
+  const canCreateMarketplace = can("core.marketplace.create");
   const stateLabel = (state: string) =>
     stateKeys[state] ? t(stateKeys[state]) : state;
   const client = useQueryClient();
@@ -317,6 +319,7 @@ export default function PluginsPage() {
   const [runtimeCredentialBusy, setRuntimeCredentialBusy] = useState(false);
   const [runtimeCredentialSetupOpen, setRuntimeCredentialSetupOpen] =
     useState(false);
+  const [marketplaceCreateOpen, setMarketplaceCreateOpen] = useState(false);
   const runtimeCredentialPrompted = useRef(false);
   const plugins = useQuery({
     queryKey: ["plugins"],
@@ -779,35 +782,8 @@ export default function PluginsPage() {
   };
   return (
     <>
-      <PageHeader
-        title={t("nav.plugins")}
-        description={t("plugins.description")}
-        navigation={
-          <div
-            className="flex min-w-0 gap-1 overflow-x-auto border-b"
-            role="tablist"
-            aria-label={t("plugins.tabs.label")}
-          >
-            {(["installed", "catalog", "marketplaces"] as const).map((tab) => (
-              <button
-                key={tab}
-                id={`plugins-tab-${tab}`}
-                type="button"
-                role="tab"
-                aria-selected={activeTab === tab}
-                aria-controls={`plugins-panel-${tab}`}
-                className={`shrink-0 border-b-2 px-3 py-2 text-sm font-semibold transition ${
-                  activeTab === tab
-                    ? "border-indigo-600 text-indigo-600"
-                    : "border-transparent text-slate-500 hover:text-slate-800"
-                }`}
-                onClick={() => navigate(`/app/plugins/${tab}`)}
-              >
-                {t(`plugins.tabs.${tab}`)}
-              </button>
-            ))}
-          </div>
-        }
+      <PageTabBar
+        label={t("plugins.tabs.label")}
         action={
           activeTab === "installed" && (canCreate || canUpdate) ? (
             <Button
@@ -820,16 +796,48 @@ export default function PluginsPage() {
               <PackagePlus className="h-4 w-4" />
               {t("common.add")}
             </Button>
+          ) : activeTab === "marketplaces" && canCreateMarketplace ? (
+            <Button onClick={() => setMarketplaceCreateOpen(true)}>
+              <Plus className="h-4 w-4" />
+              {t("plugins.addMarketplace")}
+            </Button>
           ) : undefined
         }
-      />
+      >
+        {(["installed", "catalog", "marketplaces"] as const).map((tab) => (
+          <button
+            key={tab}
+            id={`plugins-tab-${tab}`}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab}
+            aria-controls={`plugins-panel-${tab}`}
+            className={`shrink-0 border-b-2 px-3 py-2 text-sm font-semibold transition ${
+              activeTab === tab
+                ? "border-indigo-600 text-indigo-600"
+                : "border-transparent text-slate-500 hover:text-slate-800"
+            }`}
+            onClick={() => {
+              setMarketplaceCreateOpen(false);
+              navigate(`/app/plugins/${tab}`);
+            }}
+          >
+            {t(`plugins.tabs.${tab}`)}
+          </button>
+        ))}
+      </PageTabBar>
       {activeTab !== "installed" && (
         <section
           id={`plugins-panel-${activeTab}`}
           role="tabpanel"
           aria-labelledby={`plugins-tab-${activeTab}`}
         >
-          <MarketplacePanels onSelectPackage={choose} view={activeTab} />
+          <MarketplacePanels
+            onSelectPackage={choose}
+            view={activeTab}
+            sourceModalOpen={marketplaceCreateOpen}
+            onSourceModalOpenChange={setMarketplaceCreateOpen}
+          />
         </section>
       )}
       <section

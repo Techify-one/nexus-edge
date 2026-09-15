@@ -176,11 +176,14 @@ describe("repository data-table standard", () => {
     );
 
     expect(components).toContain('data-ui="page-header"');
-    expect(components).toContain('data-ui="page-header-navigation"');
+    expect(components).toContain('data-ui="page-tab-bar"');
     expect(components).toContain("mb-3 flex min-w-0");
     expect(shell).toContain('"mx-auto max-w-7xl lg:p-6"');
-    expect(plugins).toContain("navigation={");
+    expect(plugins).toContain("<PageTabBar");
+    expect(plugins).not.toContain('title={t("nav.plugins")}');
+    expect(plugins).not.toContain('description={t("plugins.description")}');
     expect(plugins).not.toContain('className="mb-6 flex gap-1');
+    expect(standard).toContain("shared `PageTabBar`");
     expect(standard).toContain("never below 25%");
   });
 });

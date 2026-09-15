@@ -269,12 +269,10 @@ export const EmptyState = ({
 export const PageHeader = ({
   title,
   description,
-  navigation,
   action,
 }: {
   title: string;
   description?: string;
-  navigation?: ReactNode;
   action?: ReactNode;
 }) => (
   <header
@@ -292,17 +290,31 @@ export const PageHeader = ({
         </p>
       )}
     </div>
-    {(navigation || action) && (
-      <div className="flex min-w-0 shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-        {navigation && (
-          <div data-ui="page-header-navigation" className="min-w-0">
-            {navigation}
-          </div>
-        )}
-        {action && <div className="shrink-0">{action}</div>}
-      </div>
-    )}
+    {action && <div className="shrink-0">{action}</div>}
   </header>
+);
+export const PageTabBar = ({
+  label,
+  children,
+  action,
+}: {
+  label: string;
+  children: ReactNode;
+  action?: ReactNode;
+}) => (
+  <div
+    data-ui="page-tab-bar"
+    className="mb-3 flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+  >
+    <div
+      className="flex min-w-0 gap-1 overflow-x-auto border-b"
+      role="tablist"
+      aria-label={label}
+    >
+      {children}
+    </div>
+    {action && <div className="shrink-0">{action}</div>}
+  </div>
 );
 export const Skeleton = ({ className }: { className?: string }) => (
   <div

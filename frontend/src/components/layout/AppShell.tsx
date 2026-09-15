@@ -71,6 +71,16 @@ const items = [
   permission?: string;
 }>;
 
+export function resolveCoreNavigationLabel(pathname: string): TranslationKey {
+  return (
+    items.find(({ to }) =>
+      to === "/app"
+        ? pathname === to
+        : pathname === to || pathname.startsWith(`${to}/`),
+    )?.label ?? "nav.panel"
+  );
+}
+
 export function AppShell() {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
@@ -86,6 +96,7 @@ export function AppShell() {
   const navigate = useNavigate();
   const location = useLocation();
   const pluginBackTarget = resolvePluginBackTarget(location.pathname, []);
+  const pageTitle = t(resolveCoreNavigationLabel(location.pathname));
   useEffect(() => {
     try {
       window.localStorage.setItem(
@@ -190,9 +201,7 @@ export function AppShell() {
                 {t("common.back")}
               </Button>
             )}
-            <p className="text-sm font-semibold text-slate-700">
-              {t("nav.panel")}
-            </p>
+            <p className="text-sm font-semibold text-slate-700">{pageTitle}</p>
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />

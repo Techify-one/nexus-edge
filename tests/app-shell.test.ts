@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { resolveCoreNavigationLabel } from "../frontend/src/components/layout/AppShell.js";
 import { resolvePluginBackTarget } from "../frontend/src/plugins/navigation.js";
 
 describe("application shell", () => {
@@ -44,6 +45,17 @@ describe("application shell", () => {
     );
 
     expect(shell).not.toContain("{location.pathname}");
+  });
+
+  it("shows the active Core section name in the app header", () => {
+    expect(resolveCoreNavigationLabel("/app/plugins/catalog")).toBe(
+      "nav.plugins",
+    );
+    expect(resolveCoreNavigationLabel("/app/settings/api-keys")).toBe(
+      "nav.apiKeys",
+    );
+    expect(resolveCoreNavigationLabel("/app")).toBe("nav.overview");
+    expect(resolveCoreNavigationLabel("/app/p/crm")).toBe("nav.panel");
   });
 
   it("shows a hierarchical Core-owned back button on dynamic plugin routes", () => {

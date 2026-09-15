@@ -115,7 +115,9 @@ describe("plugin runtime credential onboarding", () => {
   it("does not interrupt the page when the credential is already configured", async () => {
     renderPage(true);
 
-    await waitFor(() => expect(screen.getByText(/^(Plugins)$/)).toBeTruthy());
+    expect(
+      await screen.findByRole("tab", { name: /^(Instalados|Installed)$/ }),
+    ).toBeTruthy();
     expect(
       screen.queryByRole("heading", {
         name: /^(Autorize a publicação do primeiro plugin|Authorize the first plugin deployment)$/,
@@ -133,7 +135,10 @@ describe("plugin runtime credential onboarding", () => {
       name: /^(Novos Plugins|New Plugins)$/,
     });
     const marketplaces = screen.getByRole("tab", { name: "Market Places" });
-    expect(installed.closest('[data-ui="page-header"]')).not.toBeNull();
+    const addPlugin = screen.getByRole("button", {
+      name: /^(Adicionar|Add)$/,
+    });
+    expect(installed.closest('[data-ui="page-tab-bar"]')).not.toBeNull();
     expect(installed.getAttribute("aria-selected")).toBe("true");
     expect(
       screen.getByRole("heading", { name: /^(Instalados|Installed)$/ }),
@@ -156,6 +161,13 @@ describe("plugin runtime credential onboarding", () => {
     expect(
       await screen.findByRole("heading", { name: "Marketplaces" }),
     ).toBeTruthy();
+    const addMarketplace = screen.getByRole("button", {
+      name: /^(Adicionar marketplace|Add marketplace)$/,
+    });
+    expect(addMarketplace.closest('[data-ui="page-tab-bar"]')).not.toBeNull();
+    expect(addMarketplace.className).toBe(addPlugin.className);
+    fireEvent.click(addMarketplace);
+    expect(await screen.findByRole("dialog")).toBeTruthy();
     expect(
       screen.queryByRole("heading", { name: /^(Explorar|Explore)$/ }),
     ).toBeNull();
