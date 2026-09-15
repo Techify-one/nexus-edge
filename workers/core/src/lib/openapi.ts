@@ -807,7 +807,6 @@ const CORE_OPENAPI_DOCUMENT = {
             { name: "operationId", in: "path", required: true },
             { name: "logicalName", in: "path", required: true },
             { name: "Idempotency-Key", in: "header", required: true },
-            { name: "X-Reauth-Token", in: "header", required: true },
           ],
           responses: {
             "200": {
@@ -827,7 +826,6 @@ const CORE_OPENAPI_DOCUMENT = {
         parameters: [
           { name: "pluginId", in: "path", required: true },
           { name: "logicalName", in: "path", required: true },
-          { name: "X-Reauth-Token", in: "header", required: true },
         ],
         responses: {
           "200": { description: "Optional declared resource activated" },
@@ -839,7 +837,6 @@ const CORE_OPENAPI_DOCUMENT = {
         parameters: [
           { name: "operationId", in: "path", required: true },
           { name: "Idempotency-Key", in: "header", required: true },
-          { name: "X-Reauth-Token", in: "header", required: true },
         ],
         requestBody: {
           required: true,
@@ -866,7 +863,7 @@ const CORE_OPENAPI_DOCUMENT = {
             description: "Dedicated R2 bucket provisioned and attached",
           },
           "403": {
-            description: "Recent reauthentication or R2 permission required",
+            description: "Plugin resource permission required",
           },
           "409": { description: "Operation is not in the provisioning state" },
           "422": {
@@ -880,7 +877,6 @@ const CORE_OPENAPI_DOCUMENT = {
         parameters: [
           { name: "pluginId", in: "path", required: true },
           { name: "Idempotency-Key", in: "header", required: true },
-          { name: "X-Reauth-Token", in: "header", required: true },
         ],
         requestBody: {
           required: true,
@@ -909,8 +905,7 @@ const CORE_OPENAPI_DOCUMENT = {
               "Optional private R2 bucket provisioned and attached to an installed plugin",
           },
           "403": {
-            description:
-              "Plugin update permission and recent reauthentication required",
+            description: "Plugin update permission required",
           },
           "409": {
             description:
@@ -1024,10 +1019,7 @@ const CORE_OPENAPI_DOCUMENT = {
         responses: { "200": { description: "Recording details" } },
       },
       delete: {
-        parameters: [
-          { name: "recordingId", in: "path", required: true },
-          { name: "X-Reauth-Token", in: "header", required: true },
-        ],
+        parameters: [{ name: "recordingId", in: "path", required: true }],
         responses: { "202": { description: "Resumable deletion started" } },
       },
     },
@@ -1163,19 +1155,13 @@ const CORE_OPENAPI_DOCUMENT = {
         },
       },
       put: {
-        parameters: [
-          { name: "secretName", in: "path", required: true },
-          { name: "X-Reauth-Token", in: "header", required: true },
-        ],
+        parameters: [{ name: "secretName", in: "path", required: true }],
         responses: {
           "200": { description: "Telegram Worker secret configured" },
         },
       },
       delete: {
-        parameters: [
-          { name: "secretName", in: "path", required: true },
-          { name: "X-Reauth-Token", in: "header", required: true },
-        ],
+        parameters: [{ name: "secretName", in: "path", required: true }],
         responses: { "204": { description: "Telegram Worker secret deleted" } },
       },
     },

@@ -31,7 +31,6 @@ import {
   api,
   apiFile,
   idempotencyKey,
-  recentReauthHeaders,
 } from "../../lib/api/core-client.js";
 import {
   cloudflareAccountTokensUrl,
@@ -482,9 +481,6 @@ export default function PluginsPage() {
           throw new Error(t("plugins.gzipTooLarge"));
         if (requiresProvisioning && temporaryR2Token.length < 40)
           throw new Error(t("plugins.resourceTokenRequired"));
-        const r2Reauth = requiresProvisioning
-          ? await recentReauthHeaders(t("plugins.resourceReauthPassword"))
-          : {};
         current = await api<Operation>("/api/v1/plugin-operations", {
           method: "POST",
           headers: {
@@ -515,7 +511,6 @@ export default function PluginsPage() {
                 {
                   method: "POST",
                   headers: {
-                    ...r2Reauth,
                     "Idempotency-Key": `resource-${current.operationId}-${nextResource.logicalName}`,
                   },
                   body: JSON.stringify({
@@ -530,7 +525,6 @@ export default function PluginsPage() {
                 {
                   method: "POST",
                   headers: {
-                    ...r2Reauth,
                     "Idempotency-Key": `r2-${current.operationId}`,
                   },
                   body: JSON.stringify({

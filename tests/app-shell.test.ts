@@ -75,8 +75,8 @@ describe("application shell", () => {
     expect(shell).toContain("location.pathname,");
     expect(shell).toContain("onClick={() => navigate(pluginBackTarget)}");
     expect(shell).toContain('aria-label={t("common.back")}');
-    expect(guide).toContain("Core-owned **Back** button");
-    expect(template).toContain("Core header supplies a **Back** button");
+    expect(guide).toContain("O botão\n**Voltar** do Core");
+    expect(template).toContain("**Back** button for the plugin route");
   });
 
   it("returns from nested plugin routes to the plugin overview", () => {
@@ -84,6 +84,19 @@ describe("application shell", () => {
       "/app/p/example",
     );
     expect(resolvePluginBackTarget("/app/p/example", [])).toBe("/app");
+    expect(resolvePluginBackTarget("/app/p/example/settings/api", [])).toBe(
+      "/app/p/example/settings",
+    );
     expect(resolvePluginBackTarget("/app/users", [])).toBeUndefined();
+  });
+
+  it("uses the localized plugin name and hides the menu toggle on plugin routes", () => {
+    const shell = readFileSync(
+      "frontend/src/components/layout/AppShell.tsx",
+      "utf8",
+    );
+    expect(shell).toContain('queryKey: ["plugin-runtime"]');
+    expect(shell).toContain("pluginName ?? pluginId.replaceAll");
+    expect(shell).toContain("{!pluginId && (");
   });
 });

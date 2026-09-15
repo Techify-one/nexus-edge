@@ -4,10 +4,13 @@ const pluginRoot = (registeredPath: string): string | null => {
   return `/app/${segments[1]}`;
 };
 
-/**
- * Nested plugin pages return to their plugin overview. The plugin overview
- * itself returns to the Core overview.
- */
+const parentWithinPlugin = (pathname: string, root: string): string => {
+  if (pathname === root) return "/app";
+  const parent = pathname.slice(0, pathname.lastIndexOf("/"));
+  return parent.length >= root.length ? parent : root;
+};
+
+/** Plugin routes return one URL level at a time, then return to Core. */
 export const resolvePluginBackTarget = (
   pathname: string,
   registeredPaths: Iterable<string>,
@@ -16,7 +19,7 @@ export const resolvePluginBackTarget = (
   const dynamic = /^\/app\/p\/([a-z][a-z0-9_]{1,31})(?:\/|$)/u.exec(normalized);
   if (dynamic) {
     const root = `/app/p/${dynamic[1]}`;
-    return normalized === root ? "/app" : root;
+    return parentWithinPlugin(normalized, root);
   }
   const roots = new Set(
     [...registeredPaths]
@@ -28,5 +31,5 @@ export const resolvePluginBackTarget = (
       normalized === candidate || normalized.startsWith(`${candidate}/`),
   );
   if (!root) return undefined;
-  return normalized === root ? "/app" : root;
+  return parentWithinPlugin(normalized, root);
 };

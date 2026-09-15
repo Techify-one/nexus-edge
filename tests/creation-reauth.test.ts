@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { createMongoAbility } from "@casl/ability";
 import { Hono } from "hono";
 import { describe, expect, it } from "vitest";
@@ -113,5 +114,31 @@ describe("creation authentication", () => {
     expect(parameters).not.toContainEqual(
       expect.objectContaining({ name: "X-Reauth-Token" }),
     );
+  });
+
+  it("does not require password confirmation anywhere in plugin flows", () => {
+    const installer = readFileSync(
+      "workers/core/src/routes/installer.ts",
+      "utf8",
+    );
+    const gateway = readFileSync("workers/core/src/routes/gateway.ts", "utf8");
+    const pluginUi = readFileSync(
+      "frontend/src/features/plugins/PluginsPage.tsx",
+      "utf8",
+    );
+    expect(installer).not.toContain("validateRecentReauth");
+    expect(gateway).not.toContain("validateRecentReauth");
+    expect(pluginUi).not.toContain("recentReauthHeaders");
+
+    for (const path of [
+      "/api/v1/plugin-operations/{operationId}/resources/{logicalName}/provision",
+      "/api/v1/plugins/{pluginId}/runtime-resources/{logicalName}/provision",
+      "/api/v1/plugin-operations/{operationId}/provision-r2",
+      "/api/v1/plugins/{pluginId}/runtime-resources/r2",
+      "/api/v1/plugins/{pluginId}/runtime-secrets/{secretName}",
+    ] as const) {
+      const operations = OPENAPI_DOCUMENT.paths[path];
+      expect(JSON.stringify(operations)).not.toContain("X-Reauth-Token");
+    }
   });
 });

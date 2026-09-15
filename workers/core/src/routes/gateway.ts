@@ -3,7 +3,6 @@ import type { PluginContext } from "@app/core-contract";
 import type { HonoEnv } from "../env.js";
 import { concretePermissionsForNamespace } from "../lib/ability.js";
 import { AppError } from "../lib/http.js";
-import { validateRecentReauth } from "../middleware/reauth.js";
 import { idempotencyLookup, saveIdempotency } from "../services/idempotency.js";
 
 const encode = (value: unknown): string => {
@@ -27,7 +26,6 @@ gatewayRoutes.all("/:pluginId/*", async (c) => {
     ]);
   if (!plugin || plugin.status !== "installed")
     throw new AppError(404, "PLUGIN_NOT_INSTALLED", "Plugin is not installed.");
-  if (c.req.method === "DELETE") await validateRecentReauth(c);
   const binding = c.env[`PLUGIN_${pluginId.toUpperCase()}`];
   if (!binding || typeof (binding as Fetcher).fetch !== "function")
     throw new AppError(

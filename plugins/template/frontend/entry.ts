@@ -2,7 +2,6 @@ import { definePlugin, mountConfigurableDataTable } from "@nexus/plugin-sdk";
 
 const messages = {
   "pt-BR": {
-    title: "Plugin de exemplo",
     description:
       "Esta tela foi carregada do pacote do plugin, sem fazer parte do build do Core.",
     load: "Carregar itens",
@@ -10,7 +9,6 @@ const messages = {
     empty: "Nenhum item encontrado.",
   },
   en: {
-    title: "Example plugin",
     description:
       "This screen was loaded from the plugin package and is not part of the Core build.",
     load: "Load items",
@@ -24,11 +22,7 @@ export default definePlugin({
     const text = messages[host.locale];
     container.innerHTML = `
       <main class="plugin-page">
-        <header>
-          <p class="eyebrow">Nexus Plugin API v${host.apiVersion}</p>
-          <h1>${text.title}</h1>
-          <p>${text.description}</p>
-        </header>
+        <p>${text.description}</p>
         <button type="button" data-load>${text.load}</button>
         <button type="button" data-create>${text.create}</button>
         <div data-result aria-live="polite"></div>

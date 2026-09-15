@@ -30,8 +30,15 @@ contratos:
 notificação e a tabela configurável oficial do `@nexus/plugin-sdk`. O Core
 fornece locale, tema, navegação, permissões e persistência por usuário.
 
-The Core header supplies a **Back** button for the plugin route, so plugin
-screens must not render a competing global back control.
+The Core header displays the localized plugin name and supplies a hierarchical
+**Back** button for the plugin route. Plugin screens must not repeat the plugin
+name in a page heading, render a competing global back control, or add a menu
+toggle beside the Core header. The button returns one route level at a time and
+then returns from the plugin root to the Core overview.
+
+Plugin screens must rely on the authenticated Nexus session and declared
+permissions. They must not ask the user to type the Nexus account password
+again for plugin actions, runtime secrets, webhooks, or resources.
 
 ## Build e pacote
 

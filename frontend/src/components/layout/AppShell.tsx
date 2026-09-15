@@ -13,6 +13,7 @@ import {
   UserRoundCog,
   Webhook,
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { queryClient } from "../../app/query-client.js";
@@ -24,6 +25,7 @@ import { LanguageSwitcher } from "../i18n/LanguageSwitcher.js";
 import { ThemeToggle } from "../theme/ThemeToggle.js";
 import { useI18n, type TranslationKey } from "../../i18n/index.js";
 import { resolvePluginBackTarget } from "../../plugins/navigation.js";
+import type { PluginRuntimeResponse } from "../../plugins/runtime.js";
 
 const items = [
   { to: "/app", label: "nav.overview", icon: LayoutDashboard },
@@ -95,8 +97,21 @@ export function AppShell() {
   });
   const navigate = useNavigate();
   const location = useLocation();
+  const pluginId =
+    /^\/app\/p\/([a-z][a-z0-9_]{1,31})(?:\/|$)/u.exec(location.pathname)?.[1] ??
+    null;
+  const pluginRuntime = useQuery({
+    queryKey: ["plugin-runtime"],
+    queryFn: () => api<PluginRuntimeResponse>("/api/v1/plugin-runtime"),
+    enabled: pluginId !== null,
+  });
+  const pluginName = pluginRuntime.data?.plugins.find(
+    (plugin) => plugin.pluginId === pluginId,
+  )?.name;
   const pluginBackTarget = resolvePluginBackTarget(location.pathname, []);
-  const pageTitle = t(resolveCoreNavigationLabel(location.pathname));
+  const pageTitle = pluginId
+    ? (pluginName ?? pluginId.replaceAll("_", " "))
+    : t(resolveCoreNavigationLabel(location.pathname));
   useEffect(() => {
     try {
       window.localStorage.setItem(
@@ -181,14 +196,16 @@ export function AppShell() {
       >
         <header className="app-header sticky top-0 z-20 flex h-16 items-center justify-between border-b bg-white/95 px-4 backdrop-blur sm:px-6">
           <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              className="px-2 lg:hidden"
-              onClick={() => setOpen(true)}
-              aria-label={t("nav.openMenu")}
-            >
-              <Menu className="h-5 w-5" />
-            </Button>
+            {!pluginId && (
+              <Button
+                variant="ghost"
+                className="px-2 lg:hidden"
+                onClick={() => setOpen(true)}
+                aria-label={t("nav.openMenu")}
+              >
+                <Menu className="h-5 w-5" />
+              </Button>
+            )}
             {pluginBackTarget && (
               <Button
                 variant="ghost"

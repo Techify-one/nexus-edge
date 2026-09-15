@@ -140,9 +140,16 @@ endereçada pelo hash do release. O release atual e o anterior ficam disponívei
 para abas já abertas/recuperação. Use CSS autocontido e teste `light`, `dark`,
 `pt-BR` e `en`.
 
-O cabeçalho continua pertencendo ao host. O Core-owned **Back** button resolve
-o retorno hierárquico pela rota registrada, inclusive para deep links, sem o
-plugin duplicar navegação global.
+O cabeçalho continua pertencendo ao host: ele exibe o nome localizado do plugin
+e não mostra o acionador do menu lateral durante uma rota de plugin. A tela do
+plugin não repete esse nome em `PageHeader`, `h1` ou outro título global. O botão
+**Voltar** do Core retorna um nível da rota por vez, inclusive em deep links, e
+somente a raiz do plugin retorna para a visão geral do Core.
+
+As ações do plugin usam a sessão autenticada e as permissões declaradas. Não
+solicite novamente a senha da conta Nexus para configurar segredos, webhooks,
+recursos ou executar operações internas do plugin; não use
+`recentReauthHeaders` em frontends de plugins.
 
 ### Filter layout standard
 

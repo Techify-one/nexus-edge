@@ -54,7 +54,6 @@ import { AppError, noStore } from "../lib/http.js";
 import { canPermission } from "../lib/ability.js";
 import { dbTime, numberTime, parseJson } from "../lib/values.js";
 import { requirePermission } from "../middleware/auth.js";
-import { validateRecentReauth } from "../middleware/reauth.js";
 import { audit } from "../services/audit.js";
 import { commitWithEvent } from "../services/events.js";
 import { idempotencyLookup, saveIdempotency } from "../services/idempotency.js";
@@ -1115,7 +1114,6 @@ installerRoutes.put(
   "/plugins/:pluginId/runtime-secrets/:secretName",
   async (c) => {
     const target = await runtimeSecretTarget(c, "update");
-    await validateRecentReauth(c);
     const body = (await c.req.json().catch(() => null)) as {
       value?: unknown;
     } | null;
@@ -1267,7 +1265,6 @@ installerRoutes.delete(
   "/plugins/:pluginId/runtime-secrets/:secretName",
   async (c) => {
     const target = await runtimeSecretTarget(c, "update");
-    await validateRecentReauth(c);
     await deletePluginSecret(c.env, target.workerName, target.secretName);
     await audit(
       c,
@@ -1592,7 +1589,6 @@ installerRoutes.post(
   async (c) => {
     const operation = await getOperation(c);
     requirePluginOperationPermission(c, operation.type);
-    await validateRecentReauth(c);
     if (!(c.req.header("Idempotency-Key") ?? "").trim())
       throw new AppError(
         400,
@@ -1847,7 +1843,6 @@ installerRoutes.post(
   async (c) => {
     const operation = await getOperation(c);
     requirePluginOperationPermission(c, operation.type);
-    await validateRecentReauth(c);
     if (!(c.req.header("Idempotency-Key") ?? "").trim())
       throw new AppError(
         400,
@@ -2080,7 +2075,6 @@ installerRoutes.post(
   "/plugins/:pluginId/runtime-resources/r2",
   requirePermission("core.plugin.update"),
   async (c) => {
-    await validateRecentReauth(c);
     if (!c.env.CF_ACCOUNT_ID || !c.env.APP_INSTALLATION_ID)
       throw new AppError(
         503,
@@ -2362,7 +2356,6 @@ installerRoutes.post(
   "/plugins/:pluginId/runtime-resources/:logicalName/provision",
   requirePermission("core.plugin.update"),
   async (c) => {
-    await validateRecentReauth(c);
     const pluginId = c.req.param("pluginId") ?? "";
     const logicalName = c.req.param("logicalName") ?? "";
     const plugin = await c.get("db").first<{
