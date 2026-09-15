@@ -109,6 +109,10 @@ export function AppShell() {
     (plugin) => plugin.pluginId === pluginId,
   )?.name;
   const pluginBackTarget = resolvePluginBackTarget(location.pathname, []);
+  const navigatePluginBack = () => {
+    if (!pluginBackTarget) return;
+    window.location.assign(pluginBackTarget);
+  };
   const pageTitle = pluginId
     ? (pluginName ?? pluginId.replaceAll("_", " "))
     : t(resolveCoreNavigationLabel(location.pathname));
@@ -208,9 +212,10 @@ export function AppShell() {
             )}
             {pluginBackTarget && (
               <Button
+                type="button"
                 variant="ghost"
                 className="px-2"
-                onClick={() => navigate(pluginBackTarget)}
+                onClick={navigatePluginBack}
                 aria-label={t("common.back")}
                 title={t("common.back")}
               >

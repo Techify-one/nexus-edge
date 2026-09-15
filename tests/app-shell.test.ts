@@ -73,7 +73,8 @@ describe("application shell", () => {
       "const pluginBackTarget = resolvePluginBackTarget(",
     );
     expect(shell).toContain("location.pathname,");
-    expect(shell).toContain("onClick={() => navigate(pluginBackTarget)}");
+    expect(shell).toContain("window.location.assign(pluginBackTarget)");
+    expect(shell).toContain("onClick={navigatePluginBack}");
     expect(shell).toContain('aria-label={t("common.back")}');
     expect(guide).toContain("O botão\n**Voltar** do Core");
     expect(template).toContain("**Back** button for the plugin route");
