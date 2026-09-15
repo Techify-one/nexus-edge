@@ -284,19 +284,22 @@ export function MarketplacePanels({
     <div>
       <section
         aria-labelledby="plugin-catalog-heading"
-        className="space-y-4"
+        className="space-y-3"
         hidden={view !== "catalog"}
       >
-        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
-          <div>
-            <h2 id="plugin-catalog-heading" className="text-lg font-semibold">
+        <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
+          <div className="min-w-0 sm:flex sm:items-baseline sm:gap-2">
+            <h2
+              id="plugin-catalog-heading"
+              className="shrink-0 text-base font-semibold"
+            >
               {t("plugins.explore")}
             </h2>
-            <p className="text-sm text-slate-500">
+            <p className="min-w-0 text-sm text-slate-500 sm:truncate">
               {t("plugins.exploreDescription")}
             </p>
           </div>
-          <div className="relative w-full sm:w-80">
+          <div className="relative w-full shrink-0 sm:w-80">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <Input
               value={catalogSearch}
@@ -429,18 +432,18 @@ export function MarketplacePanels({
       {canReadSources && (
         <section
           aria-labelledby="plugin-marketplaces-heading"
-          className="space-y-4"
+          className="space-y-3"
           hidden={view !== "marketplaces"}
         >
-          <div className="flex items-center justify-between gap-3">
-            <div>
+          <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
+            <div className="min-w-0 sm:flex sm:items-baseline sm:gap-2">
               <h2
                 id="plugin-marketplaces-heading"
-                className="text-lg font-semibold"
+                className="shrink-0 text-base font-semibold"
               >
                 {t("plugins.marketplaces")}
               </h2>
-              <p className="text-sm text-slate-500">
+              <p className="min-w-0 text-sm text-slate-500 sm:truncate">
                 {t("plugins.marketplacesDescription")}
               </p>
             </div>

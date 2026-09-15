@@ -37,6 +37,31 @@ with an intentional `accent`, `success`, `info`, or `warning` tone. Summary
 numbers above a table should use `MetricCard`. These components preserve
 contrast in both themes without hard-coded plugin colors.
 
+## Viewport priority and vertical density
+
+The record table is the primary content of a list page. On desktop viewports
+that are at least 768 px tall, target the top edge of the table, loading state,
+or empty state within the first 20% of the viewport and never below 25% when
+the standard controls fit on one line.
+
+- Use the shared `PageHeader`; keep the title and short description inline on
+  desktop.
+- Put page-level tabs in the `PageHeader` `navigation` slot instead of a second
+  full-width row below the header.
+- Keep search, filters, and primary actions in one compact row whenever their
+  labels remain usable. Use the shared `SingleLineFilterBar` for multi-filter
+  plugin pages.
+- Keep 0.75rem (`gap-3` or `mb-3`) as the normal vertical separation between
+  the header, controls, and table. Do not stack decorative section headings or
+  repeat the active tab name above the table.
+- On narrow screens, controls may wrap vertically to preserve readable labels,
+  touch targets, and horizontal tab scrolling.
+- A page may exceed the 25% budget only when essential, always-visible business
+  controls cannot fit compactly. Document that exception next to the layout.
+
+The authenticated shell supplies compact page insets. Feature pages must not
+add a second outer top padding around record lists.
+
 ## Stable identifiers and persistence
 
 Each table needs an immutable ID:
@@ -136,6 +161,8 @@ For every new or migrated table:
 6. Test that resizing one column does not change its neighbor.
 7. Test that the icon-only settings trigger is inside the `Ações` header and no separate settings row exists.
 8. Run `pnpm typecheck`, `pnpm test`, and the relevant build.
+9. Verify at a desktop viewport at least 768 px tall that the table starts by
+   25% of the viewport, unless the source documents a justified exception.
 
 ## Request wording
 

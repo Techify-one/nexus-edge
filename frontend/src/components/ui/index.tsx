@@ -269,21 +269,40 @@ export const EmptyState = ({
 export const PageHeader = ({
   title,
   description,
+  navigation,
   action,
 }: {
   title: string;
   description?: string;
+  navigation?: ReactNode;
   action?: ReactNode;
 }) => (
-  <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-    <div>
-      <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
+  <header
+    data-ui="page-header"
+    className="mb-3 flex min-w-0 flex-col gap-3 xl:flex-row xl:items-center xl:justify-between"
+  >
+    <div className="min-w-0 sm:flex sm:items-baseline sm:gap-3">
+      <h1 className="shrink-0 text-xl font-bold tracking-tight">{title}</h1>
       {description && (
-        <p className="mt-1 text-sm text-slate-500">{description}</p>
+        <p
+          className="mt-0.5 min-w-0 text-sm text-slate-500 sm:mt-0 sm:truncate"
+          title={description}
+        >
+          {description}
+        </p>
       )}
     </div>
-    {action}
-  </div>
+    {(navigation || action) && (
+      <div className="flex min-w-0 shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+        {navigation && (
+          <div data-ui="page-header-navigation" className="min-w-0">
+            {navigation}
+          </div>
+        )}
+        {action && <div className="shrink-0">{action}</div>}
+      </div>
+    )}
+  </header>
 );
 export const Skeleton = ({ className }: { className?: string }) => (
   <div

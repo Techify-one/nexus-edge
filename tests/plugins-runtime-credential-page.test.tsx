@@ -133,6 +133,7 @@ describe("plugin runtime credential onboarding", () => {
       name: /^(Novos Plugins|New Plugins)$/,
     });
     const marketplaces = screen.getByRole("tab", { name: "Market Places" });
+    expect(installed.closest('[data-ui="page-header"]')).not.toBeNull();
     expect(installed.getAttribute("aria-selected")).toBe("true");
     expect(
       screen.getByRole("heading", { name: /^(Instalados|Installed)$/ }),

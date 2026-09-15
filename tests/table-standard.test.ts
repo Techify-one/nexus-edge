@@ -156,4 +156,31 @@ describe("repository data-table standard", () => {
     expect(source).not.toContain('queryKey: ["plugin-operations"]');
     expect(source).not.toContain("plugins.recentOperations");
   });
+
+  it("keeps record-list chrome within the documented viewport budget", () => {
+    const components = readFileSync(
+      resolve(repositoryRoot, "frontend/src/components/ui/index.tsx"),
+      "utf8",
+    );
+    const shell = readFileSync(
+      resolve(repositoryRoot, "frontend/src/components/layout/AppShell.tsx"),
+      "utf8",
+    );
+    const plugins = readFileSync(
+      resolve(repositoryRoot, "frontend/src/features/plugins/PluginsPage.tsx"),
+      "utf8",
+    );
+    const standard = readFileSync(
+      resolve(repositoryRoot, "docs/DATA-TABLE-STANDARD.md"),
+      "utf8",
+    );
+
+    expect(components).toContain('data-ui="page-header"');
+    expect(components).toContain('data-ui="page-header-navigation"');
+    expect(components).toContain("mb-3 flex min-w-0");
+    expect(shell).toContain('"mx-auto max-w-7xl lg:p-6"');
+    expect(plugins).toContain("navigation={");
+    expect(plugins).not.toContain('className="mb-6 flex gap-1');
+    expect(standard).toContain("never below 25%");
+  });
 });
