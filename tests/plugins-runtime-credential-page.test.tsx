@@ -36,11 +36,15 @@ function renderPage(
 ) {
   const accountId = "a".repeat(32);
   const requests: string[] = [];
+  const syncRequests: string[] = [];
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (input: RequestInfo | URL) => {
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       requests.push(url);
+      if (url.endsWith("/sync") && init?.method === "POST") {
+        syncRequests.push(url);
+      }
       const body = url.endsWith("/api/v1/plugins")
         ? {
             items: options.plugins ?? [],
@@ -81,7 +85,7 @@ function renderPage(
       </I18nProvider>
     </QueryClientProvider>,
   );
-  return { accountId, requests };
+  return { accountId, requests, syncRequests };
 }
 
 describe("plugin runtime credential onboarding", () => {
@@ -156,6 +160,63 @@ describe("plugin runtime credential onboarding", () => {
     ).toBeNull();
     expect(screen.getByTestId("plugin-location").textContent).toBe(
       "/app/plugins/marketplaces",
+    );
+  });
+
+  it("refreshes every enabled marketplace when opening the new plugins tab", async () => {
+    const { syncRequests } = renderPage(true, {
+      marketplaces: [
+        {
+          id: "mkt_techfire",
+          name: "Techfire Plugins",
+          owner: "Techify-one",
+          repository: "nexus-edge-plugins",
+          enabled: true,
+          isDefault: true,
+          trustState: "trusted",
+          keyFingerprint: "fingerprint",
+          lastSyncedAt: Date.now(),
+          lastErrorCode: null,
+        },
+        {
+          id: "mkt_community",
+          name: "Community Plugins",
+          owner: "community",
+          repository: "plugins",
+          enabled: true,
+          isDefault: false,
+          trustState: "trusted",
+          keyFingerprint: "fingerprint",
+          lastSyncedAt: Date.now(),
+          lastErrorCode: null,
+        },
+        {
+          id: "mkt_disabled",
+          name: "Disabled Plugins",
+          owner: "disabled",
+          repository: "plugins",
+          enabled: false,
+          isDefault: false,
+          trustState: "trusted",
+          keyFingerprint: "fingerprint",
+          lastSyncedAt: Date.now(),
+          lastErrorCode: null,
+        },
+      ],
+    });
+
+    fireEvent.click(
+      await screen.findByRole("tab", { name: /^(Novos Plugins|New Plugins)$/ }),
+    );
+
+    await waitFor(() => {
+      expect(syncRequests).toEqual([
+        "/api/v1/plugin-marketplaces/mkt_techfire/sync",
+        "/api/v1/plugin-marketplaces/mkt_community/sync",
+      ]);
+    });
+    expect(syncRequests).not.toContain(
+      "/api/v1/plugin-marketplaces/mkt_disabled/sync",
     );
   });
 

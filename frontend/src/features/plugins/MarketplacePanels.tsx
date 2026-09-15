@@ -82,7 +82,8 @@ export function MarketplacePanels({
     null,
   );
   const [editedSourceName, setEditedSourceName] = useState("");
-  const defaultSyncAttempted = useRef(false);
+  const catalogSyncAttempted = useRef(false);
+  const [catalogReady, setCatalogReady] = useState(false);
   const sources = useQuery({
     queryKey: ["plugin-marketplaces"],
     queryFn: () => api<{ items: Marketplace[] }>("/api/v1/plugin-marketplaces"),
@@ -91,7 +92,7 @@ export function MarketplacePanels({
   const catalog = useQuery({
     queryKey: ["plugin-catalog"],
     queryFn: () => api<{ items: CatalogRelease[] }>("/api/v1/plugin-catalog"),
-    enabled: view === "catalog",
+    enabled: view === "catalog" && catalogReady,
   });
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ["plugin-marketplaces"] });
@@ -208,23 +209,57 @@ export function MarketplacePanels({
     onError: (error: Error) => toast.error(error.message),
   });
   useEffect(() => {
-    if (
-      defaultSyncAttempted.current ||
-      !canUpdateSource ||
-      syncSource.isPending
-    )
+    if (view !== "catalog") {
+      catalogSyncAttempted.current = false;
+      setCatalogReady(false);
       return;
-    const pendingDefault = (sources.data?.items ?? []).find(
-      (source) =>
-        Boolean(source.isDefault) &&
-        Boolean(source.enabled) &&
-        source.trustState === "pending" &&
-        !source.lastSyncedAt,
-    );
-    if (!pendingDefault) return;
-    defaultSyncAttempted.current = true;
-    syncSource.mutate(pendingDefault);
-  }, [canUpdateSource, sources.data?.items, syncSource]);
+    }
+    if (catalogSyncAttempted.current) return;
+    if (canReadSources && sources.isPending) return;
+
+    catalogSyncAttempted.current = true;
+    const enabledSources = canReadSources
+      ? (sources.data?.items ?? []).filter((source) => Boolean(source.enabled))
+      : [];
+    if (!canUpdateSource || enabledSources.length === 0) {
+      setCatalogReady(true);
+      return;
+    }
+
+    setCatalogReady(false);
+    void Promise.allSettled(
+      enabledSources.map((source) =>
+        api(
+          `/api/v1/plugin-marketplaces/${encodeURIComponent(source.id)}/sync`,
+          { method: "POST" },
+        ),
+      ),
+    ).then(async (results) => {
+      let refreshFailed = results.some(
+        (result) => result.status === "rejected",
+      );
+      try {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["plugin-marketplaces"] }),
+          queryClient.invalidateQueries({ queryKey: ["plugin-catalog"] }),
+        ]);
+      } catch {
+        refreshFailed = true;
+      }
+      if (refreshFailed) {
+        toast.error(t("plugins.marketplaceAutoSyncFailed"));
+      }
+      setCatalogReady(true);
+    });
+  }, [
+    canReadSources,
+    canUpdateSource,
+    queryClient,
+    sources.data?.items,
+    sources.isPending,
+    t,
+    view,
+  ]);
   const catalogRows = useMemo(() => {
     const search = catalogSearch.trim().toLocaleLowerCase();
     return (catalog.data?.items ?? []).filter((release) =>

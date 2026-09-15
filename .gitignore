@@ -16,3 +16,7 @@ test-results/
 nexus-edge-source.zip
 artifacts/core-distribution/
 artifacts/core-update/
+
+# Local implementation plans
+docs/CRM-TRACKIFY-IMPLEMENTATION-PLAN.md
+plano-completo-plugin-gravador-nexus-edge.md

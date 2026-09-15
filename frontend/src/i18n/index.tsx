@@ -439,6 +439,8 @@ const ptBR = {
   "plugins.marketplaceUpdated": "Marketplace atualizado.",
   "plugins.marketplaceSynced":
     "Marketplace sincronizado e assinatura validada.",
+  "plugins.marketplaceAutoSyncFailed":
+    "Não foi possível atualizar um ou mais marketplaces. O catálogo exibido pode estar desatualizado.",
   "plugins.marketplaceRemoved":
     "Marketplace removido; os plugins já instalados foram preservados.",
   "plugins.removeMarketplaceConfirm": "Remover o marketplace {{name}}?",
@@ -1072,6 +1074,8 @@ const en: Record<TranslationKey, string> = {
   "plugins.marketplaceAdded": "Marketplace added.",
   "plugins.marketplaceUpdated": "Marketplace updated.",
   "plugins.marketplaceSynced": "Marketplace synced and signature verified.",
+  "plugins.marketplaceAutoSyncFailed":
+    "One or more marketplaces could not be refreshed. The catalog shown may be out of date.",
   "plugins.marketplaceRemoved":
     "Marketplace removed; installed plugins were preserved.",
   "plugins.removeMarketplaceConfirm": "Remove marketplace {{name}}?",
