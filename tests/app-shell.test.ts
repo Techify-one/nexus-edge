@@ -11,7 +11,7 @@ describe("application shell", () => {
     );
 
     expect(shell).toContain(
-      'window.localStorage.getItem("nexus.sidebar.hidden")',
+      "const [sidebarHidden, setSidebarHidden] = useState(true)",
     );
     expect(shell).toContain(
       'sidebarHidden ? "w-0 border-r-0" : "w-60 border-r"',
@@ -25,6 +25,12 @@ describe("application shell", () => {
     expect(shell).not.toContain("PanelLeftClose");
     expect(shell).not.toContain("PanelLeftOpen");
     expect(shell).not.toContain('sidebarCollapsed ? "w-20"');
+    expect(shell).not.toContain("nexus.sidebar.hidden");
+    expect(shell).toContain("setSidebarHidden((current) => !current)");
+    expect(shell).toContain('window.matchMedia("(min-width: 1024px)")');
+    expect(shell).toContain("{APP_MARK}");
+    expect(shell).toContain("{APP_NAME}");
+    expect(shell).not.toContain("Edge Runtime");
   });
 
   it("keeps plugin destinations out of the Core sidebar", () => {

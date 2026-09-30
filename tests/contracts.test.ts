@@ -65,6 +65,7 @@ describe("contracts", () => {
     const preference = {
       version: 1 as const,
       itemOrder: ["plugin.crm", "core.users", "core.api-keys"],
+      showCoreCards: true,
     };
     expect(overviewPreferenceConfigSchema.parse(preference)).toEqual(
       preference,

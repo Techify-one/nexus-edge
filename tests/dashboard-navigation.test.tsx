@@ -59,7 +59,10 @@ describe("Overview navigation persistence", () => {
             savedOrders.push(config.itemOrder);
             return Response.json({ config, updatedAt: 456 });
           }
-          return Response.json({ config: null, updatedAt: null });
+          return Response.json({
+            config: { version: 1, itemOrder: [], showCoreCards: true },
+            updatedAt: null,
+          });
         }
         return Response.json({ plugins: [] });
       }),

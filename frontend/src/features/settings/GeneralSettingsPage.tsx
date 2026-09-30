@@ -13,6 +13,7 @@ import {
   Card,
   PageHeader,
   Skeleton,
+  ToggleSwitch,
 } from "../../components/ui/index.js";
 import { can } from "../../lib/ability.js";
 import { api, recentReauthHeaders } from "../../lib/api/core-client.js";
@@ -25,6 +26,19 @@ type Operation = {
   restoreTimestamp: string | number | null;
   failureCode?: string;
 };
+
+type OverviewPreferenceConfig = {
+  version: 1;
+  itemOrder: string[];
+  showCoreCards?: boolean;
+};
+
+type OverviewPreferenceResponse = {
+  config: OverviewPreferenceConfig | null;
+  updatedAt: string | number | null;
+};
+
+const overviewPreferenceQueryKey = ["me", "overview-preference"] as const;
 
 type GeneralSettings = {
   channel: "beta";
@@ -66,6 +80,31 @@ export default function GeneralSettingsPage() {
     queryKey: ["settings", "general"],
     queryFn: () => api<GeneralSettings>("/api/v1/settings/general"),
     staleTime: 60_000,
+  });
+  const overviewPreference = useQuery({
+    queryKey: overviewPreferenceQueryKey,
+    queryFn: () =>
+      api<OverviewPreferenceResponse>("/api/v1/me/overview-preference"),
+  });
+  const coreCards = useMutation({
+    scope: { id: "overview-preference" },
+    mutationFn: async (showCoreCards: boolean) => {
+      const config: OverviewPreferenceConfig = {
+        version: 1,
+        itemOrder: overviewPreference.data?.config?.itemOrder ?? [],
+        showCoreCards,
+      };
+      return api<OverviewPreferenceResponse>("/api/v1/me/overview-preference", {
+        method: "PUT",
+        body: JSON.stringify(config),
+      });
+    },
+    onSuccess: (response) => {
+      client.setQueryData(overviewPreferenceQueryKey, response);
+    },
+    onError: () => {
+      toast.error(t("settings.coreCardsSaveFailed"));
+    },
   });
 
   const update = useMutation({
@@ -134,6 +173,31 @@ export default function GeneralSettingsPage() {
         title={t("settings.title")}
         description={t("settings.description")}
       />
+      <Card className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 className="font-bold">{t("settings.coreCardsTitle")}</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            {t("settings.coreCardsDescription")}
+          </p>
+        </div>
+        <ToggleSwitch
+          checked={overviewPreference.data?.config?.showCoreCards ?? false}
+          disabled={
+            overviewPreference.isPending ||
+            overviewPreference.isError ||
+            coreCards.isPending
+          }
+          onClick={() =>
+            coreCards.mutate(!overviewPreference.data?.config?.showCoreCards)
+          }
+          aria-label={t("settings.coreCardsTitle")}
+        />
+        {overviewPreference.isError && (
+          <p className="w-full text-sm text-red-700" role="alert">
+            {t("settings.coreCardsLoadFailed")}
+          </p>
+        )}
+      </Card>
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
         <Card>
           <div className="flex items-center gap-3">

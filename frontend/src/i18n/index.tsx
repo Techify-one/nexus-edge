@@ -131,10 +131,11 @@ const ptBR = {
   "dashboard.webhooksDescription": "Entregas e tentativas",
   "dashboard.pluginsDescription": "Módulos instalados",
   "dashboard.auditDescription": "Histórico de atividades",
-  "dashboard.searchModules": "Buscar módulos e plugins",
+  "dashboard.settingsDescription": "Preferências e atualizações",
+  "dashboard.searchModules": "Buscar plugins e páginas",
   "dashboard.openPlugin": "Abrir plugin",
   "dashboard.pluginWithoutPage": "Plugin sem página disponível",
-  "dashboard.noResults": "Nenhum módulo ou plugin corresponde à busca.",
+  "dashboard.noResults": "Nenhum card corresponde à busca.",
   "dashboard.dragCard": "Arrastar {{name}} para reordenar",
   "dashboard.savingOrder": "Salvando ordem da visão geral",
   "dashboard.orderSaveFailed":
@@ -292,6 +293,13 @@ const ptBR = {
   "permissionGroups.additional": "Outras permissões do módulo",
 
   "settings.title": "Configurações gerais",
+  "settings.coreCardsTitle": "Mostrar menus do sistema como cards",
+  "settings.coreCardsDescription":
+    "Exibe os atalhos da sidebar na tela inicial. Os plugins continuam visíveis.",
+  "settings.coreCardsLoadFailed":
+    "Não foi possível carregar esta preferência. Atualize a página para tentar novamente.",
+  "settings.coreCardsSaveFailed":
+    "Não foi possível salvar a exibição dos cards.",
   "settings.description":
     "Informações da instalação e atualizações do Nexus Edge.",
   "settings.installationTitle": "Instalação",
@@ -780,10 +788,11 @@ const en: Record<TranslationKey, string> = {
   "dashboard.webhooksDescription": "Deliveries and attempts",
   "dashboard.pluginsDescription": "Installed modules",
   "dashboard.auditDescription": "Activity history",
-  "dashboard.searchModules": "Search modules and plugins",
+  "dashboard.settingsDescription": "Preferences and updates",
+  "dashboard.searchModules": "Search plugins and pages",
   "dashboard.openPlugin": "Open plugin",
   "dashboard.pluginWithoutPage": "Plugin without an available page",
-  "dashboard.noResults": "No modules or plugins match your search.",
+  "dashboard.noResults": "No cards match your search.",
   "dashboard.dragCard": "Drag {{name}} to reorder",
   "dashboard.savingOrder": "Saving overview order",
   "dashboard.orderSaveFailed": "Unable to save the overview order.",
@@ -935,6 +944,12 @@ const en: Record<TranslationKey, string> = {
   "permissionGroups.soletrando.child": "Spelling Practice — Children",
   "permissionGroups.additional": "Other module permissions",
   "settings.title": "General settings",
+  "settings.coreCardsTitle": "Show system menus as cards",
+  "settings.coreCardsDescription":
+    "Show sidebar shortcuts on the home screen. Plugins remain visible.",
+  "settings.coreCardsLoadFailed":
+    "Unable to load this preference. Refresh the page to try again.",
+  "settings.coreCardsSaveFailed": "Unable to save the card display preference.",
   "settings.description": "Installation information and Nexus Edge updates.",
   "settings.installationTitle": "Installation",
   "settings.installationDescription":

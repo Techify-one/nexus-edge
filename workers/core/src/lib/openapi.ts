@@ -174,6 +174,7 @@ const CORE_OPENAPI_DOCUMENT = {
         required: ["version", "itemOrder"],
         properties: {
           version: { type: "integer", const: 1 },
+          showCoreCards: { type: "boolean", default: false },
           itemOrder: {
             type: "array",
             maxItems: 128,

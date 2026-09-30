@@ -50,6 +50,7 @@ const overviewItemIdSchema = z
 export const overviewPreferenceConfigSchema = z
   .object({
     version: z.literal(1),
+    showCoreCards: z.boolean().optional(),
     itemOrder: z
       .array(overviewItemIdSchema)
       .max(128)

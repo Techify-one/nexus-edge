@@ -35,7 +35,7 @@ describe("Overview navigation", () => {
     ).toEqual(["core.groups", "plugin.crm", "core.users"]);
   });
 
-  it("renders Core modules and plugins as peers under one search", async () => {
+  it("shows only plugins by default and searches the visible cards", async () => {
     ability.update([{ action: "manage", subject: "all" }]);
     vi.stubGlobal(
       "fetch",
@@ -103,24 +103,21 @@ describe("Overview navigation", () => {
     expect(
       screen.getByRole("link", { name: /Meta Ads/ }).getAttribute("href"),
     ).toBe("/app/p/meta_ads");
-    expect(
-      screen
-        .getByRole("link", { name: /Chaves de API|API keys/ })
-        .getAttribute("href"),
-    ).toBe("/app/settings/api-keys");
     for (const moduleName of [
       "Usuários|Users",
       "Grupos|Groups",
+      "Chaves de API|API keys",
       "Webhooks",
       "Plugins",
       "Auditoria|Audit",
+      "Configurações gerais|General settings",
     ])
       expect(
-        screen.getByRole("link", { name: new RegExp(moduleName) }),
-      ).toBeTruthy();
+        screen.queryByRole("link", { name: new RegExp(moduleName) }),
+      ).toBeNull();
 
     const search = screen.getByRole("textbox", {
-      name: /Buscar módulos e plugins|Search modules and plugins/,
+      name: /Buscar plugins e páginas|Search plugins and pages/,
     });
     fireEvent.change(search, { target: { value: "contas" } });
 
@@ -131,11 +128,10 @@ describe("Overview navigation", () => {
     expect(screen.getByRole("link", { name: /Meta Ads/ })).toBeTruthy();
 
     fireEvent.change(search, { target: { value: "api-keys" } });
-
-    expect(
-      screen.getByRole("link", { name: /Chaves de API|API keys/ }),
-    ).toBeTruthy();
     expect(screen.queryByRole("link", { name: /Meta Ads/ })).toBeNull();
+    expect(
+      screen.queryByRole("link", { name: /Chaves de API|API keys/ }),
+    ).toBeNull();
   });
 
   it("loads each user's saved module and plugin order", async () => {
@@ -149,6 +145,7 @@ describe("Overview navigation", () => {
             config: {
               version: 1,
               itemOrder: ["plugin.crm", "core.groups", "core.users"],
+              showCoreCards: true,
             },
             updatedAt: 123,
           });

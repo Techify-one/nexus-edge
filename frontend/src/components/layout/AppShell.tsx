@@ -14,7 +14,7 @@ import {
   Webhook,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { queryClient } from "../../app/query-client.js";
 import { can } from "../../lib/ability.js";
@@ -86,15 +86,7 @@ export function resolveCoreNavigationLabel(pathname: string): TranslationKey {
 export function AppShell() {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
-  const [sidebarHidden, setSidebarHidden] = useState(() => {
-    try {
-      const hidden = window.localStorage.getItem("nexus.sidebar.hidden");
-      if (hidden !== null) return hidden === "true";
-      return window.localStorage.getItem("nexus.sidebar.collapsed") === "true";
-    } catch {
-      return false;
-    }
-  });
+  const [sidebarHidden, setSidebarHidden] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
   const pluginId =
@@ -113,19 +105,10 @@ export function AppShell() {
     if (!pluginBackTarget) return;
     window.location.assign(pluginBackTarget);
   };
+  const isHome = location.pathname === "/app";
   const pageTitle = pluginId
     ? (pluginName ?? pluginId.replaceAll("_", " "))
     : t(resolveCoreNavigationLabel(location.pathname));
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(
-        "nexus.sidebar.hidden",
-        String(sidebarHidden),
-      );
-    } catch {
-      // The menu still works when browser storage is unavailable.
-    }
-  }, [sidebarHidden]);
   const logout = async () => {
     await api("/api/auth/sign-out", { method: "POST" });
     queryClient.clear();
@@ -133,14 +116,8 @@ export function AppShell() {
   };
   const nav = () => (
     <>
-      <div className="flex h-16 items-center gap-3 border-b px-5">
-        <div className="grid h-9 w-9 place-items-center rounded-xl bg-indigo-600 font-black text-white">
-          {APP_MARK}
-        </div>
-        <div>
-          <div className="font-bold">{APP_NAME}</div>
-          <div className="text-xs text-slate-500">Edge Runtime</div>
-        </div>
+      <div className="flex h-16 items-center border-b px-5 font-semibold">
+        {t("nav.main")}
       </div>
       <nav className="space-y-1 p-3" aria-label={t("nav.main")}>
         {items
@@ -203,9 +180,17 @@ export function AppShell() {
             {!pluginId && (
               <Button
                 variant="ghost"
-                className="px-2 lg:hidden"
-                onClick={() => setOpen(true)}
-                aria-label={t("nav.openMenu")}
+                className="px-2"
+                onClick={() => {
+                  if (window.matchMedia("(min-width: 1024px)").matches) {
+                    setSidebarHidden((current) => !current);
+                  } else {
+                    setOpen((current) => !current);
+                  }
+                }}
+                aria-label={
+                  sidebarHidden ? t("nav.openMenu") : t("nav.closeMenu")
+                }
               >
                 <Menu className="h-5 w-5" />
               </Button>
@@ -223,7 +208,23 @@ export function AppShell() {
                 {t("common.back")}
               </Button>
             )}
-            <p className="text-sm font-semibold text-slate-700">{pageTitle}</p>
+            {isHome ? (
+              <div className="flex items-center gap-2.5">
+                <span
+                  className="grid h-9 w-9 place-items-center rounded-xl bg-indigo-600 font-black text-white"
+                  aria-hidden
+                >
+                  {APP_MARK}
+                </span>
+                <span className="text-sm font-bold text-slate-700">
+                  {APP_NAME}
+                </span>
+              </div>
+            ) : (
+              <p className="text-sm font-semibold text-slate-700">
+                {pageTitle}
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />

@@ -23,6 +23,7 @@ import {
   Package,
   ScrollText,
   Search,
+  Settings,
   UserRoundCog,
   Users,
   Webhook,
@@ -31,7 +32,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { Card, Input, PageHeader, Skeleton } from "../components/ui/index.js";
+import { Card, Input, Skeleton } from "../components/ui/index.js";
 import { useI18n, type TranslationKey } from "../i18n/index.js";
 import { can } from "../lib/ability.js";
 import { api } from "../lib/api/core-client.js";
@@ -84,6 +85,14 @@ const coreModules = [
     icon: ScrollText,
     permission: "core.audit.read",
   },
+  {
+    id: "core.settings",
+    title: "nav.settings",
+    description: "dashboard.settingsDescription",
+    to: "/app/settings/general",
+    icon: Settings,
+    permission: "core.settings.read",
+  },
 ] satisfies Array<{
   id: string;
   title: TranslationKey;
@@ -108,7 +117,11 @@ type OverviewCard = {
   searchTerms: string[];
 };
 
-type OverviewPreferenceConfig = { version: 1; itemOrder: string[] };
+type OverviewPreferenceConfig = {
+  version: 1;
+  itemOrder: string[];
+  showCoreCards?: boolean;
+};
 type OverviewPreferenceResponse = {
   config: OverviewPreferenceConfig | null;
   updatedAt: string | number | null;
@@ -302,7 +315,11 @@ export default function DashboardPage() {
         preference.data?.config?.itemOrder,
         availableIds,
       );
-      latestConfig.current = { version: 1, itemOrder: normalized };
+      latestConfig.current = {
+        version: 1,
+        itemOrder: normalized,
+        showCoreCards: preference.data?.config?.showCoreCards ?? false,
+      };
       setCardOrder(normalized);
       setHydrated(true);
       return;
@@ -321,7 +338,11 @@ export default function DashboardPage() {
     preference.isPending,
   ]);
 
-  latestConfig.current = { version: 1, itemOrder: cardOrder };
+  latestConfig.current = {
+    version: 1,
+    itemOrder: cardOrder,
+    showCoreCards: preference.data?.config?.showCoreCards ?? false,
+  };
 
   const flushPreference = useCallback(() => {
     if (!hydrated || !shouldFlush.current) return;
@@ -343,7 +364,10 @@ export default function DashboardPage() {
   const orderedCards = normalizeOverviewOrder(cardOrder, availableIds).flatMap(
     (id) => {
       const card = cardById.get(id);
-      return card ? [card] : [];
+      return card &&
+        (preference.data?.config?.showCoreCards || !id.startsWith("core."))
+        ? [card]
+        : [];
     },
   );
   const visibleCards = filterOverviewCards(orderedCards, search);
@@ -363,7 +387,11 @@ export default function DashboardPage() {
       String(active.id),
       String(over.id),
     );
-    const config: OverviewPreferenceConfig = { version: 1, itemOrder };
+    const config: OverviewPreferenceConfig = {
+      version: 1,
+      itemOrder,
+      showCoreCards: latestConfig.current.showCoreCards ?? false,
+    };
     latestConfig.current = config;
     shouldFlush.current = true;
     setCardOrder(itemOrder);
@@ -381,25 +409,19 @@ export default function DashboardPage() {
 
   return (
     <>
-      <PageHeader
-        title={t("dashboard.title")}
-        description={t("dashboard.description")}
-        action={
-          <div className="relative w-full sm:w-80">
-            <Search
-              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-              aria-hidden
-            />
-            <Input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              className="pl-9"
-              placeholder={t("dashboard.searchModules")}
-              aria-label={t("dashboard.searchModules")}
-            />
-          </div>
-        }
-      />
+      <div className="relative mb-5 w-full sm:max-w-[40rem]">
+        <Search
+          className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+          aria-hidden
+        />
+        <Input
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          className="pl-9"
+          placeholder={t("dashboard.searchModules")}
+          aria-label={t("dashboard.searchModules")}
+        />
+      </div>
       {loading ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {Array.from({ length: 6 }, (_, index) => (
