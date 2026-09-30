@@ -726,10 +726,10 @@ marketplacesRoutes.post(
           const releaseId = `rel_${(await sha256(`${source.id}:${plugin.id}:${release.channel}:${release.version}`)).slice(0, 40)}`;
           statements.push({
             sql: `INSERT INTO plugin_releases(id, marketplace_id, plugin_id, publisher_id,
-                    publisher_name, version, channel, description, manifest_json, artifact_url,
+                    publisher_name, version, channel, description, changelog, manifest_json, artifact_url,
                     artifact_sha256, artifact_signature, package_bytes, compatible,
                     compatibility_reason, published_at, discovered_at)
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             params: [
               releaseId,
               source.id,
@@ -739,6 +739,7 @@ marketplacesRoutes.post(
               release.version,
               release.channel,
               plugin.description,
+              release.changelog ?? null,
               JSON.stringify(release.manifest),
               release.artifact.url,
               release.artifact.sha256,
@@ -821,6 +822,7 @@ marketplacesRoutes.get(
       version: string;
       channel: string;
       description: string;
+      changelog: string | null;
       manifest: unknown;
       compatible: number | boolean;
       compatibilityReason: string | null;
@@ -833,7 +835,7 @@ marketplacesRoutes.get(
     }>(
       `SELECT r.id, r.marketplace_id AS "marketplaceId", m.name AS "marketplaceName",
               r.plugin_id AS "pluginId", r.publisher_id AS "publisherId",
-              r.publisher_name AS "publisherName", r.version, r.channel, r.description,
+              r.publisher_name AS "publisherName", r.version, r.channel, r.description, r.changelog,
               r.manifest_json AS manifest, r.compatible,
               r.compatibility_reason AS "compatibilityReason", r.package_bytes AS "packageBytes",
               m.trust_state AS "trustState", m.catalog_expires_at AS "catalogExpiresAt",
@@ -981,6 +983,7 @@ marketplacesRoutes.post("/plugin-catalog/:releaseId/package", async (c) => {
     id: string;
     pluginId: string;
     version: string;
+    marketplaceId: string;
     artifactUrl: string;
     manifest: unknown;
     artifactSha256: string;
@@ -996,7 +999,7 @@ marketplacesRoutes.post("/plugin-catalog/:releaseId/package", async (c) => {
     catalogExpiresAt: unknown;
   }>(
     `SELECT r.id, r.plugin_id AS "pluginId", r.version,
-            r.artifact_url AS "artifactUrl", r.manifest_json AS manifest,
+            r.marketplace_id AS "marketplaceId", r.artifact_url AS "artifactUrl", r.manifest_json AS manifest,
             r.artifact_sha256 AS "artifactSha256", r.artifact_signature AS "artifactSignature",
             r.package_bytes AS "packageBytes", r.channel, m.owner, m.repository,
             m.trusted_public_key AS "publicKey", r.compatible, m.enabled,
@@ -1014,8 +1017,9 @@ marketplacesRoutes.post("/plugin-catalog/:releaseId/package", async (c) => {
     );
   const installed = await c
     .get("db")
-    .first<{ version: string; status: string }>(
-      `SELECT installed_version AS version, status FROM plugins
+    .first<{ version: string; status: string; marketplaceId: string | null }>(
+      `SELECT installed_version AS version, status,
+              marketplace_id AS "marketplaceId" FROM plugins
         WHERE id = ? AND status IN ('installed','disabled')`,
       [release.pluginId],
     );
@@ -1037,6 +1041,15 @@ marketplacesRoutes.post("/plugin-catalog/:releaseId/package", async (c) => {
       409,
       "PLUGIN_RELEASE_UNAVAILABLE",
       "This plugin release is not available for this Core.",
+    );
+  if (
+    installed?.marketplaceId &&
+    installed.marketplaceId !== release.marketplaceId
+  )
+    throw new AppError(
+      409,
+      "PLUGIN_MARKETPLACE_ORIGIN_CHANGED",
+      "Use an explicit publisher reassociation procedure before changing this plugin marketplace.",
     );
   if (installed?.status === "disabled")
     throw new AppError(

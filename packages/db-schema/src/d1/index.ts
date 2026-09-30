@@ -473,6 +473,7 @@ export const pluginReleases = sqliteTable(
     version: text("version").notNull(),
     channel: text("channel").notNull().default("stable"),
     description: text("description").notNull().default(""),
+    changelog: text("changelog"),
     manifestJson: text("manifest_json").notNull(),
     artifactUrl: text("artifact_url").notNull(),
     artifactSha256: text("artifact_sha256").notNull(),

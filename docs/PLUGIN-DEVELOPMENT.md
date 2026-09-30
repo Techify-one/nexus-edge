@@ -301,7 +301,8 @@ um bundle Node cru. A chave privada pertence ao CI/secret manager e jamais é
 commitada, impressa ou enviada ao Core.
 
 Publique o `.plugin.zip` como asset imutável de um GitHub Release no
-repositório do marketplace e gere o catálogo assinado conforme
+repositório do marketplace. Registre as alterações da versão em `catalog.json`,
+no campo opcional `changelog` (texto simples, até 10.000 caracteres), e gere o catálogo assinado conforme
 `docs/PLUGIN-MARKETPLACE.md`. Pacotes formato 2 não são versionados no
 repositório do Core.
 

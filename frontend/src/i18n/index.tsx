@@ -422,6 +422,14 @@ const ptBR = {
   "plugins.available": "Disponível",
   "plugins.alreadyInstalled": "Já instalado",
   "plugins.updateAvailable": "Atualização disponível",
+  "plugins.updateFromFile": "Atualizar por arquivo",
+  "plugins.changelog": "O que mudou nesta versão",
+  "plugins.noChangelog": "Notas desta versão não disponíveis.",
+  "plugins.updateVersions": "Versão {{current}} para {{next}}",
+  "plugins.updateIncompatible":
+    "Esta versão não é compatível com esta instalação.",
+  "plugins.updateUnavailable":
+    "Este marketplace precisa ser sincronizado novamente antes da atualização.",
   "plugins.packageSize": "Tamanho do pacote",
   "plugins.pluginDetails": "Detalhes do plugin",
   "plugins.catalogEmpty":
@@ -1058,6 +1066,14 @@ const en: Record<TranslationKey, string> = {
   "plugins.available": "Available",
   "plugins.alreadyInstalled": "Already installed",
   "plugins.updateAvailable": "Update available",
+  "plugins.updateFromFile": "Update from file",
+  "plugins.changelog": "What changed in this release",
+  "plugins.noChangelog": "Release notes are not available for this version.",
+  "plugins.updateVersions": "Version {{current}} to {{next}}",
+  "plugins.updateIncompatible":
+    "This version is not compatible with this installation.",
+  "plugins.updateUnavailable":
+    "This marketplace must be synchronized again before updating.",
   "plugins.packageSize": "Package size",
   "plugins.pluginDetails": "Plugin details",
   "plugins.catalogEmpty":

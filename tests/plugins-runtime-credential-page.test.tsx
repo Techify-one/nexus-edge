@@ -1,6 +1,7 @@
 /* @vitest-environment jsdom */
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { strToU8, zipSync } from "fflate";
 import {
   cleanup,
   fireEvent,
@@ -32,6 +33,7 @@ function renderPage(
     plugins?: Array<Record<string, unknown>>;
     catalog?: Array<Record<string, unknown>>;
     marketplaces?: Array<Record<string, unknown>>;
+    packageBytes?: Uint8Array;
   } = {},
 ) {
   const accountId = "a".repeat(32);
@@ -44,6 +46,11 @@ function renderPage(
       requests.push(url);
       if (url.endsWith("/sync") && init?.method === "POST") {
         syncRequests.push(url);
+      }
+      if (url.endsWith("/package") && options.packageBytes) {
+        return new Response(options.packageBytes.slice().buffer, {
+          headers: { "X-Plugin-Release-Id": "rel_meta_ads_210" },
+        });
       }
       const body = url.endsWith("/api/v1/plugins")
         ? {
@@ -307,6 +314,130 @@ describe("plugin runtime credential onboarding", () => {
     expect(
       screen.getByRole("button", { name: /^(Desativar|Deactivate)$/ }),
     ).toBeTruthy();
+  });
+
+  it("shows an update with release notes before downloading its package", async () => {
+    const { requests } = renderPage(true, {
+      plugins: [
+        {
+          id: "meta_ads",
+          name: "Meta Ads",
+          marketplaceId: "mkt_techfire",
+          installedVersion: "2.0.0",
+          apiVersion: 1,
+          databaseProvider: "d1",
+          workerName: "app-plugin-meta-ads",
+          status: "installed",
+          installedAt: Date.now(),
+          packageAvailable: true,
+        },
+      ],
+      packageBytes: zipSync({
+        "manifest.json": strToU8(
+          JSON.stringify({
+            id: "meta_ads",
+            name: "Meta Ads",
+            version: "2.1.0",
+            coreMinVersion: "1.0.0",
+            permissions: [],
+            menu: [],
+            databaseDialects: [],
+          }),
+        ),
+        "backend/worker.mjs": strToU8("export default {}"),
+      }),
+      catalog: [
+        {
+          id: "rel_meta_ads_210",
+          marketplaceId: "mkt_techfire",
+          marketplaceName: "Techfire Plugins",
+          pluginId: "meta_ads",
+          publisherId: "techfire",
+          publisherName: "Techfire",
+          version: "2.1.0",
+          changelog: "Correções de relatórios e novos filtros.",
+          description: "Plugin Meta Ads",
+          compatible: true,
+          compatibilityReason: null,
+          packageBytes: 2048,
+          installedVersion: "2.0.0",
+          installedStatus: "installed",
+          updateAvailable: true,
+          sourceMatches: true,
+        },
+      ],
+    });
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: /^(Atualização disponível|Update available) Meta Ads$/,
+      }),
+    );
+    expect(
+      await screen.findByText("Correções de relatórios e novos filtros."),
+    ).toBeTruthy();
+    expect(screen.getByText(/2\.0\.0.*2\.1\.0/u)).toBeTruthy();
+    expect(requests).not.toContain(
+      "/api/v1/plugin-catalog/rel_meta_ads_210/package",
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /^(Atualizar|Update)$/ }),
+    );
+    await waitFor(() => {
+      expect(requests).toContain(
+        "/api/v1/plugin-catalog/rel_meta_ads_210/package",
+      );
+    });
+    expect(await screen.findByText("Worker gzip")).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: /^(Atualizar|Update)$/ }),
+    ).toBeTruthy();
+    expect(requests).not.toContain("/api/v1/plugin-operations");
+  });
+
+  it("does not offer cross-source updates on installed plugins", async () => {
+    renderPage(true, {
+      plugins: [
+        {
+          id: "meta_ads",
+          name: "Meta Ads",
+          marketplaceId: "mkt_techfire",
+          installedVersion: "2.0.0",
+          apiVersion: 1,
+          databaseProvider: "d1",
+          workerName: "app-plugin-meta-ads",
+          status: "installed",
+          installedAt: Date.now(),
+          packageAvailable: true,
+        },
+      ],
+      catalog: [
+        {
+          id: "rel_foreign",
+          marketplaceId: "mkt_other",
+          marketplaceName: "Other",
+          pluginId: "meta_ads",
+          publisherId: "other",
+          publisherName: "Other",
+          version: "3.0.0",
+          changelog: "Changes",
+          description: "Plugin Meta Ads",
+          compatible: true,
+          compatibilityReason: null,
+          packageBytes: 2048,
+          installedVersion: "2.0.0",
+          installedStatus: "installed",
+          updateAvailable: true,
+          sourceMatches: false,
+        },
+      ],
+    });
+    expect(await screen.findByText("Meta Ads")).toBeTruthy();
+    expect(
+      screen.queryByRole("button", {
+        name: /^(Atualização disponível|Update available) Meta Ads$/,
+      }),
+    ).toBeNull();
   });
 
   it("offers activation and uninstall separately for a disabled plugin", async () => {

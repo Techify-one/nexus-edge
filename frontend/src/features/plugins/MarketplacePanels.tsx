@@ -23,6 +23,10 @@ import {
 import { useI18n } from "../../i18n/index.js";
 import { can } from "../../lib/ability.js";
 import { api } from "../../lib/api/core-client.js";
+import {
+  downloadCatalogRelease,
+  type CatalogRelease,
+} from "./catalog-release.js";
 
 type Marketplace = {
   id: string;
@@ -35,24 +39,6 @@ type Marketplace = {
   keyFingerprint: string | null;
   lastSyncedAt: string | number | null;
   lastErrorCode: string | null;
-};
-
-type CatalogRelease = {
-  id: string;
-  marketplaceId: string;
-  marketplaceName: string;
-  pluginId: string;
-  publisherId: string;
-  publisherName: string;
-  version: string;
-  description: string;
-  compatible: boolean | number;
-  compatibilityReason: string | null;
-  packageBytes: number | null;
-  installedVersion: string | null;
-  installedStatus: string | null;
-  updateAvailable: boolean;
-  sourceMatches: boolean;
 };
 
 export function MarketplacePanels({
@@ -184,27 +170,11 @@ export function MarketplacePanels({
   });
   const download = useMutation({
     mutationFn: async (release: CatalogRelease) => {
-      const response = await fetch(
-        `/api/v1/plugin-catalog/${encodeURIComponent(release.id)}/package`,
-        { method: "POST", credentials: "include" },
+      const { file, releaseId } = await downloadCatalogRelease(
+        release,
+        t("plugins.marketplaceDownloadFailed"),
       );
-      if (!response.ok) {
-        const body = (await response.json().catch(() => null)) as {
-          error?: { message?: string };
-        } | null;
-        throw new Error(
-          body?.error?.message || t("plugins.marketplaceDownloadFailed"),
-        );
-      }
-      const blob = await response.blob();
-      const releaseId = response.headers.get("X-Plugin-Release-Id");
-      if (!releaseId) throw new Error(t("plugins.marketplaceDownloadFailed"));
-      await onSelectPackage(
-        new File([blob], `${release.pluginId}.plugin.zip`, {
-          type: "application/zip",
-        }),
-        releaseId,
-      );
+      await onSelectPackage(file, releaseId);
       setSelectedRelease(null);
     },
     onError: (error: Error) => toast.error(error.message),
@@ -668,6 +638,14 @@ export function MarketplacePanels({
               </h3>
               <p className="mt-2 whitespace-pre-wrap break-words text-sm text-slate-700">
                 {selectedRelease.description || "—"}
+              </p>
+            </section>
+            <section>
+              <h3 className="text-sm font-semibold">
+                {t("plugins.changelog")}
+              </h3>
+              <p className="mt-2 whitespace-pre-wrap break-words text-sm text-slate-700">
+                {selectedRelease.changelog?.trim() || t("plugins.noChangelog")}
               </p>
             </section>
             <div className="flex justify-end gap-2">

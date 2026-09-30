@@ -30,6 +30,7 @@ O schema `catalogVersion: 1` contém:
 - nome/revisão do marketplace;
 - identidade, key ID e chave pública do publisher;
 - plugins, categorias e releases `stable` ou `beta`;
+- notas opcionais por versão no campo `changelog` do release, assinadas com o catálogo;
 - URL, tamanho, SHA-256 e assinatura do ZIP completo;
 - assinatura Ed25519 da representação canônica do catálogo sem o campo
   `signature`.
