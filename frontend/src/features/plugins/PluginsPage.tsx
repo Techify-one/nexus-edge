@@ -346,8 +346,6 @@ export default function PluginsPage() {
         plugin.status === "installed" &&
         release.updateAvailable &&
         release.sourceMatches &&
-        Boolean(plugin.marketplaceId) &&
-        release.marketplaceId === plugin.marketplaceId &&
         release.installedVersion === plugin.installedVersion,
     );
   const downloadUpdate = useMutation({

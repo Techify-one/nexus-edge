@@ -395,6 +395,49 @@ describe("plugin runtime credential onboarding", () => {
     expect(requests).not.toContain("/api/v1/plugin-operations");
   });
 
+  it("offers the update for a plugin installed without a recorded marketplace", async () => {
+    renderPage(true, {
+      plugins: [
+        {
+          id: "meeting_recorder",
+          name: "Meeting Recorder",
+          installedVersion: "2.0.4",
+          apiVersion: 1,
+          databaseProvider: "d1",
+          workerName: "app-plugin-meeting-recorder",
+          status: "installed",
+          installedAt: Date.now(),
+          packageAvailable: true,
+        },
+      ],
+      catalog: [
+        {
+          id: "rel_meeting_recorder_210",
+          marketplaceId: "mkt_techfire",
+          marketplaceName: "Techfire Plugins",
+          pluginId: "meeting_recorder",
+          publisherId: "techfire",
+          publisherName: "Techfire",
+          version: "2.1.0",
+          changelog: null,
+          description: "Meeting Recorder",
+          compatible: true,
+          compatibilityReason: null,
+          packageBytes: 2048,
+          installedVersion: "2.0.4",
+          installedStatus: "installed",
+          updateAvailable: true,
+          sourceMatches: true,
+        },
+      ],
+    });
+    expect(
+      await screen.findByRole("button", {
+        name: /^(Atualização disponível|Update available) Meeting Recorder$/,
+      }),
+    ).toBeTruthy();
+  });
+
   it("does not offer cross-source updates on installed plugins", async () => {
     renderPage(true, {
       plugins: [
