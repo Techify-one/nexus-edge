@@ -301,6 +301,13 @@ describe("plugin package format 2", () => {
       const parsed = await parsePluginArchive(readFileSync(output));
       expect(parsed.manifest.id).toBe("external_demo");
       expect(parsed.files).toHaveProperty("frontend/entry.js");
+      writeFileSync(
+        join(root, "catalog.json"),
+        JSON.stringify({
+          description: "External demo",
+          changelog: "New filters",
+        }),
+      );
       const catalogOutput = join(workspace, "nexus-marketplace.json");
       const key = privateKey
         .export({ format: "der", type: "pkcs8" })
@@ -318,12 +325,17 @@ describe("plugin package format 2", () => {
       expect(generated.pluginCount).toBe(1);
       const catalogSource = JSON.parse(readFileSync(catalogOutput, "utf8"));
       const catalog = marketplaceCatalogSchema.parse(catalogSource);
+      expect(catalog.plugins[0]?.releases[0]?.changelog).toBe("New filters");
       expect(
         catalog.plugins[0]?.releases[0]?.manifest.frontend?.persistentSurface,
       ).toBe(false);
       await expect(
         verifyCatalogSignature(catalogSource),
       ).resolves.toBeUndefined();
+      catalogSource.plugins[0].releases[0].changelog = "Altered notes";
+      await expect(verifyCatalogSignature(catalogSource)).rejects.toThrow(
+        "MARKETPLACE_SIGNATURE_INVALID",
+      );
     } finally {
       rmSync(workspace, { recursive: true, force: true });
     }

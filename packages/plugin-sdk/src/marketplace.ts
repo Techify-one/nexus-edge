@@ -60,6 +60,7 @@ export function generatePluginMarketplace(
     releases: Array<{
       version: string;
       channel: "stable";
+      changelog?: string;
       manifest: Record<string, unknown>;
       artifact: {
         url: string;
@@ -90,6 +91,7 @@ export function generatePluginMarketplace(
       ? (JSON.parse(readFileSync(catalogPath, "utf8")) as {
           category?: unknown;
           description?: unknown;
+          changelog?: unknown;
         })
       : undefined;
     if (
@@ -97,7 +99,10 @@ export function generatePluginMarketplace(
       ((catalogMetadata.category !== undefined &&
         typeof catalogMetadata.category !== "string") ||
         (catalogMetadata.description !== undefined &&
-          typeof catalogMetadata.description !== "string"))
+          typeof catalogMetadata.description !== "string") ||
+        (catalogMetadata.changelog !== undefined &&
+          (typeof catalogMetadata.changelog !== "string" ||
+            catalogMetadata.changelog.length > 10000)))
     )
       throw new Error(`${catalogPath} has invalid marketplace metadata.`);
     if (sourceManifest.packageFormat !== 2) continue;
@@ -137,6 +142,9 @@ export function generatePluginMarketplace(
         {
           version: sourceManifest.version,
           channel: "stable",
+          ...(typeof catalogMetadata?.changelog === "string"
+            ? { changelog: catalogMetadata.changelog }
+            : {}),
           manifest: sourceManifest,
           artifact: {
             url: `https://github.com/${options.repository}/releases/download/${encodeURIComponent(`${id}-v${sourceManifest.version}`)}/${id}.plugin.zip`,

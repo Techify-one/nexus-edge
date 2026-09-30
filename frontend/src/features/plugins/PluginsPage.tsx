@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Copy,
   Download,
+  DownloadCloud,
   ExternalLink,
   PackagePlus,
   Pencil,
@@ -44,6 +45,10 @@ import {
   type PluginSupportDiagnostic,
 } from "./support-report.js";
 import { MarketplacePanels } from "./MarketplacePanels.js";
+import {
+  downloadCatalogRelease,
+  type CatalogRelease,
+} from "./catalog-release.js";
 
 type Manifest = {
   id: string;
@@ -67,6 +72,7 @@ type Plugin = {
   id: string;
   name: string;
   installedVersion: string;
+  marketplaceId?: string | null;
   apiVersion: number;
   databaseProvider: string;
   workerName: string;
@@ -327,6 +333,31 @@ export default function PluginsPage() {
         items: Plugin[];
         runtimeCredential: PluginRuntimeCredential | null;
       }>("/api/v1/plugins"),
+  });
+  const catalog = useQuery({
+    queryKey: ["plugin-catalog"],
+    queryFn: () => api<{ items: CatalogRelease[] }>("/api/v1/plugin-catalog"),
+    enabled: activeTab === "installed",
+  });
+  const updateFor = (plugin: Plugin): CatalogRelease | undefined =>
+    catalog.data?.items.find(
+      (release) =>
+        release.pluginId === plugin.id &&
+        plugin.status === "installed" &&
+        release.updateAvailable &&
+        release.sourceMatches &&
+        Boolean(plugin.marketplaceId) &&
+        release.marketplaceId === plugin.marketplaceId &&
+        release.installedVersion === plugin.installedVersion,
+    );
+  const downloadUpdate = useMutation({
+    mutationFn: (release: CatalogRelease) =>
+      downloadCatalogRelease(release, t("plugins.marketplaceDownloadFailed")),
+    onSuccess: ({ file, releaseId }) => {
+      setSelected(null);
+      void choose(file, releaseId);
+    },
+    onError: (error: Error) => toast.error(error.message),
   });
   useEffect(() => {
     if (tab !== activeTab)
@@ -943,7 +974,22 @@ export default function PluginsPage() {
                 maxSize: 600,
                 sortValue: (row) => row.name,
                 render: (row) => (
-                  <span className="font-medium">{row.name}</span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">{row.name}</span>
+                    {updateFor(row) && (
+                      <button
+                        type="button"
+                        className="data-value data-value-warning rounded-full border px-2.5 py-1 text-xs font-semibold hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelected(row);
+                        }}
+                        aria-label={`${t("plugins.updateAvailable")} ${row.name}`}
+                      >
+                        {t("plugins.updateAvailable")}
+                      </button>
+                    )}
+                  </div>
                 ),
               },
               {
@@ -1349,7 +1395,54 @@ export default function PluginsPage() {
                 <dd>{stateLabel(selected.status)}</dd>
               </div>
             </dl>
+            {updateFor(selected) && (
+              <section className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <h3 className="font-semibold text-amber-900">
+                  {t("plugins.updateAvailable")}
+                </h3>
+                <p className="text-amber-900">
+                  {t("plugins.updateVersions", {
+                    current: selected.installedVersion,
+                    next: updateFor(selected)!.version,
+                  })}
+                  {" · "}
+                  {updateFor(selected)!.marketplaceName}
+                </p>
+                <div>
+                  <h4 className="font-semibold text-amber-900">
+                    {t("plugins.changelog")}
+                  </h4>
+                  <p className="mt-1 whitespace-pre-wrap break-words text-amber-950">
+                    {updateFor(selected)!.changelog?.trim() ||
+                      t("plugins.noChangelog")}
+                  </p>
+                </div>
+                {!Boolean(updateFor(selected)!.compatible) && (
+                  <p className="font-medium text-amber-900">
+                    {updateFor(selected)!.compatibilityReason ===
+                    "marketplace_revalidation_required"
+                      ? t("plugins.updateUnavailable")
+                      : t("plugins.updateIncompatible")}
+                  </p>
+                )}
+                {!canUpdate && (
+                  <p className="font-medium text-amber-900">
+                    {t("plugins.permissionRequired")}
+                  </p>
+                )}
+              </section>
+            )}
             <div className="flex justify-end gap-2">
+              {updateFor(selected) && canUpdate && (
+                <Button
+                  busy={downloadUpdate.isPending}
+                  disabled={!Boolean(updateFor(selected)!.compatible)}
+                  onClick={() => downloadUpdate.mutate(updateFor(selected)!)}
+                >
+                  <DownloadCloud className="h-4 w-4" />
+                  {t("plugins.update")}
+                </Button>
+              )}
               {canExport &&
                 ["installed", "disabled"].includes(selected.status) && (
                   <Button
@@ -1376,7 +1469,7 @@ export default function PluginsPage() {
                   }}
                 >
                   <Pencil className="h-4 w-4" />
-                  {t("plugins.update")}
+                  {t("plugins.updateFromFile")}
                 </Button>
               )}
               {canUpdate &&

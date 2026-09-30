@@ -24,6 +24,7 @@ const releaseSchema = z
         bytes: z.number().int().positive().max(MAX_PLUGIN_PACKAGE_BYTES),
       })
       .strict(),
+    changelog: z.string().max(10000).optional(),
     publishedAt: z.iso.datetime().optional(),
   })
   .strict();

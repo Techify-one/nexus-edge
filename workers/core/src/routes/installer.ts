@@ -1077,7 +1077,7 @@ installerRoutes.get(
       runtimeCredential,
       items: await c.get("db").query(
         `SELECT p.id, p.name, p.installed_version AS "installedVersion", p.api_version AS "apiVersion",
-                  p.active_database_provider AS "databaseProvider", p.worker_name AS "workerName", p.status,
+                  p.active_database_provider AS "databaseProvider", p.worker_name AS "workerName", p.status,\n                  p.marketplace_id AS "marketplaceId",
                   p.installed_at AS "installedAt", p.updated_at AS "updatedAt",
                   (SELECT pr.status FROM plugin_runtime_resources pr
                     WHERE pr.plugin_id = p.id AND pr.binding_name = 'STORAGE') AS "runtimeStorageStatus",
