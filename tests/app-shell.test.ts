@@ -78,8 +78,9 @@ describe("application shell", () => {
     expect(shell).toContain(
       "const pluginBackTarget = resolvePluginBackTarget(",
     );
-    expect(shell).toContain("location.pathname,");
-    expect(shell).toContain("window.location.assign(pluginBackTarget)");
+    expect(shell).toContain("window.location.pathname,");
+    expect(shell).toContain("navigate(pluginBackTarget)");
+    expect(shell).not.toContain("window.location.assign(pluginBackTarget)");
     expect(shell).toContain("onClick={navigatePluginBack}");
     expect(shell).toContain('aria-label={t("common.back")}');
     expect(guide).toContain("O botão\n**Voltar** do Core");

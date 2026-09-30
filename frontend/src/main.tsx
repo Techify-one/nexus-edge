@@ -22,6 +22,7 @@ import { registerChunkRecovery } from "./lib/chunk-recovery.js";
 import { isReloadGuarded } from "./lib/reload-guard.js";
 import { initializeTheme } from "./theme/index.js";
 import { PluginPageHost } from "./plugins/PluginPageHost.js";
+import { synchronizeBrowserNavigation } from "./plugins/browser-navigation.js";
 import { PublicPluginPageHost } from "./plugins/PublicPluginPageHost.js";
 import "./styles/globals.css";
 
@@ -37,6 +38,8 @@ const GeneralSettingsPage = lazy(
 
 registerChunkRecovery();
 initializeTheme();
+const browserNavigation = synchronizeBrowserNavigation();
+if (import.meta.hot) import.meta.hot.dispose(browserNavigation.dispose);
 
 const pending = (
   <div className="space-y-4">
@@ -111,38 +114,41 @@ const AuthenticatedRouteErrorPage = () => {
   );
 };
 
-const router = createBrowserRouter([
-  { path: "/", element: <HomeRedirect /> },
-  { path: "/setup", element: <SetupPage /> },
-  { path: "/login", element: <LoginPage /> },
-  { path: "/accept-invite", element: <AcceptInvitePage /> },
-  {
-    path: "/app",
-    element: <AuthenticatedLayout />,
-    errorElement: <RouteErrorPage />,
-    children: [
-      {
-        element: <AuthenticatedContent />,
-        errorElement: <AuthenticatedRouteErrorPage />,
-        children: [
-          { index: true, element: <DashboardPage /> },
-          { path: "users", element: lazyElement(UsersPage) },
-          { path: "groups", element: lazyElement(GroupsPage) },
-          { path: "settings/api-keys", element: lazyElement(ApiKeysPage) },
-          { path: "settings/webhooks", element: lazyElement(WebhooksPage) },
-          { path: "plugins/:tab?", element: lazyElement(PluginsPage) },
-          { path: "audit", element: lazyElement(AuditPage) },
-          { path: "p/:pluginId/*", element: <PluginPageHost /> },
-          {
-            path: "settings/general",
-            element: lazyElement(GeneralSettingsPage),
-          },
-        ],
-      },
-    ],
-  },
-  { path: "*", element: <PublicPluginPageHost /> },
-]);
+const router = createBrowserRouter(
+  [
+    { path: "/", element: <HomeRedirect /> },
+    { path: "/setup", element: <SetupPage /> },
+    { path: "/login", element: <LoginPage /> },
+    { path: "/accept-invite", element: <AcceptInvitePage /> },
+    {
+      path: "/app",
+      element: <AuthenticatedLayout />,
+      errorElement: <RouteErrorPage />,
+      children: [
+        {
+          element: <AuthenticatedContent />,
+          errorElement: <AuthenticatedRouteErrorPage />,
+          children: [
+            { index: true, element: <DashboardPage /> },
+            { path: "users", element: lazyElement(UsersPage) },
+            { path: "groups", element: lazyElement(GroupsPage) },
+            { path: "settings/api-keys", element: lazyElement(ApiKeysPage) },
+            { path: "settings/webhooks", element: lazyElement(WebhooksPage) },
+            { path: "plugins/:tab?", element: lazyElement(PluginsPage) },
+            { path: "audit", element: lazyElement(AuditPage) },
+            { path: "p/:pluginId/*", element: <PluginPageHost /> },
+            {
+              path: "settings/general",
+              element: lazyElement(GeneralSettingsPage),
+            },
+          ],
+        },
+      ],
+    },
+    { path: "*", element: <PublicPluginPageHost /> },
+  ],
+  { window: browserNavigation.coreWindow },
+);
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

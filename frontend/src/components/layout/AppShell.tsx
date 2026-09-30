@@ -100,10 +100,13 @@ export function AppShell() {
   const pluginName = pluginRuntime.data?.plugins.find(
     (plugin) => plugin.pluginId === pluginId,
   )?.name;
-  const pluginBackTarget = resolvePluginBackTarget(location.pathname, []);
   const navigatePluginBack = () => {
+    const pluginBackTarget = resolvePluginBackTarget(
+      window.location.pathname,
+      [],
+    );
     if (!pluginBackTarget) return;
-    window.location.assign(pluginBackTarget);
+    void navigate(pluginBackTarget);
   };
   const isHome = location.pathname === "/app";
   const pageTitle = pluginId
@@ -195,7 +198,7 @@ export function AppShell() {
                 <Menu className="h-5 w-5" />
               </Button>
             )}
-            {pluginBackTarget && (
+            {pluginId && (
               <Button
                 type="button"
                 variant="ghost"

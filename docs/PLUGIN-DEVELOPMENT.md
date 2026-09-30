@@ -144,7 +144,10 @@ O cabeçalho continua pertencendo ao host: ele exibe o nome localizado do plugin
 e não mostra o acionador do menu lateral durante uma rota de plugin. A tela do
 plugin não repete esse nome em `PageHeader`, `h1` ou outro título global. O botão
 **Voltar** do Core retorna um nível da rota por vez, inclusive em deep links, e
-somente a raiz do plugin retorna para a visão geral do Core.
+somente a raiz do plugin retorna para a visão geral do Core. Esse retorno é
+uma navegação interna, sem recarregar a página ou interromper superfícies
+persistentes. O Core sincroniza as mudanças de History com roteadores próprios
+dos plugins, inclusive `pushState`, `replaceState` e Voltar/Avançar do navegador.
 
 As ações do plugin usam a sessão autenticada e as permissões declaradas. Não
 solicite novamente a senha da conta Nexus para configurar segredos, webhooks,
