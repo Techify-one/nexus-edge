@@ -41,7 +41,7 @@ type OverviewPreferenceResponse = {
 const overviewPreferenceQueryKey = ["me", "overview-preference"] as const;
 
 type GeneralSettings = {
-  channel: "beta";
+  channel: "stable" | "beta";
   currentVersion: string;
   provider: "d1" | "postgres";
   supported: boolean;
@@ -225,7 +225,11 @@ export default function GeneralSettingsPage() {
             <div>
               <dt className="text-slate-500">{t("settings.channel")}</dt>
               <dd className="mt-1">
-                <Badge tone="warning">Beta</Badge>
+                <Badge tone={data.channel === "beta" ? "warning" : "success"}>
+                  {data.channel === "beta"
+                    ? t("settings.channelBeta")
+                    : t("settings.channelStable")}
+                </Badge>
               </dd>
             </div>
             <div>
@@ -245,7 +249,11 @@ export default function GeneralSettingsPage() {
                 <h2 className="font-bold text-slate-900">
                   {t("settings.updatesTitle")}
                 </h2>
-                <Badge tone="warning">Beta</Badge>
+                <Badge tone={data.channel === "beta" ? "warning" : "success"}>
+                  {data.channel === "beta"
+                    ? t("settings.channelBeta")
+                    : t("settings.channelStable")}
+                </Badge>
               </div>
               <p className="mt-1 text-sm text-slate-500">
                 {t("settings.updatesDescription")}

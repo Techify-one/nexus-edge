@@ -1,10 +1,10 @@
-name: Publish Core update beta
+name: Publish Core update
 
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: Exact prerelease version from package.json (for example 1.1.0-beta.1)
+        description: Exact version from package.json (for example 1.1.0 or 1.2.0-beta.1)
         required: true
         type: string
 
@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: core-update-release
     concurrency:
-      group: core-update-beta-release
+      group: core-update-release
       cancel-in-progress: false
     env:
       CORE_UPDATE_PRIVATE_KEY_PKCS8_BASE64: ${{ secrets.CORE_UPDATE_PRIVATE_KEY_PKCS8_BASE64 }}
@@ -30,7 +30,7 @@ jobs:
       - uses: actions/setup-node@v7
         with: { node-version: 24, cache: pnpm }
       - run: pnpm install --frozen-lockfile
-      - name: Validate beta version
+      - name: Validate version
         run: |
           node --input-type=module <<'NODE'
           import { readFile } from "node:fs/promises";
@@ -38,9 +38,9 @@ jobs:
           const pkg = JSON.parse(await readFile("package.json", "utf8"));
           if (
             input !== input?.trim() ||
-            !/^\d+\.\d+\.\d+-[0-9A-Za-z.-]+$/.test(input ?? "")
+            !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(input ?? "")
           ) {
-            throw new Error("version must be a semantic prerelease");
+            throw new Error("version must be a semantic version");
           }
           if (pkg.version !== input) {
             throw new Error(`package.json is ${pkg.version}, not ${input}`);
@@ -54,10 +54,16 @@ jobs:
       - run: pnpm verify:artifacts
       - run: pnpm verify:bundle
       - run: pnpm core:update:release:build
-      - name: Publish signed GitHub prerelease
+      - name: Publish signed GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # A version with a prerelease suffix is published as a GitHub
+          # prerelease (beta channel); any other version is a stable release.
+          channel_flag="--latest"
+          if [[ "${CORE_DISTRIBUTION_VERSION}" == *-* ]]; then
+            channel_flag="--prerelease"
+          fi
           gh release create "nexus-v${CORE_DISTRIBUTION_VERSION}" \
             artifacts/core-update/nexus-edge-release.json \
             artifacts/core-update/nexus-edge-release.sig \
@@ -65,7 +71,7 @@ jobs:
             --target "${GITHUB_SHA}" \
             --title "Nexus Edge ${CORE_DISTRIBUTION_VERSION}" \
             --generate-notes \
-            --prerelease
+            "${channel_flag}"
 
   publish-installation-distribution:
     name: Publish latest Installer distribution

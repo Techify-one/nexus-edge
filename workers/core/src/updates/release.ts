@@ -51,8 +51,10 @@ export type VerifiedCoreRelease = {
   manifestHash: string;
 };
 
+export type CoreUpdateChannel = "stable" | "beta";
+
 export type CoreUpdateStatus = {
-  channel: "beta";
+  channel: CoreUpdateChannel;
   currentVersion: string;
   provider: CoreEnv["DATABASE_PROVIDER"];
   supported: boolean;
@@ -136,13 +138,20 @@ function assetUrl(release: GitHubRelease, name: string): GitHubAsset {
   return asset;
 }
 
+/** A version with a SemVer prerelease suffix belongs to the beta channel. */
+export const coreUpdateChannel = (version: string): CoreUpdateChannel =>
+  semver.prerelease(version) ? "beta" : "stable";
+
 function validateReleaseEnvelope(release: GitHubRelease): string {
-  if (release.draft || !release.prerelease)
-    throw new Error("UPDATE_RELEASE_NOT_BETA");
+  if (release.draft) throw new Error("UPDATE_RELEASE_DRAFT");
   const match = /^nexus-v(.+)$/u.exec(release.tag_name);
   const version = match?.[1];
-  if (!version || !semver.valid(version) || !semver.prerelease(version))
+  if (!version || !semver.valid(version))
     throw new Error("UPDATE_RELEASE_TAG_INVALID");
+  // The GitHub prerelease flag must agree with the signed version so a stable
+  // number can never be published as a prerelease, or the reverse.
+  if (Boolean(release.prerelease) !== (coreUpdateChannel(version) === "beta"))
+    throw new Error("UPDATE_RELEASE_CHANNEL_MISMATCH");
   const page = new URL(release.html_url);
   if (
     page.origin !== githubDownloadOrigin ||
@@ -207,11 +216,14 @@ export async function discoverLatestCoreRelease(
   const releases = await githubJson<GitHubRelease[]>(
     `/repos/${repository}/releases?per_page=20`,
   );
+  // A stable installation follows stable releases only. A beta installation
+  // follows both channels, so it can move to the stable release that follows.
+  const followsBeta = coreUpdateChannel(env.APP_VERSION) === "beta";
   const candidates = releases
     .filter((release) => {
       try {
-        validateReleaseEnvelope(release);
-        return true;
+        const version = validateReleaseEnvelope(release);
+        return followsBeta || coreUpdateChannel(version) === "stable";
       } catch {
         return false;
       }
@@ -242,7 +254,7 @@ export async function coreUpdateStatus(
   env: CoreEnv,
 ): Promise<CoreUpdateStatus> {
   const common = {
-    channel: "beta" as const,
+    channel: coreUpdateChannel(env.APP_VERSION),
     currentVersion: env.APP_VERSION,
     provider: env.DATABASE_PROVIDER,
     supported: env.DATABASE_PROVIDER === "d1",

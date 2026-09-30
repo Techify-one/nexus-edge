@@ -1,14 +1,18 @@
 # Atualizações do Nexus Edge
 
-O atualizador integrado usa exclusivamente prereleases assinadas do repositório
-`Techify-one/nexus-edge`. Nesta fase, o canal é **beta** e atende instalações
-Cloudflare com D1. PostgreSQL continua com o fluxo operacional de
+O atualizador integrado usa exclusivamente releases assinadas do repositório
+`Techify-one/nexus-edge`. O canal é definido pela versão instalada: uma versão
+com sufixo de pré-release (`1.1.0-beta.14`) está no canal **beta** e recebe betas
+e estáveis; uma versão sem sufixo (`1.1.0`) está no canal **estável** e recebe
+somente estáveis. Atende instalações Cloudflare com D1. PostgreSQL continua com o fluxo operacional de
 `DEPLOYMENT.md`.
 
 ## O que o botão faz
 
 1. Consulta a lista pública de releases do GitHub e seleciona a maior versão
-   semântica com tag `nexus-v<VERSÃO>` marcada como prerelease.
+   semântica com tag `nexus-v<VERSÃO>` que o canal da instalação aceita. A marca
+   de prerelease do GitHub precisa concordar com a versão assinada; uma
+   divergência descarta a release.
 2. Baixa `nexus-edge-release.json` e `nexus-edge-release.sig`, valida a
    assinatura Ed25519 incorporada no Core e fixa ID, versão e hash da release.
 3. Baixa `nexus-edge-update.zip` e valida tamanho e SHA-256 de cada módulo,
@@ -26,9 +30,13 @@ O usuário precisa ter `core.settings.update`, confirmar a senha e já ter
 cadastrado em **Plugins** o token limitado a `Account → Workers Scripts → Edit`.
 O token não é enviado ao GitHub nem gravado no banco.
 
-## Publicar uma beta
+## Publicar uma release
 
-Uma release beta nunca deve ser montada manualmente no painel do GitHub.
+Uma release nunca deve ser montada manualmente no painel do GitHub. Use uma
+versão com sufixo (`1.2.0-beta.1`) para beta e uma sem sufixo (`1.2.0`) para
+estável. Instalações anteriores à `1.1.0-beta.14` só enxergam pré-releases; por
+isso a primeira versão estável só deve sair depois que as instalações estiverem
+na `1.1.0-beta.14` ou posterior.
 
 1. Defina em `package.json`, `workers/core/package.json` e nos valores
    `APP_VERSION` dos arquivos Wrangler a mesma versão semântica, por exemplo
@@ -37,11 +45,11 @@ Uma release beta nunca deve ser montada manualmente no painel do GitHub.
    aditivas. Valide localmente conforme `DEPLOYMENT.md`.
 3. Faça commit, envie para `main` e espere o workflow `CI` concluir a validação
    e o deploy de produção.
-4. No GitHub Actions, execute **Publish Core update beta** informando exatamente
+4. No GitHub Actions, execute **Publish Core update** informando exatamente
    a versão presente em `package.json`.
 5. Espere o workflow repetir todas as validações, criar o pacote
    determinístico, assinar o manifesto no environment `core-update-release` e
-   publicar a prerelease `nexus-v<VERSÃO>` com os três assets fixos.
+   publicar a release `nexus-v<VERSÃO>` (prerelease apenas quando há sufixo) com os três assets fixos.
 6. O mesmo workflow chama **Publish Core distribution**, publica os objetos
    imutáveis usados pelo Installer e, depois do gate de canário, atualiza
    `stable.json`. Assim, toda nova instalação passa a usar essa mesma versão do

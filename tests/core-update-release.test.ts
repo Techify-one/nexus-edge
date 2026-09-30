@@ -55,16 +55,16 @@ const manifest = installerReleaseSchema.parse({
 
 const releaseUrl = "https://github.com/Techify-one/nexus-edge/releases";
 
-function fixture(signature: string) {
-  const download = `${releaseUrl}/download/nexus-v1.1.0-beta.2`;
+function fixture(signature: string, version = "1.1.0-beta.2") {
+  const download = `${releaseUrl}/download/nexus-v${version}`;
   return {
     id: 42,
-    tag_name: "nexus-v1.1.0-beta.2",
+    tag_name: `nexus-v${version}`,
     name: "Beta 2",
     body: "Notas seguras",
-    html_url: `${releaseUrl}/tag/nexus-v1.1.0-beta.2`,
+    html_url: `${releaseUrl}/tag/nexus-v${version}`,
     draft: false,
-    prerelease: true,
+    prerelease: version.includes("-"),
     published_at: "2026-08-26T12:00:00Z",
     assets: [
       {
@@ -153,5 +153,90 @@ describe("signed GitHub Core updates", () => {
           .toString("base64"),
       } as CoreEnv),
     ).rejects.toThrow("UPDATE_RELEASE_SIGNATURE_INVALID");
+  });
+  const stubGitHub = (
+    releases: unknown[],
+    signedManifest: typeof manifest,
+    signature: string,
+  ) =>
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input);
+        if (url.startsWith("https://api.github.com/"))
+          return Response.json(releases);
+        if (url.endsWith("nexus-edge-release.json"))
+          return new Response(canonicalJson(signedManifest));
+        if (url.endsWith("nexus-edge-release.sig"))
+          return new Response(signature);
+        throw new Error(`Unexpected fetch: ${url}`);
+      }),
+    );
+  const signed = (version: string) => {
+    const keys = generateKeyPairSync("ed25519");
+    const versioned = installerReleaseSchema.parse({
+      ...manifest,
+      appVersion: version,
+    });
+    const digest = createHash("sha256")
+      .update(canonicalJson(versioned))
+      .digest();
+    return {
+      versioned,
+      signature: sign(null, digest, keys.privateKey).toString("base64"),
+      publicKey: keys.publicKey
+        .export({ format: "der", type: "spki" })
+        .toString("base64"),
+    };
+  };
+
+  it("offers a stable release to a beta installation", async () => {
+    const { versioned, signature, publicKey } = signed("1.1.0");
+    stubGitHub([fixture(signature, "1.1.0")], versioned, signature);
+    const result = await discoverLatestCoreRelease({
+      APP_VERSION: "1.1.0-beta.14",
+      CORE_UPDATE_PUBLIC_KEY: publicKey,
+    } as CoreEnv);
+    expect(result).toMatchObject({
+      tag: "nexus-v1.1.0",
+      manifest: { appVersion: "1.1.0" },
+    });
+  });
+
+  it("ranks a stable release above the beta it follows", async () => {
+    const { versioned, signature, publicKey } = signed("1.1.0");
+    stubGitHub(
+      [fixture(signature, "1.1.0-beta.9"), fixture(signature, "1.1.0")],
+      versioned,
+      signature,
+    );
+    const result = await discoverLatestCoreRelease({
+      APP_VERSION: "1.1.0-beta.8",
+      CORE_UPDATE_PUBLIC_KEY: publicKey,
+    } as CoreEnv);
+    expect(result?.tag).toBe("nexus-v1.1.0");
+  });
+
+  it("keeps a stable installation on the stable channel", async () => {
+    const { versioned, signature, publicKey } = signed("1.2.0-beta.1");
+    stubGitHub([fixture(signature, "1.2.0-beta.1")], versioned, signature);
+    await expect(
+      discoverLatestCoreRelease({
+        APP_VERSION: "1.1.0",
+        CORE_UPDATE_PUBLIC_KEY: publicKey,
+      } as CoreEnv),
+    ).resolves.toBeNull();
+  });
+
+  it("rejects a release whose prerelease flag disagrees with its version", async () => {
+    const { versioned, signature, publicKey } = signed("1.1.0");
+    const mislabeled = { ...fixture(signature, "1.1.0"), prerelease: true };
+    stubGitHub([mislabeled], versioned, signature);
+    await expect(
+      discoverLatestCoreRelease({
+        APP_VERSION: "1.1.0-beta.14",
+        CORE_UPDATE_PUBLIC_KEY: publicKey,
+      } as CoreEnv),
+    ).resolves.toBeNull();
   });
 });
