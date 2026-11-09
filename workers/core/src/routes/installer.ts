@@ -1696,6 +1696,7 @@ installerRoutes.post(
         c.env.CF_ACCOUNT_ID,
         requestedName,
         provisionMode,
+        c.env.CORE_WORKER_NAME,
       );
       if (provisionMode === "create" && !result.created && !existing)
         throw new R2ProvisioningError("bucket_conflict");
@@ -1972,6 +1973,7 @@ installerRoutes.post(
                 name: requestedName,
                 ...(requestedId ? { id: requestedId } : {}),
               },
+        c.env.CORE_WORKER_NAME,
       );
       const verifiedAt = dbTime(db);
       await db.execute(
@@ -2213,6 +2215,7 @@ installerRoutes.post(
         c.env.CF_ACCOUNT_ID,
         requestedName,
         provisionMode,
+        c.env.CORE_WORKER_NAME,
       );
       if (provisionMode === "create" && !result.created && !existing)
         throw new R2ProvisioningError("bucket_conflict");
@@ -2454,6 +2457,7 @@ installerRoutes.post(
                   : {}),
               }
             : { type: "queue", mode, name, ...(id ? { id } : {}) },
+        c.env.CORE_WORKER_NAME,
       );
       const resolved: PluginRuntimeResource = {
         logicalName,

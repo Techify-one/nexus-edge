@@ -289,6 +289,7 @@ export async function provisionR2Bucket(
   accountId: string,
   bucketName: string,
   mode: "create" | "attach",
+  knownWorkerName?: string,
 ): Promise<{ name: string; created: boolean }> {
   if (
     !/^[a-f0-9]{32}$/u.test(accountId) ||
@@ -318,11 +319,38 @@ export async function provisionR2Bucket(
         throw error;
       }
     };
-    const [workersDenied, d1Denied] = await Promise.all([
-      denied(`${accountPath(accountId)}/workers/scripts`),
+    const workersDenied = async (): Promise<boolean> => {
+      let scripts: unknown;
+      try {
+        scripts = await cloudflareRequest<unknown>(
+          token,
+          `${accountPath(accountId)}/workers/scripts`,
+        );
+      } catch (error) {
+        if (cloudflarePermissionDenied(error)) return true;
+        throw error;
+      }
+      // Account-owned R2-only tokens can receive a filtered empty inventory.
+      // An empty list is not proof of denial: probe the known host Worker and
+      // accept only an explicit permission failure. A successful or missing
+      // Worker remains unproven and must fail closed.
+      if (
+        !Array.isArray(scripts) ||
+        scripts.length !== 0 ||
+        !knownWorkerName ||
+        !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,62}$/u.test(knownWorkerName)
+      )
+        return false;
+      return denied(
+        `${accountPath(accountId)}/workers/scripts/${encodeURIComponent(knownWorkerName)}/settings`,
+      );
+    };
+    const [noWorkersAccess, d1Denied] = await Promise.all([
+      workersDenied(),
       denied(`${accountPath(accountId)}/d1/database?per_page=1`),
     ]);
-    if (!workersDenied || !d1Denied) throw new R2ProvisioningError("too_broad");
+    if (!noWorkersAccess || !d1Denied)
+      throw new R2ProvisioningError("too_broad");
 
     const path = `${accountPath(accountId)}/r2/buckets/${encodeURIComponent(bucketName)}`;
     let exists = false;
@@ -391,6 +419,7 @@ export async function provisionPluginResource(
         name: string;
         id?: string | undefined;
       },
+  knownWorkerName?: string,
 ): Promise<{
   externalId: string | null;
   externalName: string;
@@ -410,6 +439,7 @@ export async function provisionPluginResource(
         accountId,
         request.name,
         request.mode,
+        knownWorkerName,
       );
       return {
         externalId: null,

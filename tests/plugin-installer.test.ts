@@ -1249,6 +1249,136 @@ describe("Cloudflare plugin bindings", () => {
     ).resolves.toEqual({ name: "nexus-private-recorder", created: true });
   });
 
+  it("accepts an empty filtered Worker inventory only after explicit denial on the known host Worker", async () => {
+    const accountId = "a".repeat(32);
+    const token = `cfat_${"x".repeat(100)}`;
+    const requests: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        requests.push(url);
+        if (url.endsWith("/tokens/verify"))
+          return Response.json({ success: true, result: { status: "active" } });
+        if (url.endsWith("/accounts?per_page=50"))
+          return Response.json({ success: true, result: [{ id: accountId }] });
+        if (url.endsWith("/workers/scripts"))
+          return Response.json({ success: true, result: [] });
+        if (
+          url.endsWith("/workers/scripts/modular-workers-core/settings") ||
+          url.includes("/d1/database")
+        )
+          return Response.json(
+            { success: false, errors: [{ code: 10000 }] },
+            { status: 403 },
+          );
+        if (url.endsWith("/r2/buckets/nexus-private-recorder"))
+          return Response.json(
+            { success: false, errors: [{ code: 10006 }] },
+            { status: 404 },
+          );
+        if (url.endsWith("/r2/buckets") && init?.method === "POST")
+          return Response.json({
+            success: true,
+            result: { name: "nexus-private-recorder" },
+          });
+        throw new Error(`Unexpected URL: ${url}`);
+      }),
+    );
+    await expect(
+      provisionR2Bucket(
+        token,
+        accountId,
+        "nexus-private-recorder",
+        "create",
+        "modular-workers-core",
+      ),
+    ).resolves.toEqual({ name: "nexus-private-recorder", created: true });
+    expect(
+      requests.some((url) =>
+        url.endsWith("/workers/scripts/modular-workers-core/settings"),
+      ),
+    ).toBe(true);
+  });
+
+  it.each([200, 404, 500])(
+    "fails closed when an empty Worker inventory lacks explicit permission denial (HTTP %s)",
+    async (status) => {
+      const accountId = "a".repeat(32);
+      const requests: string[] = [];
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: RequestInfo | URL) => {
+          const url = String(input);
+          requests.push(url);
+          if (url.endsWith("/tokens/verify"))
+            return Response.json({
+              success: true,
+              result: { status: "active" },
+            });
+          if (url.endsWith("/accounts?per_page=50"))
+            return Response.json({
+              success: true,
+              result: [{ id: accountId }],
+            });
+          if (url.endsWith("/workers/scripts"))
+            return Response.json({ success: true, result: [] });
+          if (url.endsWith("/workers/scripts/modular-workers-core/settings"))
+            return Response.json(
+              { success: status === 200, result: {} },
+              { status },
+            );
+          if (url.includes("/d1/database"))
+            return Response.json(
+              { success: false, errors: [{ code: 10000 }] },
+              { status: 403 },
+            );
+          throw new Error(`Unexpected URL: ${url}`);
+        }),
+      );
+      await expect(
+        provisionR2Bucket(
+          `cfat_${"x".repeat(100)}`,
+          accountId,
+          "nexus-private-recorder",
+          "create",
+          "modular-workers-core",
+        ),
+      ).rejects.toThrow();
+      expect(requests.some((url) => url.includes("/r2/"))).toBe(false);
+    },
+  );
+
+  it("does not treat an empty Worker inventory without a known host as denial", async () => {
+    const accountId = "a".repeat(32);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith("/tokens/verify"))
+          return Response.json({ success: true, result: { status: "active" } });
+        if (url.endsWith("/accounts?per_page=50"))
+          return Response.json({ success: true, result: [{ id: accountId }] });
+        if (url.endsWith("/workers/scripts"))
+          return Response.json({ success: true, result: [] });
+        if (url.includes("/d1/database"))
+          return Response.json(
+            { success: false, errors: [{ code: 10000 }] },
+            { status: 403 },
+          );
+        throw new Error(`Unexpected URL: ${url}`);
+      }),
+    );
+    await expect(
+      provisionR2Bucket(
+        `cfat_${"x".repeat(100)}`,
+        accountId,
+        "nexus-private-recorder",
+        "create",
+      ),
+    ).rejects.toMatchObject({ code: "too_broad" });
+  });
+
   it("never recreates a preserved R2 bucket that is missing externally", async () => {
     const accountId = "a".repeat(32);
     const installationId = "install_meeting_recorder_preserved";
