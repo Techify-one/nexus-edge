@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import type { PluginContext } from "@app/core-contract";
 import type { HonoEnv } from "../env.js";
 import { concretePermissionsForNamespace } from "../lib/ability.js";
@@ -15,8 +15,12 @@ const encode = (value: unknown): string => {
 
 export const gatewayRoutes = new Hono<HonoEnv>();
 
-gatewayRoutes.all("/:pluginId/*", async (c) => {
-  const pluginId = c.req.param("pluginId");
+export async function forwardPluginRequest(
+  c: Context<HonoEnv>,
+  pluginId: string,
+  request: Request = c.req.raw,
+  delegatedPermissions?: string[],
+): Promise<Response> {
   if (!/^[a-z][a-z0-9_]{1,31}$/u.test(pluginId))
     throw new AppError(404, "PLUGIN_NOT_FOUND", "Plugin not found.");
   const plugin = await c
@@ -35,16 +39,18 @@ gatewayRoutes.all("/:pluginId/*", async (c) => {
     );
   const context: PluginContext = {
     userId: c.get("principal").userId,
-    permissions: await concretePermissionsForNamespace(
-      c.get("db"),
-      c.get("ability"),
-      pluginId,
-    ),
+    permissions:
+      delegatedPermissions ??
+      (await concretePermissionsForNamespace(
+        c.get("db"),
+        c.get("ability"),
+        pluginId,
+      )),
     requestId: c.get("requestId"),
     origin: new URL(c.req.url).origin,
   };
   const prefix = `/api/v1/p/${pluginId}`;
-  const incoming = new URL(c.req.url);
+  const incoming = new URL(request.url);
   const forwardedPath = incoming.pathname.slice(prefix.length) || "/";
   if (
     forwardedPath === "/__installer" ||
@@ -53,19 +59,21 @@ gatewayRoutes.all("/:pluginId/*", async (c) => {
     throw new AppError(404, "NOT_FOUND", "Resource not found.");
   const internalUrl = new URL(forwardedPath, "https://plugin.internal");
   internalUrl.search = incoming.search;
-  const contentType = c.req.header("Content-Type") ?? "";
-  const idempotencyRequested = Boolean(c.req.header("Idempotency-Key"));
+  const contentType = request.headers.get("Content-Type") ?? "";
+  const idempotencyRequested = Boolean(request.headers.get("Idempotency-Key"));
   const idempotency =
-    c.req.method === "POST" &&
+    request.method === "POST" &&
     idempotencyRequested &&
     contentType.toLowerCase().includes("application/json")
       ? await idempotencyLookup(
           c,
           `plugins.${pluginId}.${internalUrl.pathname}.create`,
-          await c.req.raw
+          await request
             .clone()
             .json()
             .catch(() => null),
+          false,
+          request,
         )
       : null;
   if (idempotency?.replay)
@@ -73,7 +81,7 @@ gatewayRoutes.all("/:pluginId/*", async (c) => {
       status: idempotency.replay.status,
       headers: { "Content-Type": "application/json; charset=utf-8" },
     });
-  const headers = new Headers(c.req.raw.headers);
+  const headers = new Headers(request.headers);
   headers.delete("Authorization");
   headers.delete("Cookie");
   headers.delete("X-API-Key");
@@ -83,10 +91,11 @@ gatewayRoutes.all("/:pluginId/*", async (c) => {
   headers.set("X-Plugin-Context", encode(context));
   const response = await (binding as Fetcher).fetch(
     new Request(internalUrl, {
-      method: c.req.method,
+      method: request.method,
       headers,
-      body: ["GET", "HEAD"].includes(c.req.method) ? null : c.req.raw.body,
-      signal: c.req.raw.signal,
+      body: ["GET", "HEAD"].includes(request.method) ? null : request.body,
+      ...(!["GET", "HEAD"].includes(request.method) ? { duplex: "half" } : {}),
+      signal: request.signal,
     }),
   );
   if (
@@ -100,7 +109,12 @@ gatewayRoutes.all("/:pluginId/*", async (c) => {
       idempotency,
       response.status,
       await response.clone().json(),
+      request,
     );
   }
   return response;
-});
+}
+
+gatewayRoutes.all("/:pluginId/*", (c) =>
+  forwardPluginRequest(c, c.req.param("pluginId")),
+);

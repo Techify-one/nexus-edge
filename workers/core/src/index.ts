@@ -15,6 +15,13 @@ import { webhookRoutes } from "./routes/webhooks.js";
 import { settingsRoutes } from "./routes/settings.js";
 import { pluginRuntimeRoutes } from "./routes/plugin-runtime.js";
 import { marketplacesRoutes } from "./routes/marketplaces.js";
+import { mcpRoutes } from "./routes/mcp.js";
+import { mcpSettingsRoutes } from "./routes/mcp-settings.js";
+import {
+  mcpConsentRoutes,
+  mcpDiscoveryRoutes,
+  mcpOAuthRoutes,
+} from "./mcp/oauth.js";
 import { dbTime } from "./lib/values.js";
 import { deliverWebhook, fanoutEvent } from "./webhooks/consumer.js";
 
@@ -22,6 +29,12 @@ const app = new Hono<HonoEnv>();
 app.use("*", securityHeaders);
 app.use("/health", requestContext);
 app.use("/api/*", requestContext);
+app.use("/mcp", requestContext);
+app.use("/oauth/*", requestContext);
+app.use("/.well-known/*", requestContext);
+app.route("/", mcpDiscoveryRoutes);
+app.route("/oauth", mcpOAuthRoutes);
+app.route("/mcp", mcpRoutes);
 
 app.get("/health", (c) =>
   c.json({
@@ -65,6 +78,8 @@ coreV1Routes.route("/", installerRoutes);
 coreV1Routes.route("/", settingsRoutes);
 coreV1Routes.route("/", pluginRuntimeRoutes);
 coreV1Routes.route("/", marketplacesRoutes);
+coreV1Routes.route("/", mcpSettingsRoutes);
+coreV1Routes.route("/", mcpConsentRoutes);
 coreV1Routes.route("/p", gatewayRoutes);
 coreV1Routes.get("/openapi.json", (c) => c.json(OPENAPI_DOCUMENT));
 app.route("/api/v1", coreV1Routes);
@@ -158,6 +173,14 @@ async function scheduled(env: CoreEnv): Promise<void> {
     await db.execute(
       `DELETE FROM api_idempotency_keys WHERE idempotency_key_hash IN (SELECT idempotency_key_hash FROM api_idempotency_keys WHERE expires_at < ? LIMIT 100)`,
       [dbTime(db)],
+    );
+    await db.execute(
+      "DELETE FROM mcp_oauth_codes WHERE hash IN (SELECT hash FROM mcp_oauth_codes WHERE expires_at < ? LIMIT 100)",
+      [Date.now()],
+    );
+    await db.execute(
+      "DELETE FROM mcp_oauth_grants WHERE id IN (SELECT id FROM mcp_oauth_grants WHERE refresh_expires_at < ? LIMIT 100)",
+      [Date.now()],
     );
   } finally {
     await db.close();

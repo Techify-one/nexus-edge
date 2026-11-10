@@ -15,7 +15,12 @@ export function AuthenticatedLayout() {
   });
   if (session.isError) {
     if (session.error instanceof ApiError && session.error.status === 401)
-      return <Navigate to="/login" replace />;
+      return (
+        <Navigate
+          to={`/login?returnTo=${encodeURIComponent(window.location.pathname + window.location.search)}`}
+          replace
+        />
+      );
     return (
       <main className="mx-auto max-w-xl p-8 text-center">
         <h1 className="text-xl font-bold">{t("errors.sessionUnavailable")}</h1>

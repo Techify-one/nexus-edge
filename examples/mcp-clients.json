@@ -1,0 +1,31 @@
+{
+  "endpoint": "https://YOUR-HUB/mcp",
+  "clients": {
+    "ChatGPT": {
+      "authentication": "OAuth",
+      "instructions": "Add a custom MCP connection using the endpoint and authorize it in Nexus.",
+      "documentation": "https://developers.openai.com/plugins/build/auth"
+    },
+    "Claude Code": {
+      "command": "claude mcp add --transport http nexus https://YOUR-HUB/mcp",
+      "authentication": "Run /mcp and select Authenticate.",
+      "documentation": "https://code.claude.com/docs/en/mcp"
+    },
+    "Gemini CLI": {
+      "settings": {
+        "mcpServers": {
+          "nexus": {
+            "httpUrl": "https://YOUR-HUB/mcp",
+            "oauth": { "enabled": true }
+          }
+        }
+      },
+      "authentication": "Run /mcp auth nexus.",
+      "documentation": "https://geminicli.com/docs/tools/mcp-server/"
+    },
+    "Grok": {
+      "instructions": "Add the endpoint as a custom MCP connector or remote MCP API tool where available.",
+      "documentation": "https://docs.x.ai/developers/tools/remote-mcp"
+    }
+  }
+}

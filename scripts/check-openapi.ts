@@ -1,6 +1,10 @@
 import { OPENAPI_DOCUMENT } from "../workers/core/src/lib/openapi.js";
 
 const required = [
+  "/mcp",
+  "/api/v1/plugins/{pluginId}/mcp",
+  "/api/v1/me/mcp-connections",
+  "/api/v1/me/mcp-connections/{id}",
   "/api/v1/me",
   "/api/v1/users",
   "/api/v1/groups",

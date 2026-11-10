@@ -1240,6 +1240,55 @@ export const OPENAPI_DOCUMENT = {
   ...CORE_OPENAPI_DOCUMENT,
   paths: {
     ...corePaths,
+    "/mcp": {
+      post: {
+        summary: "MCP Streamable HTTP (JSON-RPC)",
+        responses: {
+          "200": { description: "MCP result" },
+          "202": { description: "Notification accepted" },
+          "401": { description: "Authenticate via OAuth or a scoped API key" },
+        },
+      },
+    },
+    "/api/v1/plugins/{pluginId}/mcp": {
+      get: {
+        summary: "Read persistent MCP settings and declared actions",
+        responses: { "200": { description: "Plugin MCP settings" } },
+      },
+      put: {
+        summary: "Enable MCP and select the plugin action allowlist",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["enabled", "allowedActions"],
+                properties: {
+                  enabled: { type: "boolean" },
+                  allowedActions: { type: "array", items: { type: "string" } },
+                },
+              },
+            },
+          },
+        },
+        responses: { "200": { description: "Settings saved" } },
+      },
+    },
+    "/api/v1/me/mcp-connections": {
+      get: {
+        responses: {
+          "200": { description: "Current user's active MCP connections" },
+        },
+      },
+    },
+    "/api/v1/me/mcp-connections/{id}": {
+      delete: {
+        responses: {
+          "204": { description: "Connection and refresh access revoked" },
+        },
+      },
+    },
     "/api/v1/p/{pluginId}/{path}": {
       get: { responses: { "200": { description: "Plugin response" } } },
       post: { responses: { "200": { description: "Plugin response" } } },

@@ -29,6 +29,10 @@ import "./styles/globals.css";
 const UsersPage = lazy(() => import("./features/users/UsersPage.js"));
 const GroupsPage = lazy(() => import("./features/groups/GroupsPage.js"));
 const ApiKeysPage = lazy(() => import("./features/api-keys/ApiKeysPage.js"));
+const McpPage = lazy(() => import("./features/mcp/McpPage.js"));
+const McpAuthorizePage = lazy(
+  () => import("./features/mcp/McpAuthorizePage.js"),
+);
 const WebhooksPage = lazy(() => import("./features/webhooks/WebhooksPage.js"));
 const PluginsPage = lazy(() => import("./features/plugins/PluginsPage.js"));
 const AuditPage = lazy(() => import("./features/audit/AuditPage.js"));
@@ -133,6 +137,8 @@ const router = createBrowserRouter(
             { path: "users", element: lazyElement(UsersPage) },
             { path: "groups", element: lazyElement(GroupsPage) },
             { path: "settings/api-keys", element: lazyElement(ApiKeysPage) },
+            { path: "settings/mcp", element: lazyElement(McpPage) },
+            { path: "mcp/authorize", element: lazyElement(McpAuthorizePage) },
             { path: "settings/webhooks", element: lazyElement(WebhooksPage) },
             { path: "plugins/:tab?", element: lazyElement(PluginsPage) },
             { path: "audit", element: lazyElement(AuditPage) },

@@ -45,6 +45,7 @@ import {
   type PluginSupportDiagnostic,
 } from "./support-report.js";
 import { MarketplacePanels } from "./MarketplacePanels.js";
+import { PluginMcpSettings } from "./PluginMcpSettings.js";
 import {
   downloadCatalogRelease,
   type CatalogRelease,
@@ -1393,6 +1394,9 @@ export default function PluginsPage() {
                 <dd>{stateLabel(selected.status)}</dd>
               </div>
             </dl>
+            {["installed", "disabled"].includes(selected.status) && (
+              <PluginMcpSettings key={selected.id} pluginId={selected.id} />
+            )}
             {updateFor(selected) && (
               <section className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
                 <h3 className="font-semibold text-amber-900">

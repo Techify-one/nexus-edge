@@ -85,6 +85,43 @@ const ptBR = {
   "nav.metaAds": "Meta Ads",
   "nav.metaAdsAccounts": "Contas de anúncios",
   "nav.apiKeys": "Chaves de API",
+  "mcp.connections": "Conexões MCP",
+  "mcp.description": "Conecte seus assistentes às ações liberadas no hub.",
+  "mcp.pluginTitle": "Acesso por MCP",
+  "mcp.pluginDescription":
+    "Escolha quais ações deste plugin os assistentes podem executar.",
+  "mcp.enable": "Ativar MCP neste plugin",
+  "mcp.allowedActions": "Ações permitidas",
+  "mcp.saved": "Configuração MCP salva.",
+  "mcp.saving": "Salvando…",
+  "mcp.persisted":
+    "As alterações são salvas automaticamente e mantidas nas atualizações. Novas ações começam bloqueadas.",
+  "mcp.noActions":
+    "Este plugin ainda não declara ações MCP. Atualize-o pelo catálogo para habilitar essa opção.",
+  "mcp.destructive":
+    "Esta ação pode excluir dados ou executar uma operação irreversível.",
+  "mcp.search": "Buscar conexão",
+  "mcp.createdAt": "Conectado em",
+  "mcp.revoke": "Revogar acesso",
+  "mcp.revoked": "Acesso revogado.",
+  "mcp.revokeConfirm": "Revogar esta conexão MCP?",
+  "mcp.connectTitle": "Conectar um assistente",
+  "mcp.connectDescription":
+    "Use o endereço abaixo em um cliente com suporte a MCP por HTTP.",
+  "mcp.endpoint": "Endereço MCP",
+  "mcp.oauthHelp":
+    "No ChatGPT e nos clientes compatíveis com OAuth, adicione este endereço e entre na sua conta Nexus para autorizar a conexão. No Claude Code, você também pode usar o comando abaixo e concluir o login em /mcp.",
+  "mcp.apiKeyHelp":
+    "Clientes que aceitam chave de API podem enviar uma chave Nexus em Authorization: Bearer ou X-API-Key. As permissões da chave também limitam as ações disponíveis. A disponibilidade da conexão depende do suporte a MCP de cada cliente.",
+  "mcp.configurePlugins": "Configurar ações dos plugins",
+  "mcp.authorizeTitle": "Autorizar conexão MCP",
+  "mcp.authorizeDescription":
+    "{{client}} quer acessar as ações abaixo usando sua conta Nexus.",
+  "mcp.consentPermissions":
+    "A conexão terá somente as permissões destas ações e continuará respeitando as liberações atuais dos plugins. Para liberar permissões adicionais, conecte novamente.",
+  "mcp.noEnabledActions":
+    "Nenhuma ação está liberada. Ative o MCP e selecione ações nos detalhes dos plugins antes de conectar.",
+  "mcp.authorize": "Autorizar",
   "nav.webhooks": "Webhooks",
   "nav.plugins": "Plugins",
   "nav.audit": "Auditoria",
@@ -754,6 +791,43 @@ const en: Record<TranslationKey, string> = {
   "nav.metaAds": "Meta Ads",
   "nav.metaAdsAccounts": "Ad accounts",
   "nav.apiKeys": "API keys",
+  "mcp.connections": "MCP connections",
+  "mcp.description": "Connect assistants to actions enabled in your hub.",
+  "mcp.pluginTitle": "MCP access",
+  "mcp.pluginDescription":
+    "Choose which actions assistants can execute in this plugin.",
+  "mcp.enable": "Enable MCP for this plugin",
+  "mcp.allowedActions": "Allowed actions",
+  "mcp.saved": "MCP settings saved.",
+  "mcp.saving": "Saving…",
+  "mcp.persisted":
+    "Changes are saved automatically and preserved during updates. New actions start blocked.",
+  "mcp.noActions":
+    "This plugin does not declare MCP actions yet. Update it from the catalog to enable this option.",
+  "mcp.destructive":
+    "This action can delete data or perform an irreversible operation.",
+  "mcp.search": "Search connections",
+  "mcp.createdAt": "Connected at",
+  "mcp.revoke": "Revoke access",
+  "mcp.revoked": "Access revoked.",
+  "mcp.revokeConfirm": "Revoke this MCP connection?",
+  "mcp.connectTitle": "Connect an assistant",
+  "mcp.connectDescription":
+    "Use the address below in a client that supports MCP over HTTP.",
+  "mcp.endpoint": "MCP address",
+  "mcp.oauthHelp":
+    "In ChatGPT and OAuth-compatible clients, add this address and sign into Nexus to authorize the connection. In Claude Code, you can also use the command below and complete sign-in in /mcp.",
+  "mcp.apiKeyHelp":
+    "Clients that accept API keys can send a Nexus key in Authorization: Bearer or X-API-Key. The key permissions also limit available actions. Connection availability depends on each client's MCP support.",
+  "mcp.configurePlugins": "Configure plugin actions",
+  "mcp.authorizeTitle": "Authorize MCP connection",
+  "mcp.authorizeDescription":
+    "{{client}} wants to access the actions below using your Nexus account.",
+  "mcp.consentPermissions":
+    "The connection receives only the permissions used by these actions and always respects current plugin settings. Reconnect to grant additional permissions.",
+  "mcp.noEnabledActions":
+    "No actions are enabled. Enable MCP and select actions in plugin details before connecting.",
+  "mcp.authorize": "Authorize",
   "nav.webhooks": "Webhooks",
   "nav.plugins": "Plugins",
   "nav.audit": "Audit",

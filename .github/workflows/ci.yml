@@ -94,6 +94,11 @@ jobs:
             }
           }
 
+          const discovery = await fetchEventually(`${baseUrl}/.well-known/oauth-authorization-server`, "OAuth discovery");
+          const metadata = await discovery.json();
+          if (!metadata.code_challenge_methods_supported?.includes("S256")) throw new Error("MCP OAuth must support PKCE S256");
+          const mcp = await fetch(`${baseUrl}/mcp`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping" }) });
+          if (mcp.status !== 401 || !mcp.headers.get("WWW-Authenticate")?.includes("oauth-protected-resource")) throw new Error(`MCP authentication smoke failed: HTTP ${mcp.status}`);
           NODE
 
   deploy-marketplace-test:

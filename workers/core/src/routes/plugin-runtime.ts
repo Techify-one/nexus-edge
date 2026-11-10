@@ -47,7 +47,7 @@ const publicRouteMatches = (template: string, pathname: string): boolean => {
   return expected.length === actual.length;
 };
 
-const archivedAssetBytes = async (
+export const archivedAssetBytes = async (
   c: Context<HonoEnv>,
   operationId: string,
   path: string,

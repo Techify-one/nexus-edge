@@ -21,6 +21,7 @@ import {
   GripVertical,
   KeyRound,
   Package,
+  Plug,
   ScrollText,
   Search,
   Settings,
@@ -92,6 +93,13 @@ const coreModules = [
     to: "/app/settings/general",
     icon: Settings,
     permission: "core.settings.read",
+  },
+  {
+    id: "core.mcp",
+    title: "mcp.connections",
+    description: "mcp.description",
+    to: "/app/settings/mcp",
+    icon: Plug,
   },
 ] satisfies Array<{
   id: string;

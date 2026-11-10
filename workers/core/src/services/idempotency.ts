@@ -15,12 +15,13 @@ export async function idempotencyLookup(
   routeKey: string,
   requestBody: unknown,
   required = false,
+  request: Request = c.req.raw,
 ): Promise<{
   keyHash: string;
   requestHash: string;
   replay?: { status: number; body: unknown };
 } | null> {
-  const rawKey = c.req.header("Idempotency-Key");
+  const rawKey = request.headers.get("Idempotency-Key");
   if (!rawKey) {
     if (required || c.get("principal").authMethod !== "cookie")
       throw new AppError(
@@ -41,7 +42,7 @@ export async function idempotencyLookup(
   const existing = await c.get("db").first<StoredResult>(
     `SELECT request_hash AS "requestHash", response_status AS "responseStatus", response_body AS "responseBody"
        FROM api_idempotency_keys WHERE user_id = ? AND method = ? AND route_key = ? AND idempotency_key_hash = ?`,
-    [c.get("principal").userId, c.req.method, routeKey, keyHash],
+    [c.get("principal").userId, request.method, routeKey, keyHash],
   );
   if (!existing) return { keyHash, requestHash };
   if (existing.requestHash !== requestHash)
@@ -66,6 +67,7 @@ export async function saveIdempotency(
   state: { keyHash: string; requestHash: string } | null,
   status: number,
   body: unknown,
+  request: Request = c.req.raw,
 ): Promise<void> {
   if (!state) return;
   const now = Date.now();
@@ -74,7 +76,7 @@ export async function saveIdempotency(
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       c.get("principal").userId,
-      c.req.method,
+      request.method,
       routeKey,
       state.keyHash,
       state.requestHash,

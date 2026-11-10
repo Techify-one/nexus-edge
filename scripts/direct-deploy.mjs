@@ -185,7 +185,13 @@ const metadata = {
     jwt: completionJwt,
     config: {
       not_found_handling: "single-page-application",
-      run_worker_first: ["/api/*", "/health"],
+      run_worker_first: [
+        "/api/*",
+        "/health",
+        "/mcp",
+        "/oauth/*",
+        "/.well-known/*",
+      ],
     },
   },
   bindings: [

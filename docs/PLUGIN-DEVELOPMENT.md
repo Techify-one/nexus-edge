@@ -311,6 +311,15 @@ repositório do Core.
 
 ## 10. Compatibilidade e testes
 
+### Ações MCP
+
+Para expor ações a assistentes, declare `x-nexus-mcp` em cada operação JSON do
+`openapi.json`, com nome estável, permissões e títulos localizados. O Core gera
+as ferramentas a partir do pacote assinado; o administrador ativa o MCP e
+seleciona as ações nos detalhes do plugin. Leia [MCP.md](./MCP.md) para o contrato
+completo, schemas, autenticação e verificação. Nunca exponha callbacks públicos,
+segredos ou captura binária como ações MCP.
+
 Uma atualização pode adicionar código, telas, permissões e recursos, mas não
 pode alterar migrations antigas, diminuir versão automaticamente, mudar a
 identidade de recurso ou renomear/remover classe Durable Object. Preserve

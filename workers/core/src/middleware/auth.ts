@@ -1,10 +1,10 @@
-import type { MiddlewareHandler } from "hono";
+import type { Context, MiddlewareHandler, Next } from "hono";
 import { createId, type RequestPrincipal } from "@app/core-contract";
 import type { HonoEnv } from "../env.js";
 import { AppError } from "../lib/http.js";
 import { canPermission, loadPrincipalAccess } from "../lib/ability.js";
 
-async function consumePrincipalRateLimit(
+export async function consumePrincipalRateLimit(
   c: Parameters<MiddlewareHandler<HonoEnv>>[0],
   principal: RequestPrincipal,
 ): Promise<void> {
@@ -71,10 +71,14 @@ const parseStoredPermissions = (value: unknown): string[] => {
   );
 };
 
-export const requirePrincipal: MiddlewareHandler<HonoEnv> = async (c, next) => {
-  const hasCookie = cookieCredentialPresent(c.req.raw.headers);
-  const bearer = c.req.header("Authorization")?.startsWith("Bearer ") ?? false;
-  const apiKey = c.req.header("X-API-Key");
+export async function authenticatePrincipal(
+  c: Context<HonoEnv>,
+  next: Next,
+  headers = c.req.raw.headers,
+) {
+  const hasCookie = cookieCredentialPresent(headers);
+  const bearer = headers.get("Authorization")?.startsWith("Bearer ") ?? false;
+  const apiKey = headers.get("X-API-Key");
   if ([hasCookie, bearer, Boolean(apiKey)].filter(Boolean).length > 1) {
     throw new AppError(
       401,
@@ -85,7 +89,7 @@ export const requirePrincipal: MiddlewareHandler<HonoEnv> = async (c, next) => {
 
   const auth = c.get("auth");
   const sessionResult = await auth.api.getSession({
-    headers: c.req.raw.headers,
+    headers,
     returnHeaders: true,
   });
   for (const cookie of sessionResult.headers.getSetCookie())
@@ -119,7 +123,10 @@ export const requirePrincipal: MiddlewareHandler<HonoEnv> = async (c, next) => {
   c.set("currentUser", access.user);
   c.set("ability", access.ability);
   await next();
-};
+}
+
+export const requirePrincipal: MiddlewareHandler<HonoEnv> = (c, next) =>
+  authenticatePrincipal(c, next);
 
 export const requirePermission =
   (key: string): MiddlewareHandler<HonoEnv> =>

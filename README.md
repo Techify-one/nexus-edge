@@ -5,6 +5,7 @@ Nexus Edge is a lightweight, modular runtime for distributed applications. This 
 ## Included features
 
 - Core Worker with cookie, Bearer token, and personal API-key authentication;
+- persistent, opt-in MCP access per plugin and per action, OAuth connections and revocation; see [docs/MCP.md](./docs/MCP.md);
 - first-administrator bootstrap without public sign-up;
 - direct user creation and complete editing with name, email, password, status, and groups, plus optional invitations and independent read/create/update/delete permissions;
 - user-friendly, area-grouped permission labels in every supported language, with plugin permissions exposed only while that plugin is installed;

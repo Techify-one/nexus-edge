@@ -3,6 +3,7 @@ import {
   ChevronLeft,
   ChevronRight,
   KeyRound,
+  Plug,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -42,6 +43,7 @@ const items = [
     permission: "core.group.read",
   },
   { to: "/app/settings/api-keys", label: "nav.apiKeys", icon: KeyRound },
+  { to: "/app/settings/mcp", label: "mcp.connections", icon: Plug },
   {
     to: "/app/settings/webhooks",
     label: "nav.webhooks",

@@ -1,3 +1,5 @@
+export * from "./mcp.js";
+
 import {
   bigint,
   boolean,
