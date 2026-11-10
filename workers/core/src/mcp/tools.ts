@@ -66,6 +66,17 @@ export function actionsFromOpenApi(
 ): McpAction[] {
   const actions: McpAction[] = [];
   const names = new Set<string>();
+  const explicitContract = Object.values(document.paths ?? {}).some(
+    (item: any) =>
+      item &&
+      typeof item === "object" &&
+      Object.values(item).some(
+        (operation: any) =>
+          operation &&
+          typeof operation === "object" &&
+          Object.hasOwn(operation, "x-nexus-mcp"),
+      ),
+  );
   const prefix = `/api/v1/p/${pluginId}/`;
   for (const [path, item] of Object.entries(document.paths ?? {}) as [
     string,
@@ -89,7 +100,9 @@ export function actionsFromOpenApi(
       const legacyName = operation?.operationId;
       const declaration =
         operation?.["x-nexus-mcp"] ??
-        (legacyPermissions && typeof legacyName === "string"
+        (!explicitContract &&
+        legacyPermissions &&
+        typeof legacyName === "string"
           ? {
               name: legacyName.startsWith(`${pluginId}_`)
                 ? legacyName

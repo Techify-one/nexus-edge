@@ -474,6 +474,30 @@ describe("MCP authorization and persistence", () => {
 });
 
 describe("MCP declarations", () => {
+  it("treats explicit action declarations as authoritative over legacy metadata", () => {
+    const source = {
+      paths: {
+        "/api/v1/p/demo/records": {
+          get: { "x-nexus-mcp": declaration("list", "demo.record.read") },
+        },
+        "/api/v1/p/demo/private-file": {
+          get: {
+            operationId: "download",
+            "x-required-permissions": ["demo.record.read"],
+            responses: {
+              200: { description: "Private binary stream" },
+              400: { content: { "application/json": {} } },
+            },
+          },
+        },
+      },
+    };
+    expect(
+      actionsFromOpenApi("demo", permissions, source).map(
+        (action) => action.name,
+      ),
+    ).toEqual(["demo_list"]);
+  });
   it("adapts published permission extensions without exposing public or binary routes", () => {
     const source = {
       paths: {

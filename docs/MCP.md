@@ -9,6 +9,8 @@ Older packages declaring `operationId` plus `x-nexus-permission` or
 `x-required-permissions` are adapted using those explicit permissions. This
 keeps existing independently installed plugins compatible, including Chat IA
 Free, without repackaging their signed code. Binary operations remain excluded.
+When any operation declares `x-nexus-mcp`, that explicit contract is authoritative:
+unmarked operations are excluded, even when they have older permission metadata.
 
 In **Plugins → Installed → plugin details → MCP access**, turn MCP on and select
 the permitted actions. Each change is saved immediately. Both settings survive
