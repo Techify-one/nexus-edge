@@ -330,7 +330,12 @@ mcpConsentRoutes.get("/mcp/oauth/consent", async (c) => {
     {
       clientName: client.name,
       redirectOrigin: new URL(input.redirect_uri).origin,
-      actions: actions.map(({ name, title }) => ({ name, title })),
+      actions: actions.map(({ name, title, titles, destructive }) => ({
+        name,
+        title,
+        titles,
+        destructive,
+      })),
     },
     200,
     noStore,

@@ -6,7 +6,7 @@ import { useI18n } from "../../i18n/index.js";
 import { api } from "../../lib/api/core-client.js";
 
 export default function McpAuthorizePage() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [params] = useSearchParams();
   const [autoSyncActions, setAutoSyncActions] = useState(true);
   const consent = useQuery({
@@ -15,7 +15,12 @@ export default function McpAuthorizePage() {
       api<{
         clientName: string;
         redirectOrigin: string;
-        actions: Array<{ name: string; title: string }>;
+        actions: Array<{
+          name: string;
+          title: string;
+          titles?: Record<string, string>;
+          destructive?: boolean;
+        }>;
       }>(`/api/v1/mcp/oauth/consent?${params.toString()}`),
     retry: false,
   });
@@ -48,7 +53,14 @@ export default function McpAuthorizePage() {
           <p className="text-sm">{t("mcp.consentPermissions")}</p>
           <ul className="max-h-72 list-disc space-y-1 overflow-y-auto pl-5 text-sm">
             {consent.data.actions.map((action) => (
-              <li key={action.name}>{action.title}</li>
+              <li key={action.name}>
+                {action.titles?.[locale] ?? action.title}
+                {action.destructive && (
+                  <span className="block text-xs text-slate-500">
+                    {t("mcp.destructive")}
+                  </span>
+                )}
+              </li>
             ))}
           </ul>
           {!consent.data.actions.length && (

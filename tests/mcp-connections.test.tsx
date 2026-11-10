@@ -187,6 +187,9 @@ describe("MCP connection consent review", () => {
       name: /Sincronizar ações automaticamente/,
     });
     expect((checkbox as HTMLInputElement).checked).toBe(true);
+    expect(screen.getByText("Consultar registros")).toBeDefined();
+    expect(screen.getByText("Excluir registros")).toBeDefined();
+    expect(screen.getByText(/Esta ação pode excluir/)).toBeDefined();
     expect(screen.getByText(/agora e no futuro/)).toBeDefined();
     fireEvent.click(
       screen.getByRole("button", { name: "Autorizar", exact: true }),

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -32,6 +32,7 @@ type ConnectionAction = {
 };
 export default function McpPage() {
   const { t, locale, formatDateTime } = useI18n();
+  const autoSyncDescriptionId = useId();
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Connection | null>(null);
   const client = useQueryClient();
@@ -242,12 +243,16 @@ export default function McpPage() {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h4 className="font-medium">{t("mcp.autoSyncLabel")}</h4>
-                  <p className="text-sm text-slate-500">
+                  <p
+                    id={autoSyncDescriptionId}
+                    className="text-sm text-slate-500"
+                  >
                     {t("mcp.autoSyncConsent")}
                   </p>
                 </div>
                 <ToggleSwitch
                   aria-label={t("mcp.autoSyncLabel")}
+                  aria-describedby={autoSyncDescriptionId}
                   checked={selected.autoSyncActions ?? false}
                   disabled={
                     refreshPermissions.isPending ||
