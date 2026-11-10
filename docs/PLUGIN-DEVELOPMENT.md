@@ -128,6 +128,14 @@ logout ou na troca de release. Remova listeners, timers, streams e requests no
 descarte. Deep links e refresh são atendidos pela rota genérica
 `p/:pluginId/*`; o Core não conhece o ID do plugin no build.
 
+O resultado de `mountPage` pode fornecer `updateRoute(route)` opcionalmente.
+Nesse caso o Core entrega mudanças de rota, query e hash sem desmontar a página,
+preservando foco e estado. Roteadores próprios já sincronizados com History podem
+retornar um callback vazio; implementações sem roteador devem atualizar sua tela
+nesse callback. Sem ele, o Core mantém a remontagem compatível com plugins antigos.
+Alterações de release, permissões, tema ou idioma continuam renovando a montagem.
+Callbacks assíncronos são serializados e recebem a rota mais recente pendente.
+
 Para listas de registros, use `mountConfigurableDataTable` do
 `@nexus/plugin-sdk`, como demonstra `plugins/template/frontend/entry.ts`. Ele
 oferece ordenação de uma coluna, show/hide, drag-to-reorder, resize contínuo e

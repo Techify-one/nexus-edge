@@ -47,6 +47,7 @@ export type PluginSessionV1 = Record<string, unknown> | void;
 
 export type PluginPageMountV1 = {
   dispose(): void | Promise<void>;
+  updateRoute?(route: PluginRouteV1): void | Promise<void>;
 };
 
 export type PluginModuleV1 = {

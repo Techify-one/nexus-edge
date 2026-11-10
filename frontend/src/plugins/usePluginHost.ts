@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import type { PluginHostV1, PluginTablePreferenceV1 } from "@nexus/plugin-sdk";
@@ -55,6 +55,8 @@ export const usePluginHost = (
   descriptor?: RuntimePluginDescriptor,
 ): PluginHostV1 => {
   const navigate = useNavigate();
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
   const { locale } = useI18n();
   const { theme } = useTheme();
   return useMemo(
@@ -87,7 +89,7 @@ export const usePluginHost = (
         }
       },
       navigate: (path, options) =>
-        navigate(safePluginPath(pluginId, path), {
+        navigateRef.current(safePluginPath(pluginId, path), {
           replace: options?.replace ?? false,
         }),
       notify: ({ message, tone = "info" }) => {
@@ -117,6 +119,6 @@ export const usePluginHost = (
         },
       },
     }),
-    [descriptor?.permissions, locale, navigate, pluginId, theme],
+    [descriptor?.permissions, locale, pluginId, theme],
   );
 };
