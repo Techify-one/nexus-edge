@@ -1,5 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
+import { useState } from "react";
 import { Button, Card, Skeleton } from "../../components/ui/index.js";
 import { useI18n } from "../../i18n/index.js";
 import { api } from "../../lib/api/core-client.js";
@@ -7,6 +8,7 @@ import { api } from "../../lib/api/core-client.js";
 export default function McpAuthorizePage() {
   const { t } = useI18n();
   const [params] = useSearchParams();
+  const [autoSyncActions, setAutoSyncActions] = useState(true);
   const consent = useQuery({
     queryKey: ["mcp-consent", params.toString()],
     queryFn: () =>
@@ -21,7 +23,11 @@ export default function McpAuthorizePage() {
     mutationFn: (approve: boolean) =>
       api<{ redirect: string }>("/api/v1/mcp/oauth/authorize", {
         method: "POST",
-        body: JSON.stringify({ request: Object.fromEntries(params), approve }),
+        body: JSON.stringify({
+          request: Object.fromEntries(params),
+          approve,
+          autoSyncActions: approve && autoSyncActions,
+        }),
       }),
     onSuccess: ({ redirect }) => window.location.assign(redirect),
   });
@@ -50,6 +56,23 @@ export default function McpAuthorizePage() {
               {t("mcp.noEnabledActions")}
             </p>
           )}
+          <label className="flex cursor-pointer items-start gap-3 rounded-xl border p-4">
+            <input
+              type="checkbox"
+              className="mt-1 h-4 w-4 accent-indigo-600"
+              checked={autoSyncActions}
+              disabled={authorize.isPending || !consent.data.actions.length}
+              onChange={(event) => setAutoSyncActions(event.target.checked)}
+            />
+            <span>
+              <span className="block font-medium">
+                {t("mcp.autoSyncLabel")}
+              </span>
+              <span className="block text-sm text-slate-500">
+                {t("mcp.autoSyncConsent")}
+              </span>
+            </span>
+          </label>
           <div className="flex justify-end gap-2">
             <Button
               variant="secondary"

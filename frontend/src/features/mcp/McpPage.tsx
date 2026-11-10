@@ -8,6 +8,7 @@ import {
   Input,
   PageHeader,
   Skeleton,
+  ToggleSwitch,
 } from "../../components/ui/index.js";
 import { ConfigurableDataTable } from "../../components/ui/configurable-data-table.js";
 import { Modal } from "../../components/ui/modal.js";
@@ -21,6 +22,7 @@ type Connection = {
   authorizedActionCount: number;
   availableActionCount: number;
   needsPermissionUpdate: boolean;
+  autoSyncActions: boolean;
 };
 type ConnectionAction = {
   name: string;
@@ -44,21 +46,31 @@ export default function McpPage() {
     mutationFn: ({
       id,
       approvedActions,
+      autoSyncActions,
     }: {
       id: string;
       approvedActions: string[];
+      autoSyncActions?: boolean;
     }) =>
       api<Connection>(
         `/api/v1/me/mcp-connections/${encodeURIComponent(id)}/permissions`,
         {
           method: "POST",
-          body: JSON.stringify({ approvedActions }),
+          body: JSON.stringify({ approvedActions, autoSyncActions }),
         },
       ),
-    onSuccess: (connection) => {
+    onSuccess: (connection, input) => {
       setSelected(connection);
       void client.invalidateQueries({ queryKey: ["mcp-connections"] });
-      toast.success(t("mcp.permissionsUpdated"));
+      toast.success(
+        t(
+          input.autoSyncActions === true
+            ? "mcp.autoSyncEnabled"
+            : input.autoSyncActions === false
+              ? "mcp.autoSyncDisabled"
+              : "mcp.permissionsUpdated",
+        ),
+      );
     },
     onError: (error) => {
       toast.error(error.message);
@@ -138,6 +150,11 @@ export default function McpPage() {
                   {row.needsPermissionUpdate && (
                     <span className="block text-xs text-slate-500">
                       {t("mcp.permissionsOutdated")}
+                    </span>
+                  )}
+                  {row.autoSyncActions && (
+                    <span className="block text-xs text-slate-500">
+                      {t("mcp.autoSyncEnabled")}
                     </span>
                   )}
                 </div>
@@ -222,44 +239,83 @@ export default function McpPage() {
               <h3 className="font-semibold">
                 {t("mcp.connectionPermissions")}
               </h3>
-              <p className="text-sm text-slate-500">
-                {t("mcp.permissionReview")}
-              </p>
-              <ul className="max-h-64 list-disc space-y-2 overflow-y-auto pl-5 text-sm">
-                {(connections.data?.actions ?? []).map((action) => (
-                  <li key={action.name}>
-                    {action.titles?.[locale] ?? action.title}
-                    {action.destructive && (
-                      <span className="block text-xs text-slate-500">
-                        {t("mcp.destructive")}
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-              <Button
-                busy={refreshPermissions.isPending}
-                disabled={
-                  !selected.needsPermissionUpdate ||
-                  !connections.data ||
-                  connections.isFetching ||
-                  revoke.isPending
-                }
-                onClick={() =>
-                  refreshPermissions.mutate({
-                    id: selected.id,
-                    approvedActions: (connections.data?.actions ?? []).map(
-                      ({ name }) => name,
-                    ),
-                  })
-                }
-              >
-                {t("mcp.updatePermissions")}
-              </Button>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h4 className="font-medium">{t("mcp.autoSyncLabel")}</h4>
+                  <p className="text-sm text-slate-500">
+                    {t("mcp.autoSyncConsent")}
+                  </p>
+                </div>
+                <ToggleSwitch
+                  aria-label={t("mcp.autoSyncLabel")}
+                  checked={selected.autoSyncActions ?? false}
+                  disabled={
+                    refreshPermissions.isPending ||
+                    !connections.data ||
+                    connections.isFetching ||
+                    connections.isError ||
+                    revoke.isPending
+                  }
+                  onClick={() =>
+                    refreshPermissions.mutate({
+                      id: selected.id,
+                      approvedActions: (connections.data?.actions ?? []).map(
+                        ({ name }) => name,
+                      ),
+                      autoSyncActions: !selected.autoSyncActions,
+                    })
+                  }
+                />
+              </div>
+              <details className="rounded-xl border p-3">
+                <summary className="cursor-pointer font-medium">
+                  {t("mcp.reviewActions", {
+                    count: connections.data?.actions.length ?? 0,
+                  })}
+                </summary>
+                <p className="my-3 text-sm text-slate-500">
+                  {t("mcp.permissionReview")}
+                </p>
+                <ul className="max-h-64 list-disc space-y-2 overflow-y-auto pl-5 text-sm">
+                  {(connections.data?.actions ?? []).map((action) => (
+                    <li key={action.name}>
+                      {action.titles?.[locale] ?? action.title}
+                      {action.destructive && (
+                        <span className="block text-xs text-slate-500">
+                          {t("mcp.destructive")}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+              {!selected.autoSyncActions && (
+                <Button
+                  busy={refreshPermissions.isPending}
+                  disabled={
+                    !selected.needsPermissionUpdate ||
+                    !connections.data ||
+                    connections.isFetching ||
+                    revoke.isPending
+                  }
+                  onClick={() =>
+                    refreshPermissions.mutate({
+                      id: selected.id,
+                      approvedActions: (connections.data?.actions ?? []).map(
+                        ({ name }) => name,
+                      ),
+                    })
+                  }
+                >
+                  {t("mcp.updatePermissions")}
+                </Button>
+              )}
               <p role="status" className="text-sm text-slate-500">
-                {selected.needsPermissionUpdate
-                  ? t("mcp.permissionsOutdated")
-                  : t("mcp.permissionsCurrent")}
+                {selected.autoSyncActions
+                  ? t("mcp.autoSyncStatus")
+                  : selected.needsPermissionUpdate
+                    ? t("mcp.permissionsOutdated")
+                    : t("mcp.permissionsCurrent")}
               </p>
               {refreshPermissions.isError && (
                 <p role="alert">{refreshPermissions.error.message}</p>

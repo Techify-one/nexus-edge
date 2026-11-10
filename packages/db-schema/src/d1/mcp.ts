@@ -21,6 +21,9 @@ export const mcpOauthCodes = sqliteTable("mcp_oauth_codes", {
   resource: text("resource").notNull(),
   challenge: text("challenge").notNull(),
   permissionsJson: text("permissions_json").notNull(),
+  autoSyncActions: integer("auto_sync_actions", { mode: "boolean" })
+    .notNull()
+    .default(false),
   expiresAt: integer("expires_at").notNull(),
   consumedAt: integer("consumed_at"),
 });
@@ -32,6 +35,9 @@ export const mcpOauthGrants = sqliteTable(
     userId: text("user_id").notNull(),
     resource: text("resource").notNull(),
     permissionsJson: text("permissions_json").notNull(),
+    autoSyncActions: integer("auto_sync_actions", { mode: "boolean" })
+      .notNull()
+      .default(false),
     accessHash: text("access_hash").notNull().unique(),
     refreshHash: text("refresh_hash").notNull().unique(),
     accessExpiresAt: integer("access_expires_at").notNull(),

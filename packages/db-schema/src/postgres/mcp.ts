@@ -32,6 +32,7 @@ export const mcpOauthCodes = pgTable("mcp_oauth_codes", {
   resource: text("resource").notNull(),
   challenge: text("challenge").notNull(),
   permissionsJson: text("permissions_json").notNull(),
+  autoSyncActions: integer("auto_sync_actions").notNull().default(0),
   expiresAt: epoch("expires_at").notNull(),
   consumedAt: epoch("consumed_at"),
 });
@@ -43,6 +44,7 @@ export const mcpOauthGrants = pgTable(
     userId: text("user_id").notNull(),
     resource: text("resource").notNull(),
     permissionsJson: text("permissions_json").notNull(),
+    autoSyncActions: integer("auto_sync_actions").notNull().default(0),
     accessHash: text("access_hash").notNull().unique(),
     refreshHash: text("refresh_hash").notNull().unique(),
     accessExpiresAt: epoch("access_expires_at").notNull(),

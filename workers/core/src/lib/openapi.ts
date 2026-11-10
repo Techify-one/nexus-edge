@@ -1320,6 +1320,11 @@ export const OPENAPI_DOCUMENT = {
                     description:
                       "Exact action names reviewed from GET /api/v1/me/mcp-connections. Stale consent is rejected.",
                   },
+                  autoSyncActions: {
+                    type: "boolean",
+                    description:
+                      "Explicitly opt this connection into following currently and subsequently enabled plugin actions within the user's permissions. Set false to freeze current permissions; omit to preserve the current policy.",
+                  },
                 },
               },
             },

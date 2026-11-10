@@ -220,9 +220,10 @@ mcpOAuthRoutes.post("/token", async (c) => {
       resource: string;
       challenge: string;
       permissions: string;
+      autoSyncActions: number;
       expires: number;
       consumed: number | null;
-    }>(`SELECT client_id AS "clientId", user_id AS "userId", redirect_uri AS "redirectUri", resource, challenge, permissions_json AS permissions, expires_at AS expires, consumed_at AS consumed FROM mcp_oauth_codes WHERE hash = ?`, [hash]);
+    }>(`SELECT client_id AS "clientId", user_id AS "userId", redirect_uri AS "redirectUri", resource, challenge, permissions_json AS permissions, auto_sync_actions AS "autoSyncActions", expires_at AS expires, consumed_at AS consumed FROM mcp_oauth_codes WHERE hash = ?`, [hash]);
     const challenge = base64url(
       new Uint8Array(
         await crypto.subtle.digest(
@@ -258,13 +259,14 @@ mcpOAuthRoutes.post("/token", async (c) => {
     await c
       .get("db")
       .execute(
-        "INSERT INTO mcp_oauth_grants(id,client_id,user_id,resource,permissions_json,access_hash,refresh_hash,access_expires_at,refresh_expires_at,created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO mcp_oauth_grants(id,client_id,user_id,resource,permissions_json,auto_sync_actions,access_hash,refresh_hash,access_expires_at,refresh_expires_at,created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
           createId("mcp_grant"),
           clientId,
           code.userId,
           code.resource,
           code.permissions,
+          code.autoSyncActions,
           accessHash,
           refreshHash,
           now + 3_600_000,
@@ -347,6 +349,7 @@ mcpConsentRoutes.post("/mcp/oauth/authorize", async (c) => {
       .object({
         request: z.record(z.string(), z.string()),
         approve: z.boolean(),
+        autoSyncActions: z.boolean().default(false),
       })
       .strict(),
   );
@@ -374,7 +377,7 @@ mcpConsentRoutes.post("/mcp/oauth/authorize", async (c) => {
     await c
       .get("db")
       .execute(
-        "INSERT INTO mcp_oauth_codes(hash,client_id,user_id,redirect_uri,resource,challenge,permissions_json,expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO mcp_oauth_codes(hash,client_id,user_id,redirect_uri,resource,challenge,permissions_json,auto_sync_actions,expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [
           await hashToken(code),
           client.id,
@@ -383,12 +386,14 @@ mcpConsentRoutes.post("/mcp/oauth/authorize", async (c) => {
           input.resource,
           input.code_challenge,
           JSON.stringify(permissions),
+          body.autoSyncActions ? 1 : 0,
           Date.now() + 300_000,
         ],
       );
     redirect.searchParams.set("code", code);
     await audit(c, "core.mcp.client_authorized", "core.mcp", client.id, {
       actionCount: actions.length,
+      autoSyncActions: body.autoSyncActions,
     });
   }
   return c.json({ redirect: redirect.toString() }, 200, noStore);
@@ -397,19 +402,24 @@ type AvailableActions = ReturnType<typeof permittedMcpActions>;
 function connectionPermissions(
   actions: AvailableActions,
   permissions: string[],
+  autoSyncActions = false,
 ) {
   const granted = new Set(permissions);
   const current = new Set(
     actions.flatMap((action) => action.delegatedPermissions),
   );
   return {
-    authorizedActionCount: actions.filter((action) =>
-      action.permissions.every((key) => granted.has(key)),
-    ).length,
+    autoSyncActions,
+    authorizedActionCount: autoSyncActions
+      ? actions.length
+      : actions.filter((action) =>
+          action.permissions.every((key) => granted.has(key)),
+        ).length,
     availableActionCount: actions.length,
     needsPermissionUpdate:
-      current.size !== granted.size ||
-      [...current].some((key) => !granted.has(key)),
+      !autoSyncActions &&
+      (current.size !== granted.size ||
+        [...current].some((key) => !granted.has(key))),
   };
 }
 
@@ -421,14 +431,19 @@ mcpConsentRoutes.get("/me/mcp-connections", async (c) => {
       name: string;
       createdAt: number | string;
       permissions: string;
-    }>(`SELECT g.id, c.name, g.created_at AS "createdAt", g.permissions_json AS permissions FROM mcp_oauth_grants g JOIN mcp_oauth_clients c ON c.id = g.client_id WHERE g.user_id = ? AND g.resource = ? AND g.revoked_at IS NULL AND g.refresh_expires_at > ? ORDER BY g.created_at DESC`, [c.get("principal").userId, mcpResource(c), Date.now()]),
+      autoSyncActions: number;
+    }>(`SELECT g.id, c.name, g.created_at AS "createdAt", g.permissions_json AS permissions, g.auto_sync_actions AS "autoSyncActions" FROM mcp_oauth_grants g JOIN mcp_oauth_clients c ON c.id = g.client_id WHERE g.user_id = ? AND g.resource = ? AND g.revoked_at IS NULL AND g.refresh_expires_at > ? ORDER BY g.created_at DESC`, [c.get("principal").userId, mcpResource(c), Date.now()]),
   ]);
   const actions = permittedMcpActions(c, plugins);
   return c.json(
     {
-      items: grants.map(({ permissions, ...grant }) => ({
+      items: grants.map(({ permissions, autoSyncActions, ...grant }) => ({
         ...grant,
-        ...connectionPermissions(actions, parseJson<string[]>(permissions, [])),
+        ...connectionPermissions(
+          actions,
+          parseJson<string[]>(permissions, []),
+          Boolean(autoSyncActions),
+        ),
       })),
       actions: actions.map(({ name, title, titles, destructive }) => ({
         name,
@@ -453,20 +468,16 @@ mcpConsentRoutes.post("/me/mcp-connections/:id/permissions", async (c) => {
     z
       .object({
         approvedActions: z.array(z.string().min(1).max(128)).max(5000),
+        autoSyncActions: z.boolean().optional(),
       })
       .strict(),
   );
-  const grant = await c
-    .get("db")
-    .first<{ id: string; name: string; createdAt: number | string }>(
-      `SELECT g.id, c.name, g.created_at AS "createdAt" FROM mcp_oauth_grants g JOIN mcp_oauth_clients c ON c.id = g.client_id WHERE g.id = ? AND g.user_id = ? AND g.resource = ? AND g.revoked_at IS NULL AND g.refresh_expires_at > ?`,
-      [
-        c.req.param("id"),
-        c.get("principal").userId,
-        mcpResource(c),
-        Date.now(),
-      ],
-    );
+  const grant = await c.get("db").first<{
+    id: string;
+    name: string;
+    createdAt: number | string;
+    autoSyncActions: number;
+  }>(`SELECT g.id, c.name, g.created_at AS "createdAt", g.auto_sync_actions AS "autoSyncActions" FROM mcp_oauth_grants g JOIN mcp_oauth_clients c ON c.id = g.client_id WHERE g.id = ? AND g.user_id = ? AND g.resource = ? AND g.revoked_at IS NULL AND g.refresh_expires_at > ?`, [c.req.param("id"), c.get("principal").userId, mcpResource(c), Date.now()]);
   if (!grant)
     throw new AppError(
       404,
@@ -490,12 +501,15 @@ mcpConsentRoutes.post("/me/mcp-connections/:id/permissions", async (c) => {
   const permissions = [
     ...new Set(actions.flatMap((action) => action.delegatedPermissions)),
   ];
+  const autoSyncActions =
+    input.autoSyncActions ?? Boolean(grant.autoSyncActions);
   const updated = await c
     .get("db")
     .execute(
-      "UPDATE mcp_oauth_grants SET permissions_json = ? WHERE id = ? AND user_id = ? AND resource = ? AND revoked_at IS NULL AND refresh_expires_at > ?",
+      "UPDATE mcp_oauth_grants SET permissions_json = ?, auto_sync_actions = ? WHERE id = ? AND user_id = ? AND resource = ? AND revoked_at IS NULL AND refresh_expires_at > ?",
       [
         JSON.stringify(permissions),
+        autoSyncActions ? 1 : 0,
         grant.id,
         c.get("principal").userId,
         mcpResource(c),
@@ -510,9 +524,13 @@ mcpConsentRoutes.post("/me/mcp-connections/:id/permissions", async (c) => {
     );
   await audit(c, "core.mcp.client_permissions_updated", "core.mcp", grant.id, {
     actionCount: actions.length,
+    autoSyncActions,
   });
   return c.json(
-    { ...grant, ...connectionPermissions(actions, permissions) },
+    {
+      ...grant,
+      ...connectionPermissions(actions, permissions, autoSyncActions),
+    },
     200,
     noStore,
   );
@@ -544,12 +562,12 @@ export const requireMcpPrincipal: MiddlewareHandler<HonoEnv> = async (
         "CONFLICTING_CREDENTIALS",
         "Send exactly one authentication method.",
       );
-    const grant = await c
-      .get("db")
-      .first<{ id: string; userId: string; permissions: string }>(
-        `SELECT id, user_id AS "userId", permissions_json AS permissions FROM mcp_oauth_grants WHERE access_hash = ? AND resource = ? AND revoked_at IS NULL AND access_expires_at > ? AND refresh_expires_at > ?`,
-        [await hashToken(bearer), mcpResource(c), Date.now(), Date.now()],
-      );
+    const grant = await c.get("db").first<{
+      id: string;
+      userId: string;
+      permissions: string;
+      autoSyncActions: number;
+    }>(`SELECT id, user_id AS "userId", permissions_json AS permissions, auto_sync_actions AS "autoSyncActions" FROM mcp_oauth_grants WHERE access_hash = ? AND resource = ? AND revoked_at IS NULL AND access_expires_at > ? AND refresh_expires_at > ?`, [await hashToken(bearer), mcpResource(c), Date.now(), Date.now()]);
     if (!grant)
       throw new AppError(
         401,
@@ -562,7 +580,15 @@ export const requireMcpPrincipal: MiddlewareHandler<HonoEnv> = async (
       credentialId: grant.id,
       credentialScopes: parseJson(grant.permissions, []),
     };
-    const access = await loadPrincipalAccess(c.get("db"), principal);
+    // An explicitly approved automatic policy follows the account's current
+    // permissions. Transport identity stays OAuth/API-key for audit and rate
+    // limits; permittedMcpActions still enforces the current plugin allowlists.
+    const access = await loadPrincipalAccess(
+      c.get("db"),
+      grant.autoSyncActions
+        ? { userId: grant.userId, authMethod: "cookie" }
+        : principal,
+    );
     if (!access || !Boolean(access.user.active))
       throw new AppError(401, "UNAUTHENTICATED", "The account is inactive.");
     c.set("principal", principal);

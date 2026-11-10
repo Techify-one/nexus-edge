@@ -24,7 +24,8 @@ uninstalled plugins cannot expose or execute tools. Plugin updates retain
 existing allowlists; removed action names are ignored.
 
 Every list and call intersects the installation's allowlist, the current user's
-permissions, and the connected credential's scopes. The private Service Binding
+permissions, and the connection's consent policy. API keys always retain their
+explicit credential scopes. The private Service Binding
 receives only the concrete permissions needed by that action. Ownership rules,
 optimistic version checks, confirmations and other plugin business rules still
 apply. Cookies, API keys and OAuth tokens never reach the plugin Worker. Audit
@@ -38,8 +39,37 @@ dynamic public-client registration, resource audience binding, short-lived
 access tokens and rotating refresh tokens. Browser login uses the existing
 Nexus account and an explicit consent screen. Only token hashes are stored.
 Saving a plugin action change takes effect on the next call, including calls from
-clients with cached tool lists. OAuth snapshots the concrete permissions approved
-at consent time; refreshing a client's tool catalog does not expand that grant.
+clients with cached tool lists. OAuth connections support an explicitly approved
+automatic policy or a fixed snapshot of concrete permissions.
+
+### Automatic connections
+
+The initial consent screen offers **Sync actions automatically**, with a clear
+explanation that this includes currently and subsequently enabled plugin actions.
+The user can deselect it before authorizing. Existing connections remain manual
+until their owner explicitly enables this option in **MCP connections**.
+
+With automatic sync enabled, choosing actions and saving in the plugin is the
+only Nexus configuration step. The current allowlists and account permissions
+are evaluated on every OAuth MCP request, without rotating tokens, writing
+grants for other users, running business operations, or waiting for a background
+job. Disabling an action, plugin, account or connection still blocks access
+immediately. New actions added by a package remain blocked until selected in the
+plugin allowlist. API-key scopes never inherit this policy.
+
+Turning automatic sync off freezes the currently reviewed permissions into a
+manual snapshot. The owner may change this policy at any time. The MCP transport
+remains authenticated OAuth; resolving current account permissions does not make
+the request a browser session or authorize other Core APIs.
+
+Nexus cannot refresh a client's cached tool catalog on its behalf. After saving
+actions, refresh tools in the assistant. The interface and save confirmation
+separate this remaining client-side step from automatic Nexus authorization.
+
+### Manual connections
+
+Manual OAuth connections snapshot concrete permissions at consent time;
+refreshing a client's tool catalog does not expand that grant.
 
 After enabling more actions, open the existing connection in **MCP connections**,
 review the listed actions, and choose **Update permissions**. Then refresh tools
@@ -50,8 +80,8 @@ executing tools. The submitted action names must exactly match the current
 review; changed allowlists or user permissions require another review. Expired,
 revoked, cross-user and API-key attempts are rejected. Initial authorization is
 blocked when no actions are enabled, avoiding a successful-looking empty link.
-Reconnecting and consenting again is also supported. Neither enabling actions
-nor refreshing metadata silently broadens another connection's permissions.
+Reconnecting and consenting again is also supported. Enabling actions never
+silently changes an existing manual connection to automatic mode.
 
 Add the endpoint as a remote HTTP server in the chosen client, select OAuth,
 and authorize it in Nexus. Availability depends on that client's account and
@@ -119,8 +149,10 @@ Clients should refresh tool discovery after configuration changes.
 
 ## Operations
 
-Apply paired migration `0011_mcp.sql` using the selected provider. Preserve the
-existing provider and installation ID. Assets configuration must route `/mcp`,
+Apply paired migrations `0011_mcp.sql` and `0012_mcp_auto_sync.sql` using the
+selected provider. The latter adds
+opt-in policy flags to authorization codes and grants; existing rows default to
+manual mode. Preserve the existing provider and installation ID. Assets configuration must route `/mcp`,
 `/oauth/*` and `/.well-known/*` through the Worker before the SPA fallback.
 The production workflow checks the OAuth discovery documents and verifies that
 unauthenticated `/mcp` requests receive 401 plus a resource discovery challenge.

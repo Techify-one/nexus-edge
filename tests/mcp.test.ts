@@ -565,7 +565,10 @@ describe("MCP connection permission review", () => {
         "SELECT metadata_json FROM audit_log WHERE action = 'core.mcp.client_permissions_updated'",
       )
       .get();
-    expect(audit?.metadata_json).toBe('{"actionCount":2}');
+    expect(JSON.parse(audit?.metadata_json as string)).toEqual({
+      actionCount: 2,
+      autoSyncActions: false,
+    });
     expect(JSON.stringify(audit)).not.toContain(token);
   });
 
@@ -679,6 +682,357 @@ describe("MCP connection permission review", () => {
     expect(
       new URL((await denied.json()).redirect).searchParams.get("error"),
     ).toBe("access_denied");
+  });
+});
+
+describe("MCP automatic connection policy", () => {
+  it("migrates existing authorization codes and grants without silently opting them in", () => {
+    const sqlite = new DatabaseSync(":memory:");
+    databases.push(sqlite);
+    sqlite.exec(
+      "CREATE TABLE mcp_oauth_codes (hash TEXT PRIMARY KEY, permissions_json TEXT); CREATE TABLE mcp_oauth_grants (id TEXT PRIMARY KEY, permissions_json TEXT); INSERT INTO mcp_oauth_codes VALUES ('legacy-code','[\"demo.record.read\"]'); INSERT INTO mcp_oauth_grants VALUES ('legacy-grant','[\"demo.record.read\"]')",
+    );
+    sqlite.exec(
+      readFileSync("workers/core/migrations/d1/0012_mcp_auto_sync.sql", "utf8"),
+    );
+    expect(sqlite.prepare("SELECT * FROM mcp_oauth_codes").get()).toMatchObject(
+      {
+        hash: "legacy-code",
+        permissions_json: '["demo.record.read"]',
+        auto_sync_actions: 0,
+      },
+    );
+    expect(
+      sqlite.prepare("SELECT * FROM mcp_oauth_grants").get(),
+    ).toMatchObject({
+      id: "legacy-grant",
+      permissions_json: '["demo.record.read"]',
+      auto_sync_actions: 0,
+    });
+    expect(() =>
+      sqlite.exec("UPDATE mcp_oauth_grants SET auto_sync_actions = 2"),
+    ).toThrow();
+  });
+
+  it("automatically includes a different plugin only after its MCP actions are explicitly enabled", async () => {
+    const f = await fixture();
+    const { headers } = await seedConnection(f);
+    await f.settings(true, ["demo_list"]);
+    await f.request("/api/v1/me/mcp-connections/existing-grant/permissions", {
+      method: "POST",
+      headers: { ...cookieHeaders, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        approvedActions: ["demo_list"],
+        autoSyncActions: true,
+      }),
+    });
+    const manifest = JSON.stringify({ permissions: ["second.record.read"] });
+    f.sqlite
+      .prepare(
+        "INSERT INTO plugins(id,name,installed_version,api_version,database_dialects_json,active_database_provider,worker_name,status,manifest_json,installed_at,updated_at,package_format,release_hash) VALUES ('second','Second','1.0.0',1,'[\"d1\"]','d1','second-worker','installed',?,1,1,2,'release')",
+      )
+      .run(manifest);
+    const bytes = new TextEncoder().encode(
+      JSON.stringify({
+        paths: {
+          "/api/v1/p/second/records": {
+            get: {
+              "x-nexus-mcp": {
+                name: "second_list",
+                permissions: ["second.record.read"],
+              },
+            },
+          },
+        },
+      }),
+    );
+    f.sqlite
+      .prepare(
+        "INSERT INTO plugin_assets(plugin_id,release_hash,path,content_type,operation_id,sha256,byte_length,active,created_at) VALUES ('second','release','openapi.json','application/json','op-second',?,?,1,1)",
+      )
+      .run(await sha256(bytes), bytes.byteLength);
+    f.sqlite
+      .prepare(
+        "INSERT INTO plugin_package_chunks(operation_id,path,chunk_index,content,created_at) VALUES ('op-second','openapi.json',0,?,1)",
+      )
+      .run(`base64:${Buffer.from(bytes).toString("base64url")}`);
+    expect(
+      (await (await f.rpc("tools/list", {}, headers)).json()).result.tools.map(
+        (tool: { name: string }) => tool.name,
+      ),
+    ).toEqual(["demo_list"]);
+    const enabled = await f.request("/api/v1/plugins/second/mcp", {
+      method: "PUT",
+      headers: { ...cookieHeaders, "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled: true, allowedActions: ["second_list"] }),
+    });
+    expect(enabled.status).toBe(200);
+    expect(
+      (await (await f.rpc("tools/list", {}, headers)).json()).result.tools.map(
+        (tool: { name: string }) => tool.name,
+      ),
+    ).toEqual(["demo_list", "second_list"]);
+    expect(
+      f.sqlite.prepare("SELECT permissions_json FROM mcp_oauth_grants").get()
+        ?.permissions_json,
+    ).toBe('["demo.record.read"]');
+    expect(f.pluginFetch).not.toHaveBeenCalled();
+  });
+
+  it("requires explicit opt-in and immediately follows saved actions only for that connection", async () => {
+    const f = await fixture();
+    const { headers } = await seedConnection(f);
+    await f.settings(true, ["demo_list"]);
+    expect(
+      (await (await f.rpc("tools/list", {}, headers)).json()).result.tools,
+    ).toEqual([]);
+    const original = f.sqlite.prepare("SELECT * FROM mcp_oauth_grants").get()!;
+    const activated = await f.request(
+      "/api/v1/me/mcp-connections/existing-grant/permissions",
+      {
+        method: "POST",
+        headers: { ...cookieHeaders, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          approvedActions: ["demo_list"],
+          autoSyncActions: true,
+        }),
+      },
+    );
+    expect(activated.status).toBe(200);
+    expect(await activated.json()).toMatchObject({
+      autoSyncActions: true,
+      authorizedActionCount: 1,
+      needsPermissionUpdate: false,
+    });
+    await f.settings(true, ["demo_list", "demo_create"]);
+    expect(
+      (await (await f.rpc("tools/list", {}, headers)).json()).result.tools,
+    ).toHaveLength(2);
+    const list = await (
+      await f.request("/api/v1/me/mcp-connections", { headers: cookieHeaders })
+    ).json();
+    expect(list.items[0]).toMatchObject({
+      autoSyncActions: true,
+      authorizedActionCount: 2,
+      availableActionCount: 2,
+      needsPermissionUpdate: false,
+    });
+    const after = f.sqlite.prepare("SELECT * FROM mcp_oauth_grants").get()!;
+    expect({
+      ...after,
+      permissions_json: original.permissions_json,
+      auto_sync_actions: 0,
+    }).toEqual(original);
+    expect(after.permissions_json).toBe('["demo.record.read"]');
+    const restricted = await f.rpc("tools/list", {}, {
+      Authorization: "Bearer app_readonly",
+    } as typeof cookieHeaders);
+    expect((await restricted.json()).result.tools).toHaveLength(1);
+    expect(f.pluginFetch).not.toHaveBeenCalled();
+    await f.settings(false, ["demo_list", "demo_create"]);
+    expect(
+      (await (await f.rpc("tools/list", {}, headers)).json()).result.tools,
+    ).toEqual([]);
+    await f.settings(true, ["demo_list"]);
+    const called = await (
+      await f.rpc("tools/call", { name: "demo_list" }, headers)
+    ).json();
+    expect(JSON.parse(called.result.content[0].text).permissions).toEqual([
+      "demo.record.read",
+    ]);
+  });
+
+  it("freezes current permissions when automatic mode is turned off and never re-enables itself", async () => {
+    const f = await fixture();
+    const { headers } = await seedConnection(f);
+    await f.settings(true, ["demo_list"]);
+    const policy = (autoSyncActions: boolean, approvedActions: string[]) =>
+      f.request("/api/v1/me/mcp-connections/existing-grant/permissions", {
+        method: "POST",
+        headers: { ...cookieHeaders, "Content-Type": "application/json" },
+        body: JSON.stringify({ autoSyncActions, approvedActions }),
+      });
+    expect((await policy(true, ["demo_list"])).status).toBe(200);
+    await f.settings(true, ["demo_list", "demo_create"]);
+    expect((await policy(false, ["demo_list", "demo_create"])).status).toBe(
+      200,
+    );
+    await f.settings(true, ["demo_list", "demo_create", "demo_delete"]);
+    expect(
+      (await (await f.rpc("tools/list", {}, headers)).json()).result.tools
+        .map((tool: { name: string }) => tool.name)
+        .sort(),
+    ).toEqual(["demo_create", "demo_list"]);
+    expect(
+      f.sqlite.prepare("SELECT auto_sync_actions FROM mcp_oauth_grants").get()
+        ?.auto_sync_actions,
+    ).toBe(0);
+    const list = await (
+      await f.request("/api/v1/me/mcp-connections", { headers: cookieHeaders })
+    ).json();
+    expect(list.items[0]).toMatchObject({
+      autoSyncActions: false,
+      authorizedActionCount: 2,
+      availableActionCount: 3,
+      needsPermissionUpdate: true,
+    });
+  });
+
+  it("still enforces account permissions, disabled plugins, account deactivation and revocation", async () => {
+    const f = await fixture();
+    const { headers } = await seedConnection(f);
+    await f.settings(true, ["demo_list", "demo_create"]);
+    await f.request("/api/v1/me/mcp-connections/existing-grant/permissions", {
+      method: "POST",
+      headers: { ...cookieHeaders, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        approvedActions: ["demo_list", "demo_create"],
+        autoSyncActions: true,
+      }),
+    });
+    f.sqlite.exec(
+      "UPDATE groups SET is_admin = 0; INSERT INTO group_permissions(group_id,permission_id,created_at) VALUES ('admin','demo.record.read',1)",
+    );
+    expect(
+      (await (await f.rpc("tools/list", {}, headers)).json()).result.tools.map(
+        (tool: { name: string }) => tool.name,
+      ),
+    ).toEqual(["demo_list"]);
+    expect(
+      (
+        await (
+          await f.rpc("tools/call", { name: "demo_create" }, headers)
+        ).json()
+      ).error.code,
+    ).toBe(-32602);
+    expect(f.pluginFetch).not.toHaveBeenCalled();
+    f.sqlite.exec("UPDATE plugins SET status = 'disabled'");
+    expect(
+      (await (await f.rpc("tools/list", {}, headers)).json()).result.tools,
+    ).toEqual([]);
+    f.sqlite.exec(
+      "UPDATE plugins SET status = 'installed'; UPDATE \"user\" SET active = 0",
+    );
+    expect((await f.rpc("tools/list", {}, headers)).status).toBe(401);
+    f.sqlite.exec(
+      'UPDATE "user" SET active = 1; UPDATE mcp_oauth_grants SET revoked_at = 1',
+    );
+    expect((await f.rpc("tools/list", {}, headers)).status).toBe(401);
+  });
+
+  it.each([false, true])(
+    "persists initial automatic consent %s through PKCE exchange and refresh rotation",
+    async (autoSyncActions) => {
+      const f = await fixture();
+      await f.settings(true, ["demo_list"]);
+      const registered = await (
+        await f.request("/oauth/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            redirect_uris: ["https://assistant.example/callback"],
+          }),
+        })
+      ).json();
+      const verifier = "v".repeat(43);
+      const challenge = base64url(
+        new Uint8Array(
+          await crypto.subtle.digest(
+            "SHA-256",
+            new TextEncoder().encode(verifier),
+          ),
+        ),
+      );
+      const request = {
+        client_id: registered.client_id,
+        redirect_uri: "https://assistant.example/callback",
+        response_type: "code",
+        resource: `${origin}/mcp`,
+        code_challenge: challenge,
+        code_challenge_method: "S256",
+      };
+      const authorized = await (
+        await f.request("/api/v1/mcp/oauth/authorize", {
+          method: "POST",
+          headers: { ...cookieHeaders, "Content-Type": "application/json" },
+          body: JSON.stringify({ request, approve: true, autoSyncActions }),
+        })
+      ).json();
+      const token = async (form: Record<string, string>) =>
+        (
+          await f.request("/oauth/token", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams(form),
+          })
+        ).json();
+      const granted = await token({
+        grant_type: "authorization_code",
+        client_id: registered.client_id,
+        redirect_uri: request.redirect_uri,
+        resource: request.resource,
+        code_verifier: verifier,
+        code: new URL(authorized.redirect).searchParams.get("code")!,
+      });
+      expect(granted.access_token).toBeDefined();
+      await f.settings(true, ["demo_list", "demo_create"]);
+      const refreshed = await token({
+        grant_type: "refresh_token",
+        client_id: registered.client_id,
+        resource: request.resource,
+        refresh_token: granted.refresh_token,
+      });
+      expect(
+        f.sqlite.prepare("SELECT auto_sync_actions FROM mcp_oauth_grants").get()
+          ?.auto_sync_actions,
+      ).toBe(autoSyncActions ? 1 : 0);
+      expect(
+        (
+          await (
+            await f.rpc("tools/list", {}, {
+              Authorization: `Bearer ${refreshed.access_token}`,
+            } as typeof cookieHeaders)
+          ).json()
+        ).result.tools,
+      ).toHaveLength(autoSyncActions ? 2 : 1);
+    },
+  );
+
+  it("keeps legacy grants manual and rejects invalid policy values and API-key opt-in", async () => {
+    const f = await fixture();
+    await seedConnection(f);
+    await f.settings(true, ["demo_list"]);
+    expect(
+      f.sqlite.prepare("SELECT auto_sync_actions FROM mcp_oauth_grants").get()
+        ?.auto_sync_actions,
+    ).toBe(0);
+    const update = (autoSyncActions: unknown, headers = cookieHeaders) =>
+      f.request("/api/v1/me/mcp-connections/existing-grant/permissions", {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          approvedActions: ["demo_list"],
+          autoSyncActions,
+        }),
+      });
+    expect((await update("true")).status).toBe(422);
+    expect(
+      (
+        await update(true, {
+          "X-API-Key": "app_readonly",
+        } as typeof cookieHeaders)
+      ).status,
+    ).toBe(403);
+    expect(
+      (await update(true, { ...cookieHeaders, Origin: "https://evil.example" }))
+        .status,
+    ).toBe(403);
+    f.sqlite.exec("UPDATE mcp_oauth_grants SET user_id = 'another-user'");
+    expect((await update(true)).status).toBe(404);
+    expect(
+      f.sqlite.prepare("SELECT auto_sync_actions FROM mcp_oauth_grants").get()
+        ?.auto_sync_actions,
+    ).toBe(0);
   });
 });
 

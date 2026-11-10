@@ -87,6 +87,15 @@ const ptBR = {
   "nav.apiKeys": "Chaves de API",
   "mcp.connections": "Conexões MCP",
   "mcp.connectionPermissions": "Permissões da conexão",
+  "mcp.autoSyncLabel": "Sincronizar ações automaticamente",
+  "mcp.autoSyncConsent":
+    "Autorizo esta conexão a acompanhar as ações que forem liberadas nos plugins, agora e no futuro, sempre respeitando as permissões da minha conta. Posso desativar quando quiser.",
+  "mcp.autoSyncEnabled": "Sincronização automática ativada",
+  "mcp.autoSyncDisabled":
+    "Modo manual ativado. A conexão mantém somente as permissões atuais.",
+  "mcp.autoSyncStatus":
+    "Tudo certo no Nexus: basta salvar as ações nos plugins. Depois, atualize a lista de ferramentas no seu assistente.",
+  "mcp.reviewActions": "Ver ações permitidas ({{count}})",
   "mcp.actionAccessCount": "{{authorized}} de {{available}} ações autorizadas",
   "mcp.permissionsOutdated": "Revise e atualize as permissões desta conexão.",
   "mcp.permissionsCurrent":
@@ -97,7 +106,7 @@ const ptBR = {
   "mcp.permissionReview":
     "Ao confirmar, esta conexão será autorizada a usar as ações abaixo, respeitando suas permissões e as liberações dos plugins. Isso não executa nenhuma ação.",
   "mcp.permissionRefreshHelp":
-    "Liberou novas ações depois de conectar? Abra a conexão nesta página, revise as ações e clique em Atualizar permissões. Depois atualize as ferramentas no assistente; atualizar somente a lista não renova a autorização.",
+    "Com a sincronização automática ativada, basta escolher as ações e salvar nos plugins. O Nexus atualiza o acesso da conexão. Depois, atualize a lista de ferramentas no assistente. No modo manual, use Atualizar permissões nesta página.",
   "errors.MCP_NO_ACTIONS":
     "Ative o MCP e salve as ações permitidas nos detalhes dos plugins antes de autorizar a conexão.",
   "errors.MCP_CONSENT_CHANGED":
@@ -115,10 +124,11 @@ const ptBR = {
   "mcp.discard": "Descartar alterações",
   "mcp.unsaved":
     "Há alterações não salvas. Clique em Salvar para aplicar suas escolhas de uma só vez.",
-  "mcp.saved": "Configuração MCP salva.",
+  "mcp.saved":
+    "Salvo no Nexus. As conexões automáticas já acompanham suas escolhas. Atualize a lista de ferramentas no assistente.",
   "mcp.saving": "Salvando…",
   "mcp.persisted":
-    "Escolha as ações e clique em Salvar para aplicar. Para liberar novas ações em conexões existentes, atualize suas permissões em Conexões MCP. As escolhas salvas são mantidas nas atualizações.",
+    "Escolha as ações e clique em Salvar. As conexões com sincronização automática acompanham suas escolhas. Depois, atualize a lista de ferramentas no assistente. Configure o modo da conexão em Conexões MCP.",
   "mcp.noActions":
     "Este plugin ainda não declara ações MCP. Atualize-o pelo catálogo para habilitar essa opção.",
   "mcp.destructive":
@@ -141,7 +151,7 @@ const ptBR = {
   "mcp.authorizeDescription":
     "{{client}} quer acessar as ações abaixo usando sua conta Nexus.",
   "mcp.consentPermissions":
-    "A conexão terá somente as permissões destas ações e continuará respeitando as liberações atuais dos plugins. Para liberar novas ações depois, revise e atualize as permissões em Conexões MCP ou conecte novamente.",
+    "A conexão respeitará suas permissões e as ações liberadas nos plugins. Para não precisar autorizar novas ações em uma segunda tela, mantenha a sincronização automática selecionada abaixo.",
   "mcp.noEnabledActions":
     "Nenhuma ação está liberada. Ative o MCP e selecione ações nos detalhes dos plugins antes de conectar.",
   "mcp.authorize": "Autorizar",
@@ -816,6 +826,15 @@ const en: Record<TranslationKey, string> = {
   "nav.apiKeys": "API keys",
   "mcp.connections": "MCP connections",
   "mcp.connectionPermissions": "Connection permissions",
+  "mcp.autoSyncLabel": "Sync actions automatically",
+  "mcp.autoSyncConsent":
+    "I authorize this connection to follow actions enabled in plugins, now and in the future, always limited by my account permissions. I can turn this off at any time.",
+  "mcp.autoSyncEnabled": "Automatic sync enabled",
+  "mcp.autoSyncDisabled":
+    "Manual mode enabled. The connection keeps only its current permissions.",
+  "mcp.autoSyncStatus":
+    "All set in Nexus: just save actions in your plugins. Then refresh the tool list in your assistant.",
+  "mcp.reviewActions": "View allowed actions ({{count}})",
   "mcp.actionAccessCount": "{{authorized}} of {{available}} actions authorized",
   "mcp.permissionsOutdated": "Review and update this connection's permissions.",
   "mcp.permissionsCurrent":
@@ -826,7 +845,7 @@ const en: Record<TranslationKey, string> = {
   "mcp.permissionReview":
     "Confirming authorizes this connection to use the actions below, subject to your permissions and the plugin allowlists. This does not execute any action.",
   "mcp.permissionRefreshHelp":
-    "Enabled more actions after connecting? Open the connection on this page, review the actions and click Update permissions. Then refresh tools in your assistant; refreshing the list alone does not renew authorization.",
+    "With automatic sync enabled, just choose actions and save them in your plugins. Nexus updates the connection's access. Then refresh the tool list in your assistant. In manual mode, use Update permissions on this page.",
   "errors.MCP_NO_ACTIONS":
     "Enable MCP and save allowed actions in plugin details before authorizing the connection.",
   "errors.MCP_CONSENT_CHANGED":
@@ -844,10 +863,11 @@ const en: Record<TranslationKey, string> = {
   "mcp.discard": "Discard changes",
   "mcp.unsaved":
     "You have unsaved changes. Click Save to apply your choices all at once.",
-  "mcp.saved": "MCP settings saved.",
+  "mcp.saved":
+    "Saved in Nexus. Automatic connections already follow your choices. Refresh the tool list in your assistant.",
   "mcp.saving": "Saving…",
   "mcp.persisted":
-    "Choose actions and click Save to apply. To allow new actions in existing connections, update their permissions under MCP connections. Saved choices are preserved during updates.",
+    "Choose actions and click Save. Connections with automatic sync follow your choices. Then refresh the tool list in your assistant. Configure the connection mode under MCP connections.",
   "mcp.noActions":
     "This plugin does not declare MCP actions yet. Update it from the catalog to enable this option.",
   "mcp.destructive":
@@ -870,7 +890,7 @@ const en: Record<TranslationKey, string> = {
   "mcp.authorizeDescription":
     "{{client}} wants to access the actions below using your Nexus account.",
   "mcp.consentPermissions":
-    "The connection receives only the permissions used by these actions and always respects current plugin settings. To allow more actions later, review and update permissions under MCP connections or reconnect.",
+    "The connection respects your permissions and the actions enabled in plugins. Keep automatic sync selected below to avoid authorizing new actions on a second screen.",
   "mcp.noEnabledActions":
     "No actions are enabled. Enable MCP and select actions in plugin details before connecting.",
   "mcp.authorize": "Authorize",
