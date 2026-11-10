@@ -108,3 +108,21 @@ describe("application shell", () => {
     expect(shell).toContain("{!pluginId && (");
   });
 });
+
+describe("plugin header navigation slot", () => {
+  it("places the optional plugin-owned navigation between Back/title and host actions", () => {
+    const shell = readFileSync(
+      "frontend/src/components/layout/AppShell.tsx",
+      "utf8",
+    );
+    expect(shell).toContain("data-nexus-plugin-header-nav={pluginId}");
+    expect(shell.indexOf("onClick={navigatePluginBack}")).toBeLessThan(
+      shell.indexOf("data-nexus-plugin-header-nav={pluginId}"),
+    );
+    expect(
+      shell.indexOf("data-nexus-plugin-header-nav={pluginId}"),
+    ).toBeLessThan(shell.indexOf("<ThemeToggle />"));
+    expect(shell).toContain("key={pluginId}");
+    expect(shell).not.toContain('"financeiro"');
+  });
+});

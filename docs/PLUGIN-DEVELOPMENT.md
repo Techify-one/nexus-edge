@@ -328,3 +328,13 @@ Os quatro plugins históricos continuam no monorepo durante a versão ponte. O
 registry e os pacotes formato 1 existem apenas para manter instalações antigas;
 plugins novos usam exclusivamente o host dinâmico e não devem ser adicionados a
 allowlists, registries, traduções ou TypeScript references do Core.
+
+### Navegação compacta no cabeçalho
+
+O host fornece um slot opcional `[data-nexus-plugin-header-nav="<plugin-id>"]`
+na mesma barra do botão Voltar. Plugins React podem montar apenas sua navegação
+nesse elemento via portal, mantendo o contexto do roteador e traduções. Não
+movam ou substituam o botão Voltar, título global, tema ou ações do host. O
+slot pertence ao host, é removido ao sair do plugin e tem rolagem horizontal
+em telas estreitas. Desmonte o portal no dispose; se o slot estiver ausente
+(host antigo), renderize a navegação local como fallback.

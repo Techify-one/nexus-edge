@@ -178,8 +178,8 @@ export function AppShell() {
       <div
         className={`transition-[padding] duration-200 ${sidebarHidden ? "lg:pl-0" : "lg:pl-60"}`}
       >
-        <header className="app-header sticky top-0 z-20 flex h-16 items-center justify-between border-b bg-white/95 px-4 backdrop-blur sm:px-6">
-          <div className="flex items-center gap-3">
+        <header className="app-header sticky top-0 z-20 flex h-16 min-w-0 items-center justify-between gap-3 border-b bg-white/95 px-4 backdrop-blur sm:px-6">
+          <div className="flex shrink-0 items-center gap-3">
             {!pluginId && (
               <Button
                 variant="ghost"
@@ -224,17 +224,34 @@ export function AppShell() {
                 </span>
               </div>
             ) : (
-              <p className="text-sm font-semibold text-slate-700">
+              <p
+                data-plugin-header-title={pluginId ?? undefined}
+                className="text-sm font-semibold text-slate-700"
+              >
                 {pageTitle}
               </p>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          {pluginId && (
+            <div
+              key={pluginId}
+              data-nexus-plugin-header-nav={pluginId}
+              className="min-w-0 flex-1 overflow-x-auto"
+            />
+          )}
+          <div className="flex shrink-0 items-center gap-2">
             <ThemeToggle />
             <LanguageSwitcher />
-            <Button variant="ghost" onClick={logout}>
+            <Button
+              variant="ghost"
+              onClick={logout}
+              aria-label={t("nav.signOut")}
+              title={t("nav.signOut")}
+            >
               <LogOut className="h-4 w-4" />
-              {t("nav.signOut")}
+              <span className={pluginId ? "hidden xl:inline" : undefined}>
+                {t("nav.signOut")}
+              </span>
             </Button>
           </div>
         </header>
