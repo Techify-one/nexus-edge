@@ -13,7 +13,11 @@ When any operation declares `x-nexus-mcp`, that explicit contract is authoritati
 unmarked operations are excluded, even when they have older permission metadata.
 
 In **Plugins → Installed → plugin details → MCP access**, turn MCP on and select
-the permitted actions. Each change is saved immediately. Both settings survive
+the permitted actions, then click **Save** once to apply them together. **Select
+all** and **Deselect all** change the local selection without sending requests.
+The activation switch also remains a draft until saved. **Discard changes**
+restores the saved configuration. Failed saves keep the draft available to retry;
+the server configuration remains unchanged until a save succeeds. Both settings survive
 Core and plugin updates, disable/re-enable, and conservative reinstall. MCP
 starts disabled, actions are opt-in, and new actions remain blocked. Disabled or
 uninstalled plugins cannot expose or execute tools. Plugin updates retain
@@ -33,7 +37,7 @@ and revoke access immediately. OAuth uses authorization code + PKCE S256,
 dynamic public-client registration, resource audience binding, short-lived
 access tokens and rotating refresh tokens. Browser login uses the existing
 Nexus account and an explicit consent screen. Only token hashes are stored.
-Changing a plugin action takes effect on the next call, including calls from
+Saving a plugin action change takes effect on the next call, including calls from
 clients with cached tool lists. Reconnect to grant additional permissions.
 
 Add the endpoint as a remote HTTP server in the chosen client, select OAuth,

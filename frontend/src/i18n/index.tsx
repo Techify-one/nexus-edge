@@ -92,10 +92,15 @@ const ptBR = {
     "Escolha quais ações deste plugin os assistentes podem executar.",
   "mcp.enable": "Ativar MCP neste plugin",
   "mcp.allowedActions": "Ações permitidas",
+  "mcp.selectAll": "Marcar todas",
+  "mcp.deselectAll": "Desmarcar todas",
+  "mcp.discard": "Descartar alterações",
+  "mcp.unsaved":
+    "Há alterações não salvas. Clique em Salvar para aplicar suas escolhas de uma só vez.",
   "mcp.saved": "Configuração MCP salva.",
   "mcp.saving": "Salvando…",
   "mcp.persisted":
-    "As alterações são salvas automaticamente e mantidas nas atualizações. Novas ações começam bloqueadas.",
+    "Escolha as ações e clique em Salvar para aplicar. As escolhas salvas são mantidas nas atualizações. Novas ações começam bloqueadas.",
   "mcp.noActions":
     "Este plugin ainda não declara ações MCP. Atualize-o pelo catálogo para habilitar essa opção.",
   "mcp.destructive":
@@ -798,10 +803,15 @@ const en: Record<TranslationKey, string> = {
     "Choose which actions assistants can execute in this plugin.",
   "mcp.enable": "Enable MCP for this plugin",
   "mcp.allowedActions": "Allowed actions",
+  "mcp.selectAll": "Select all",
+  "mcp.deselectAll": "Deselect all",
+  "mcp.discard": "Discard changes",
+  "mcp.unsaved":
+    "You have unsaved changes. Click Save to apply your choices all at once.",
   "mcp.saved": "MCP settings saved.",
   "mcp.saving": "Saving…",
   "mcp.persisted":
-    "Changes are saved automatically and preserved during updates. New actions start blocked.",
+    "Choose actions and click Save to apply. Saved choices are preserved during updates. New actions start blocked.",
   "mcp.noActions":
     "This plugin does not declare MCP actions yet. Update it from the catalog to enable this option.",
   "mcp.destructive":
