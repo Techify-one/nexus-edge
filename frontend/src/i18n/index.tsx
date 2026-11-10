@@ -86,6 +86,24 @@ const ptBR = {
   "nav.metaAdsAccounts": "Contas de anúncios",
   "nav.apiKeys": "Chaves de API",
   "mcp.connections": "Conexões MCP",
+  "mcp.connectionPermissions": "Permissões da conexão",
+  "mcp.actionAccessCount": "{{authorized}} de {{available}} ações autorizadas",
+  "mcp.permissionsOutdated": "Revise e atualize as permissões desta conexão.",
+  "mcp.permissionsCurrent":
+    "Permissões atualizadas. Atualize as ferramentas no assistente para recarregar a lista.",
+  "mcp.updatePermissions": "Atualizar permissões",
+  "mcp.permissionsUpdated":
+    "Permissões atualizadas. Agora atualize as ferramentas no assistente.",
+  "mcp.permissionReview":
+    "Ao confirmar, esta conexão será autorizada a usar as ações abaixo, respeitando suas permissões e as liberações dos plugins. Isso não executa nenhuma ação.",
+  "mcp.permissionRefreshHelp":
+    "Liberou novas ações depois de conectar? Abra a conexão nesta página, revise as ações e clique em Atualizar permissões. Depois atualize as ferramentas no assistente; atualizar somente a lista não renova a autorização.",
+  "errors.MCP_NO_ACTIONS":
+    "Ative o MCP e salve as ações permitidas nos detalhes dos plugins antes de autorizar a conexão.",
+  "errors.MCP_CONSENT_CHANGED":
+    "As ações disponíveis mudaram. Revise a lista atualizada e tente novamente.",
+  "errors.MCP_CONNECTION_NOT_FOUND":
+    "Esta conexão expirou ou foi revogada. Conecte o assistente novamente.",
   "mcp.description": "Conecte seus assistentes às ações liberadas no hub.",
   "mcp.pluginTitle": "Acesso por MCP",
   "mcp.pluginDescription":
@@ -100,7 +118,7 @@ const ptBR = {
   "mcp.saved": "Configuração MCP salva.",
   "mcp.saving": "Salvando…",
   "mcp.persisted":
-    "Escolha as ações e clique em Salvar para aplicar. As escolhas salvas são mantidas nas atualizações. Novas ações começam bloqueadas.",
+    "Escolha as ações e clique em Salvar para aplicar. Para liberar novas ações em conexões existentes, atualize suas permissões em Conexões MCP. As escolhas salvas são mantidas nas atualizações.",
   "mcp.noActions":
     "Este plugin ainda não declara ações MCP. Atualize-o pelo catálogo para habilitar essa opção.",
   "mcp.destructive":
@@ -123,7 +141,7 @@ const ptBR = {
   "mcp.authorizeDescription":
     "{{client}} quer acessar as ações abaixo usando sua conta Nexus.",
   "mcp.consentPermissions":
-    "A conexão terá somente as permissões destas ações e continuará respeitando as liberações atuais dos plugins. Para liberar permissões adicionais, conecte novamente.",
+    "A conexão terá somente as permissões destas ações e continuará respeitando as liberações atuais dos plugins. Para liberar novas ações depois, revise e atualize as permissões em Conexões MCP ou conecte novamente.",
   "mcp.noEnabledActions":
     "Nenhuma ação está liberada. Ative o MCP e selecione ações nos detalhes dos plugins antes de conectar.",
   "mcp.authorize": "Autorizar",
@@ -797,6 +815,24 @@ const en: Record<TranslationKey, string> = {
   "nav.metaAdsAccounts": "Ad accounts",
   "nav.apiKeys": "API keys",
   "mcp.connections": "MCP connections",
+  "mcp.connectionPermissions": "Connection permissions",
+  "mcp.actionAccessCount": "{{authorized}} of {{available}} actions authorized",
+  "mcp.permissionsOutdated": "Review and update this connection's permissions.",
+  "mcp.permissionsCurrent":
+    "Permissions are up to date. Refresh tools in your assistant to reload the list.",
+  "mcp.updatePermissions": "Update permissions",
+  "mcp.permissionsUpdated":
+    "Permissions updated. Now refresh tools in your assistant.",
+  "mcp.permissionReview":
+    "Confirming authorizes this connection to use the actions below, subject to your permissions and the plugin allowlists. This does not execute any action.",
+  "mcp.permissionRefreshHelp":
+    "Enabled more actions after connecting? Open the connection on this page, review the actions and click Update permissions. Then refresh tools in your assistant; refreshing the list alone does not renew authorization.",
+  "errors.MCP_NO_ACTIONS":
+    "Enable MCP and save allowed actions in plugin details before authorizing the connection.",
+  "errors.MCP_CONSENT_CHANGED":
+    "Available actions changed. Review the updated list and try again.",
+  "errors.MCP_CONNECTION_NOT_FOUND":
+    "This connection expired or was revoked. Connect the assistant again.",
   "mcp.description": "Connect assistants to actions enabled in your hub.",
   "mcp.pluginTitle": "MCP access",
   "mcp.pluginDescription":
@@ -811,7 +847,7 @@ const en: Record<TranslationKey, string> = {
   "mcp.saved": "MCP settings saved.",
   "mcp.saving": "Saving…",
   "mcp.persisted":
-    "Choose actions and click Save to apply. Saved choices are preserved during updates. New actions start blocked.",
+    "Choose actions and click Save to apply. To allow new actions in existing connections, update their permissions under MCP connections. Saved choices are preserved during updates.",
   "mcp.noActions":
     "This plugin does not declare MCP actions yet. Update it from the catalog to enable this option.",
   "mcp.destructive":
@@ -834,7 +870,7 @@ const en: Record<TranslationKey, string> = {
   "mcp.authorizeDescription":
     "{{client}} wants to access the actions below using your Nexus account.",
   "mcp.consentPermissions":
-    "The connection receives only the permissions used by these actions and always respects current plugin settings. Reconnect to grant additional permissions.",
+    "The connection receives only the permissions used by these actions and always respects current plugin settings. To allow more actions later, review and update permissions under MCP connections or reconnect.",
   "mcp.noEnabledActions":
     "No actions are enabled. Enable MCP and select actions in plugin details before connecting.",
   "mcp.authorize": "Authorize",

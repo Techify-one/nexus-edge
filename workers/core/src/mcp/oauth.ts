@@ -361,6 +361,12 @@ mcpConsentRoutes.post("/mcp/oauth/authorize", async (c) => {
       c,
       await loadMcpPlugins(c, undefined, true),
     );
+    if (!actions.length)
+      throw new AppError(
+        422,
+        "MCP_NO_ACTIONS",
+        "Enable and select plugin actions before authorizing this connection.",
+      );
     const permissions = [
       ...new Set(actions.flatMap((action) => action.delegatedPermissions)),
     ];
@@ -387,20 +393,130 @@ mcpConsentRoutes.post("/mcp/oauth/authorize", async (c) => {
   }
   return c.json({ redirect: redirect.toString() }, 200, noStore);
 });
-mcpConsentRoutes.get("/me/mcp-connections", async (c) =>
-  c.json(
+type AvailableActions = ReturnType<typeof permittedMcpActions>;
+function connectionPermissions(
+  actions: AvailableActions,
+  permissions: string[],
+) {
+  const granted = new Set(permissions);
+  const current = new Set(
+    actions.flatMap((action) => action.delegatedPermissions),
+  );
+  return {
+    authorizedActionCount: actions.filter((action) =>
+      action.permissions.every((key) => granted.has(key)),
+    ).length,
+    availableActionCount: actions.length,
+    needsPermissionUpdate:
+      current.size !== granted.size ||
+      [...current].some((key) => !granted.has(key)),
+  };
+}
+
+mcpConsentRoutes.get("/me/mcp-connections", async (c) => {
+  const [plugins, grants] = await Promise.all([
+    loadMcpPlugins(c, undefined, true),
+    c.get("db").query<{
+      id: string;
+      name: string;
+      createdAt: number | string;
+      permissions: string;
+    }>(`SELECT g.id, c.name, g.created_at AS "createdAt", g.permissions_json AS permissions FROM mcp_oauth_grants g JOIN mcp_oauth_clients c ON c.id = g.client_id WHERE g.user_id = ? AND g.resource = ? AND g.revoked_at IS NULL AND g.refresh_expires_at > ? ORDER BY g.created_at DESC`, [c.get("principal").userId, mcpResource(c), Date.now()]),
+  ]);
+  const actions = permittedMcpActions(c, plugins);
+  return c.json(
     {
-      items: await c
-        .get("db")
-        .query(
-          `SELECT g.id, c.name, g.created_at AS "createdAt" FROM mcp_oauth_grants g JOIN mcp_oauth_clients c ON c.id = g.client_id WHERE g.user_id = ? AND g.revoked_at IS NULL AND g.refresh_expires_at > ? ORDER BY g.created_at DESC`,
-          [c.get("principal").userId, Date.now()],
-        ),
+      items: grants.map(({ permissions, ...grant }) => ({
+        ...grant,
+        ...connectionPermissions(actions, parseJson<string[]>(permissions, [])),
+      })),
+      actions: actions.map(({ name, title, titles, destructive }) => ({
+        name,
+        title,
+        titles,
+        destructive,
+      })),
     },
     200,
     noStore,
-  ),
-);
+  );
+});
+mcpConsentRoutes.post("/me/mcp-connections/:id/permissions", async (c) => {
+  if (c.get("principal").authMethod !== "cookie")
+    throw new AppError(
+      403,
+      "FORBIDDEN",
+      "Review connection permissions with your browser session.",
+    );
+  const input = await parseBody(
+    c,
+    z
+      .object({
+        approvedActions: z.array(z.string().min(1).max(128)).max(5000),
+      })
+      .strict(),
+  );
+  const grant = await c
+    .get("db")
+    .first<{ id: string; name: string; createdAt: number | string }>(
+      `SELECT g.id, c.name, g.created_at AS "createdAt" FROM mcp_oauth_grants g JOIN mcp_oauth_clients c ON c.id = g.client_id WHERE g.id = ? AND g.user_id = ? AND g.resource = ? AND g.revoked_at IS NULL AND g.refresh_expires_at > ?`,
+      [
+        c.req.param("id"),
+        c.get("principal").userId,
+        mcpResource(c),
+        Date.now(),
+      ],
+    );
+  if (!grant)
+    throw new AppError(
+      404,
+      "MCP_CONNECTION_NOT_FOUND",
+      "Connection not found.",
+    );
+  const actions = permittedMcpActions(
+    c,
+    await loadMcpPlugins(c, undefined, true),
+  );
+  const approved = new Set(input.approvedActions);
+  if (
+    approved.size !== actions.length ||
+    actions.some(({ name }) => !approved.has(name))
+  )
+    throw new AppError(
+      409,
+      "MCP_CONSENT_CHANGED",
+      "Available actions changed. Reload and review connection permissions again.",
+    );
+  const permissions = [
+    ...new Set(actions.flatMap((action) => action.delegatedPermissions)),
+  ];
+  const updated = await c
+    .get("db")
+    .execute(
+      "UPDATE mcp_oauth_grants SET permissions_json = ? WHERE id = ? AND user_id = ? AND resource = ? AND revoked_at IS NULL AND refresh_expires_at > ?",
+      [
+        JSON.stringify(permissions),
+        grant.id,
+        c.get("principal").userId,
+        mcpResource(c),
+        Date.now(),
+      ],
+    );
+  if (!updated.rowsAffected)
+    throw new AppError(
+      404,
+      "MCP_CONNECTION_NOT_FOUND",
+      "Connection not found.",
+    );
+  await audit(c, "core.mcp.client_permissions_updated", "core.mcp", grant.id, {
+    actionCount: actions.length,
+  });
+  return c.json(
+    { ...grant, ...connectionPermissions(actions, permissions) },
+    200,
+    noStore,
+  );
+});
 mcpConsentRoutes.delete("/me/mcp-connections/:id", async (c) => {
   await c
     .get("db")

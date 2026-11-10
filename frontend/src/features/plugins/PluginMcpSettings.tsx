@@ -80,6 +80,7 @@ function PluginMcpForm({
         ...data,
       }));
       setDraft(null);
+      void client.invalidateQueries({ queryKey: ["mcp-connections"] });
       toast.success(t("mcp.saved"));
     },
     onError: (error) => {

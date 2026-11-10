@@ -473,6 +473,215 @@ describe("MCP authorization and persistence", () => {
   });
 });
 
+async function seedConnection(
+  f: Awaited<ReturnType<typeof fixture>>,
+  scopes: string[] = [],
+) {
+  const token = "mcp_access_existing_connection";
+  const now = Date.now();
+  f.sqlite
+    .prepare(
+      "INSERT INTO mcp_oauth_clients(id,name,redirect_uris_json,created_at) VALUES ('existing-client','Existing assistant','[\"https://assistant.example/callback\"]',?)",
+    )
+    .run(now);
+  f.sqlite
+    .prepare(
+      "INSERT INTO mcp_oauth_grants(id,client_id,user_id,resource,permissions_json,access_hash,refresh_hash,access_expires_at,refresh_expires_at,created_at) VALUES ('existing-grant','existing-client','owner',?,?,?,?,?,?,?)",
+    )
+    .run(
+      `${origin}/mcp`,
+      JSON.stringify(scopes),
+      await sha256(token),
+      await sha256("test-refresh"),
+      now + 3600000,
+      now + 86400000,
+      now,
+    );
+  return {
+    token,
+    headers: { Authorization: `Bearer ${token}` } as typeof cookieHeaders,
+  };
+}
+
+describe("MCP connection permission review", () => {
+  it("repairs a zero-scope connection after actions are enabled without replacing tokens or executing tools", async () => {
+    const f = await fixture();
+    const { headers, token } = await seedConnection(f);
+    await f.settings(true, ["demo_list", "demo_create"]);
+    expect(
+      (await (await f.rpc("tools/list", {}, headers)).json()).result.tools,
+    ).toEqual([]);
+    const before = f.sqlite.prepare("SELECT * FROM mcp_oauth_grants").get()!;
+    const list = await (
+      await f.request("/api/v1/me/mcp-connections", { headers: cookieHeaders })
+    ).json();
+    expect(list.items[0]).toMatchObject({
+      authorizedActionCount: 0,
+      availableActionCount: 2,
+      needsPermissionUpdate: true,
+    });
+    expect(
+      list.actions.map((action: { name: string }) => action.name).sort(),
+    ).toEqual(["demo_create", "demo_list"]);
+    expect(JSON.stringify(list)).not.toMatch(
+      /access_hash|refresh_hash|permissions_json/,
+    );
+    const updated = await f.request(
+      "/api/v1/me/mcp-connections/existing-grant/permissions",
+      {
+        method: "POST",
+        headers: { ...cookieHeaders, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          approvedActions: list.actions.map(
+            (action: { name: string }) => action.name,
+          ),
+        }),
+      },
+    );
+    expect(updated.status).toBe(200);
+    expect(await updated.json()).toMatchObject({
+      authorizedActionCount: 2,
+      availableActionCount: 2,
+      needsPermissionUpdate: false,
+    });
+    const after = f.sqlite.prepare("SELECT * FROM mcp_oauth_grants").get()!;
+    expect({ ...after, permissions_json: before.permissions_json }).toEqual(
+      before,
+    );
+    expect(JSON.parse(after.permissions_json as string).sort()).toEqual([
+      permissions[1],
+      permissions[0],
+    ]);
+    expect(
+      (await (await f.rpc("tools/list", {}, headers)).json()).result.tools,
+    ).toHaveLength(2);
+    expect(f.pluginFetch).not.toHaveBeenCalled();
+    await f.settings(true, ["demo_list"]);
+    expect(
+      (await (await f.rpc("tools/list", {}, headers)).json()).result.tools,
+    ).toHaveLength(1);
+    const audit = f.sqlite
+      .prepare(
+        "SELECT metadata_json FROM audit_log WHERE action = 'core.mcp.client_permissions_updated'",
+      )
+      .get();
+    expect(audit?.metadata_json).toBe('{"actionCount":2}');
+    expect(JSON.stringify(audit)).not.toContain(token);
+  });
+
+  it("requires exact reviewed actions, a trusted browser session and an active connection owned by the current user", async () => {
+    const f = await fixture();
+    await seedConnection(f);
+    await f.settings(true, ["demo_list"]);
+    const update = (approvedActions = ["demo_list"], headers = cookieHeaders) =>
+      f.request("/api/v1/me/mcp-connections/existing-grant/permissions", {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ approvedActions }),
+      });
+    expect((await update([])).status).toBe(409);
+    expect((await update(["demo_list", "demo_create"])).status).toBe(409);
+    expect((await update(["demo_create"])).status).toBe(409);
+    expect(
+      (
+        await update(["demo_list"], {
+          ...cookieHeaders,
+          Origin: "https://evil.example",
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await update(["demo_list"], {
+          "X-API-Key": "app_readonly",
+        } as typeof cookieHeaders)
+      ).status,
+    ).toBe(403);
+    expect(
+      (await update(["demo_list"], {} as typeof cookieHeaders)).status,
+    ).toBe(401);
+    for (const change of [
+      "UPDATE mcp_oauth_grants SET user_id = 'another-user'",
+      "UPDATE mcp_oauth_grants SET user_id = 'owner', revoked_at = 1",
+      "UPDATE mcp_oauth_grants SET revoked_at = NULL, refresh_expires_at = 1",
+      "UPDATE mcp_oauth_grants SET refresh_expires_at = 9999999999999, resource = 'https://other.example/mcp'",
+    ]) {
+      f.sqlite.exec(change);
+      expect((await update()).status).toBe(404);
+    }
+    expect(
+      f.sqlite.prepare("SELECT permissions_json FROM mcp_oauth_grants").get()
+        ?.permissions_json,
+    ).toBe("[]");
+    expect(f.pluginFetch).not.toHaveBeenCalled();
+  });
+
+  it("cannot approve actions beyond the current user's permissions or silently expand grants", async () => {
+    const f = await fixture();
+    await seedConnection(f);
+    await f.settings(true, ["demo_list", "demo_create"]);
+    f.sqlite.exec(
+      "UPDATE groups SET is_admin = 0; INSERT INTO group_permissions(group_id,permission_id,created_at) VALUES ('admin','demo.record.read',1)",
+    );
+    const list = await (
+      await f.request("/api/v1/me/mcp-connections", { headers: cookieHeaders })
+    ).json();
+    expect(list.actions.map((action: { name: string }) => action.name)).toEqual(
+      ["demo_list"],
+    );
+    expect(
+      f.sqlite.prepare("SELECT permissions_json FROM mcp_oauth_grants").get()
+        ?.permissions_json,
+    ).toBe("[]");
+    const update = (approvedActions: string[]) =>
+      f.request("/api/v1/me/mcp-connections/existing-grant/permissions", {
+        method: "POST",
+        headers: { ...cookieHeaders, "Content-Type": "application/json" },
+        body: JSON.stringify({ approvedActions }),
+      });
+    expect((await update(["demo_list", "demo_create"])).status).toBe(409);
+    expect((await update(["demo_list"])).status).toBe(200);
+    expect(
+      f.sqlite.prepare("SELECT permissions_json FROM mcp_oauth_grants").get()
+        ?.permissions_json,
+    ).toBe('["demo.record.read"]');
+  });
+
+  it("does not issue an initial authorization code when no actions are enabled", async () => {
+    const f = await fixture();
+    await seedConnection(f);
+    const request = {
+      client_id: "existing-client",
+      redirect_uri: "https://assistant.example/callback",
+      response_type: "code",
+      resource: `${origin}/mcp`,
+      scope: "mcp:tools",
+      code_challenge: "x".repeat(43),
+      code_challenge_method: "S256",
+    };
+    const result = await f.request("/api/v1/mcp/oauth/authorize", {
+      method: "POST",
+      headers: { ...cookieHeaders, "Content-Type": "application/json" },
+      body: JSON.stringify({ request, approve: true }),
+    });
+    expect(result.status).toBe(422);
+    expect((await result.json()).error.code).toBe("MCP_NO_ACTIONS");
+    expect(
+      f.sqlite.prepare("SELECT count(*) AS count FROM mcp_oauth_codes").get()
+        ?.count,
+    ).toBe(0);
+    const denied = await f.request("/api/v1/mcp/oauth/authorize", {
+      method: "POST",
+      headers: { ...cookieHeaders, "Content-Type": "application/json" },
+      body: JSON.stringify({ request, approve: false }),
+    });
+    expect(denied.status).toBe(200);
+    expect(
+      new URL((await denied.json()).redirect).searchParams.get("error"),
+    ).toBe("access_denied");
+  });
+});
+
 describe("MCP declarations", () => {
   it("treats explicit action declarations as authoritative over legacy metadata", () => {
     const source = {

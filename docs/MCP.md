@@ -38,7 +38,20 @@ dynamic public-client registration, resource audience binding, short-lived
 access tokens and rotating refresh tokens. Browser login uses the existing
 Nexus account and an explicit consent screen. Only token hashes are stored.
 Saving a plugin action change takes effect on the next call, including calls from
-clients with cached tool lists. Reconnect to grant additional permissions.
+clients with cached tool lists. OAuth snapshots the concrete permissions approved
+at consent time; refreshing a client's tool catalog does not expand that grant.
+
+After enabling more actions, open the existing connection in **MCP connections**,
+review the listed actions, and choose **Update permissions**. Then refresh tools
+in the assistant. The hub shows authorized versus available action counts and
+flags outdated grants. This explicit, cookie-authenticated consent updates only
+the current user's selected active connection, without replacing its tokens or
+executing tools. The submitted action names must exactly match the current
+review; changed allowlists or user permissions require another review. Expired,
+revoked, cross-user and API-key attempts are rejected. Initial authorization is
+blocked when no actions are enabled, avoiding a successful-looking empty link.
+Reconnecting and consenting again is also supported. Neither enabling actions
+nor refreshing metadata silently broadens another connection's permissions.
 
 Add the endpoint as a remote HTTP server in the chosen client, select OAuth,
 and authorize it in Nexus. Availability depends on that client's account and

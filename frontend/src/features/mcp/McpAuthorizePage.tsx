@@ -60,6 +60,7 @@ export default function McpAuthorizePage() {
             </Button>
             <Button
               busy={authorize.isPending}
+              disabled={!consent.data.actions.length}
               onClick={() => authorize.mutate(true)}
             >
               {t("mcp.authorize")}

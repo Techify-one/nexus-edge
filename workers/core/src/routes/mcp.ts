@@ -109,7 +109,7 @@ mcpRoutes.post("/", async (c) => {
         version: c.env.APP_VERSION,
       },
       instructions:
-        "Only actions explicitly enabled by the Nexus administrator are available. Respect each tool schema and the user's intent. Reconnect after changing permissions.",
+        "Only actions explicitly enabled by the Nexus administrator are available. Respect each tool schema and the user's intent. After enabling more actions, review and update connection permissions in the hub, then refresh client tools.",
     });
   }
   if (message.method === "ping") return result({});

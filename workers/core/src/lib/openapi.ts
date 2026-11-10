@@ -1277,6 +1277,8 @@ export const OPENAPI_DOCUMENT = {
     },
     "/api/v1/me/mcp-connections": {
       get: {
+        summary:
+          "List active connections, authorized action counts and current consent actions",
         responses: {
           "200": { description: "Current user's active MCP connections" },
         },
@@ -1286,6 +1288,57 @@ export const OPENAPI_DOCUMENT = {
       delete: {
         responses: {
           "204": { description: "Connection and refresh access revoked" },
+        },
+      },
+    },
+    "/api/v1/me/mcp-connections/{id}/permissions": {
+      post: {
+        summary:
+          "Explicitly approve the current actions for an existing connection without replacing its tokens",
+        security: [{ cookieAuth: [] }],
+        parameters: [
+          {
+            name: "id",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                additionalProperties: false,
+                required: ["approvedActions"],
+                properties: {
+                  approvedActions: {
+                    type: "array",
+                    maxItems: 5000,
+                    items: { type: "string", minLength: 1, maxLength: 128 },
+                    description:
+                      "Exact action names reviewed from GET /api/v1/me/mcp-connections. Stale consent is rejected.",
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description:
+              "Updated connection with effective action counts; no tool is executed",
+          },
+          "403": { description: "Browser session and trusted origin required" },
+          "404": {
+            description:
+              "Connection is not active or does not belong to this user",
+          },
+          "409": {
+            description:
+              "Available actions changed; review the current list again",
+          },
         },
       },
     },
