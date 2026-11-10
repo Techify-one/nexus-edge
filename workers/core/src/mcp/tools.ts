@@ -106,9 +106,11 @@ export function actionsFromOpenApi(
         !operation.requestBody.content?.["application/json"]
       )
         continue;
-      const responseTypes = Object.values(operation.responses ?? {}).flatMap(
-        (response: any) => Object.keys(response?.content ?? {}),
-      );
+      const responseTypes = Object.entries(operation.responses ?? {})
+        .filter(([status]) => /^2\d\d$/u.test(status))
+        .flatMap(([, response]: [string, any]) =>
+          Object.keys(response?.content ?? {}),
+        );
       if (
         responseTypes.length &&
         !responseTypes.some(

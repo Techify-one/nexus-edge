@@ -1,4 +1,5 @@
 import type { Context, MiddlewareHandler, Next } from "hono";
+import { APIError } from "better-auth/api";
 import { createId, type RequestPrincipal } from "@app/core-contract";
 import type { HonoEnv } from "../env.js";
 import { AppError } from "../lib/http.js";
@@ -88,11 +89,28 @@ export async function authenticatePrincipal(
   }
 
   const auth = c.get("auth");
-  const sessionResult = await auth.api.getSession({
-    headers,
-    returnHeaders: true,
-  });
-  for (const cookie of sessionResult.headers.getSetCookie())
+  const sessionResult = await auth.api
+    .getSession({
+      headers,
+      returnHeaders: true,
+    })
+    .catch((error: unknown) => {
+      if (error instanceof APIError && [401, 403].includes(error.statusCode))
+        throw new AppError(
+          401,
+          apiKey ? "INVALID_API_KEY" : "UNAUTHENTICATED",
+          "Invalid or expired credentials.",
+        );
+      if (error instanceof APIError && error.statusCode === 429)
+        throw new AppError(
+          429,
+          "RATE_LIMITED",
+          "Too many requests. Try again shortly.",
+        );
+      throw error;
+    });
+  // API-key session hooks return a session without response headers.
+  for (const cookie of sessionResult.headers?.getSetCookie() ?? [])
     c.header("Set-Cookie", cookie, { append: true });
   const session = sessionResult.response;
   if (!session?.user?.id)

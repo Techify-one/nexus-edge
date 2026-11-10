@@ -70,6 +70,8 @@ export function createAuth(env: CoreEnv, db: DatabasePort) {
         disableKeyHashing: false,
         defaultPrefix: "app_",
         requireName: true,
+        minimumNameLength: 2,
+        maximumNameLength: 100,
         startingCharactersConfig: { shouldStore: true, charactersLength: 12 },
         keyExpiration: API_KEY_EXPIRATION,
         rateLimit: { enabled: true, timeWindow: 60_000, maxRequests: 600 },

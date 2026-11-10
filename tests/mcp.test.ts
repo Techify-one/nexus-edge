@@ -487,7 +487,10 @@ describe("MCP declarations", () => {
           get: {
             operationId: "download",
             "x-nexus-permission": "demo.record.read",
-            responses: { 200: { content: { "application/octet-stream": {} } } },
+            responses: {
+              200: { content: { "application/octet-stream": {} } },
+              400: { content: { "application/json": {} } },
+            },
           },
         },
         "/api/v1/p/demo/upload": {

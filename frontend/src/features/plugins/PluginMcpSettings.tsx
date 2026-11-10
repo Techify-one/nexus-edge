@@ -38,11 +38,23 @@ export function PluginMcpSettings({ pluginId }: { pluginId: string }) {
         method: "PUT",
         body: JSON.stringify(input),
       }),
+    onMutate: (input) => {
+      void client.cancelQueries({ queryKey });
+      const previous = client.getQueryData<Settings>(queryKey);
+      if (previous) client.setQueryData(queryKey, { ...previous, ...input });
+      return { previous };
+    },
     onSuccess: (data) => {
-      client.setQueryData(queryKey, { ...settings.data, ...data });
+      client.setQueryData<Settings>(queryKey, (current) => ({
+        ...current,
+        ...data,
+      }));
       toast.success(t("mcp.saved"));
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error, _input, context) => {
+      if (context?.previous) client.setQueryData(queryKey, context.previous);
+      toast.error(error.message);
+    },
   });
   if (settings.isPending) return <Skeleton className="h-36" />;
   if (settings.isError)

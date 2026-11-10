@@ -69,6 +69,11 @@ describe("plugin MCP controls", () => {
         "true",
       ),
     );
+    await waitFor(() =>
+      expect((screen.getByRole("switch") as HTMLButtonElement).disabled).toBe(
+        false,
+      ),
+    );
     fireEvent.click(screen.getAllByRole("checkbox")[0]!);
     await waitFor(() => expect(stored.allowedActions).toEqual(["demo_list"]));
     expect(writes).toEqual([
@@ -118,5 +123,56 @@ describe("plugin MCP controls", () => {
       (screen.getByRole("checkbox") as HTMLInputElement).closest("fieldset")
         ?.disabled,
     ).toBe(true);
+  });
+  it("shows changes immediately and restores the saved state when saving fails", async () => {
+    ability.update([{ action: "manage", subject: "all" }]);
+    let completeSave: ((response: Response) => void) | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: unknown, init?: RequestInit) => {
+        if (init?.method === "PUT")
+          return new Promise<Response>((resolve) => {
+            completeSave = resolve;
+          });
+        return Response.json({
+          enabled: false,
+          allowedActions: [],
+          actions: [
+            { name: "demo_list", title: "List records", destructive: false },
+          ],
+        });
+      }),
+    );
+    render(
+      <QueryClientProvider
+        client={
+          new QueryClient({ defaultOptions: { mutations: { retry: false } } })
+        }
+      >
+        <I18nProvider>
+          <MemoryRouter>
+            <PluginMcpSettings pluginId="demo" />
+          </MemoryRouter>
+        </I18nProvider>
+      </QueryClientProvider>,
+    );
+    const toggle = await screen.findByRole("switch");
+    fireEvent.click(toggle);
+    await waitFor(() =>
+      expect(toggle.getAttribute("aria-checked")).toBe("true"),
+    );
+    expect((toggle as HTMLButtonElement).disabled).toBe(true);
+    completeSave!(
+      Response.json(
+        { error: { code: "INTERNAL_ERROR", message: "Save failed" } },
+        { status: 500 },
+      ),
+    );
+    await waitFor(() =>
+      expect(toggle.getAttribute("aria-checked")).toBe("false"),
+    );
+    await waitFor(() =>
+      expect((toggle as HTMLButtonElement).disabled).toBe(false),
+    );
   });
 });
