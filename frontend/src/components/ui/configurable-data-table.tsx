@@ -54,6 +54,13 @@ import {
   type TouchEvent,
 } from "react";
 import { toast } from "sonner";
+import {
+  TABLE_ACTIONS_KEY,
+  TABLE_ACTIONS_DEFAULT_WIDTH,
+  TABLE_ACTIONS_MIN_WIDTH,
+  TABLE_ACTIONS_MAX_WIDTH,
+  tableActionsWidth,
+} from "@nexus/plugin-sdk";
 import { ApiError, api } from "../../lib/api/core-client.js";
 import { useI18n } from "../../i18n/index.js";
 import { EmptyState, Skeleton } from "./index.js";
@@ -110,12 +117,15 @@ const defaultPreference = <T,>(
   columnVisibility: Object.fromEntries(
     columns.map((column) => [column.key, true]),
   ),
-  columnSizing: Object.fromEntries(
-    columns.map((column) => [
-      column.key,
-      clamp(column.size, column.minSize, column.maxSize),
-    ]),
-  ),
+  columnSizing: {
+    ...Object.fromEntries(
+      columns.map((column) => [
+        column.key,
+        clamp(column.size, column.minSize, column.maxSize),
+      ]),
+    ),
+    [TABLE_ACTIONS_KEY]: TABLE_ACTIONS_DEFAULT_WIDTH,
+  },
   sorting: [],
 });
 
@@ -155,6 +165,9 @@ const normalizedPreference = <T,>(
         column.maxSize,
       ),
     ]),
+  );
+  columnSizing[TABLE_ACTIONS_KEY] = tableActionsWidth(
+    stored.columnSizing[TABLE_ACTIONS_KEY],
   );
   const sorting = stored.sorting
     .filter(({ id }) => sortable.has(id))
@@ -295,6 +308,10 @@ export function ConfigurableDataTable<T extends { id: string }>({
   manualSorting?: boolean;
 }) {
   const { t } = useI18n();
+  if (columns.some((column) => column.key === TABLE_ACTIONS_KEY))
+    throw new Error("TABLE_COLUMN_KEY_RESERVED");
+  const resizeCleanup = useRef<(() => void) | null>(null);
+  useEffect(() => () => resizeCleanup.current?.(), []);
   const preferenceSignature = columns
     .map(
       (column) =>
@@ -514,7 +531,45 @@ export function ConfigurableDataTable<T extends { id: string }>({
 
   const visibleColumns = table.getVisibleLeafColumns();
   const visibleDataColumnCount = visibleColumns.length;
-  const actionsWidth = 144;
+  const actionsWidth = tableActionsWidth(columnSizing[TABLE_ACTIONS_KEY]);
+  const setActionsWidth = (width: number) =>
+    setColumnSizing((current) => ({
+      ...current,
+      [TABLE_ACTIONS_KEY]: tableActionsWidth(width),
+    }));
+  const startActionsResize = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    resizeCleanup.current?.();
+    const startX = event.clientX;
+    const handle = event.currentTarget;
+    const move = (pointer: PointerEvent) => {
+      if (pointer.pointerId !== event.pointerId) return;
+      setActionsWidth(actionsWidth + startX - pointer.clientX);
+    };
+    const cleanup = () => {
+      document.removeEventListener("pointermove", move);
+      document.removeEventListener("pointerup", finish);
+      document.removeEventListener("pointercancel", cancel);
+      if (handle.hasPointerCapture?.(event.pointerId))
+        handle.releasePointerCapture(event.pointerId);
+      resizeCleanup.current = null;
+    };
+    const finish = (pointer: PointerEvent) => {
+      if (pointer.pointerId !== event.pointerId) return;
+      move(pointer);
+      cleanup();
+    };
+    const cancel = (pointer: PointerEvent) => {
+      if (pointer.pointerId === event.pointerId) cleanup();
+    };
+    resizeCleanup.current = cleanup;
+    handle.setPointerCapture?.(event.pointerId);
+    document.addEventListener("pointermove", move);
+    document.addEventListener("pointerup", finish);
+    document.addEventListener("pointercancel", cancel);
+  };
 
   return (
     <div>
@@ -560,7 +615,11 @@ export function ConfigurableDataTable<T extends { id: string }>({
                       );
                     })}
                   </SortableContext>
-                  <th className="app-table-head sticky right-0 z-20 w-36 border-l bg-slate-50 px-4 py-3 text-right shadow-[-6px_0_10px_-10px_rgba(15,23,42,0.45)]">
+                  <th
+                    data-column-key={TABLE_ACTIONS_KEY}
+                    style={{ width: actionsWidth }}
+                    className="app-table-head sticky right-0 z-20 border-l bg-slate-50 px-4 py-3 text-right shadow-[-6px_0_10px_-10px_rgba(15,23,42,0.45)]"
+                  >
                     <div className="flex items-center justify-end gap-1.5">
                       <span>{t("common.actions")}</span>
                       {isSaving && (
@@ -638,6 +697,36 @@ export function ConfigurableDataTable<T extends { id: string }>({
                         </DropdownMenu.Portal>
                       </DropdownMenu.Root>
                     </div>
+                    <div
+                      role="separator"
+                      tabIndex={0}
+                      aria-label={t("table.resizeColumn", {
+                        name: t("common.actions"),
+                      })}
+                      aria-orientation="vertical"
+                      aria-valuemin={TABLE_ACTIONS_MIN_WIDTH}
+                      aria-valuemax={TABLE_ACTIONS_MAX_WIDTH}
+                      aria-valuenow={actionsWidth}
+                      className="absolute inset-y-1 left-0 z-30 w-2 cursor-col-resize touch-none border-l-2 border-slate-300 hover:border-indigo-500 focus:border-indigo-500 focus:outline-none"
+                      onPointerDown={startActionsResize}
+                      onKeyDown={(event) => {
+                        const step = event.shiftKey ? 40 : 10;
+                        const width =
+                          event.key === "ArrowRight"
+                            ? actionsWidth + step
+                            : event.key === "ArrowLeft"
+                              ? actionsWidth - step
+                              : event.key === "Home"
+                                ? TABLE_ACTIONS_MIN_WIDTH
+                                : event.key === "End"
+                                  ? TABLE_ACTIONS_MAX_WIDTH
+                                  : null;
+                        if (width === null) return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setActionsWidth(width);
+                      }}
+                    />
                   </th>
                 </tr>
               ))}
@@ -664,10 +753,17 @@ export function ConfigurableDataTable<T extends { id: string }>({
                     </td>
                   ))}
                   <td
-                    className="app-table-action-cell sticky right-0 z-10 w-36 border-l px-4 py-2 text-right shadow-[-6px_0_10px_-10px_rgba(15,23,42,0.45)] transition"
+                    data-column-key={TABLE_ACTIONS_KEY}
+                    style={{ width: actionsWidth }}
+                    className="app-table-action-cell sticky right-0 z-10 border-l px-4 py-2 text-right shadow-[-6px_0_10px_-10px_rgba(15,23,42,0.45)] transition"
                     onClick={(event) => event.stopPropagation()}
                   >
-                    {actions?.(row.original)}
+                    <div
+                      className="app-table-actions-content"
+                      onKeyDown={(event) => event.stopPropagation()}
+                    >
+                      {actions?.(row.original)}
+                    </div>
                   </td>
                 </tr>
               ))}

@@ -158,4 +158,77 @@ describe("public plugin SDK configurable table", () => {
       "No records found.",
     );
   });
+  it("persists Actions resizing without altering neighboring columns", async () => {
+    vi.useFakeTimers();
+    const set = vi.fn(async () => undefined);
+    const host = {
+      apiVersion: 1,
+      pluginId: "outside",
+      locale: "en",
+      theme: "light",
+      permissions: [],
+      api: vi.fn(),
+      coreApi: vi.fn(),
+      navigate: vi.fn(),
+      notify: vi.fn(),
+      tablePreferences: { get: vi.fn(async () => null), set },
+    } satisfies PluginHostV1;
+    const container = document.createElement("div");
+    document.body.append(container);
+    const mount = await mountConfigurableDataTable({
+      container,
+      host,
+      tableId: "plugin.outside.resize",
+      rows: [{ id: "1" }],
+      onOpen: vi.fn(),
+      columns: [
+        {
+          key: "id",
+          label: "ID",
+          render: (r) => r.id,
+          sortValue: (r) => r.id,
+          size: 120,
+          minSize: 80,
+          maxSize: 200,
+        },
+      ],
+    });
+    const cols = container.querySelectorAll("col");
+    const handle = container.querySelector<HTMLElement>(
+      '[data-resize-key="__nexus_actions"]',
+    )!;
+    expect(cols[1]?.style.width).toBe("240px");
+    fireEvent.keyDown(handle, { key: "ArrowRight" });
+    expect(cols[1]?.style.width).toBe("250px");
+    expect(cols[0]?.style.width).toBe("120px");
+    const pointer = (type: string, x: number) => {
+      const event = new MouseEvent(type, {
+        bubbles: true,
+        clientX: x,
+        button: 0,
+      });
+      Object.defineProperty(event, "pointerId", { value: 1 });
+      return event;
+    };
+    fireEvent(handle, pointer("pointerdown", 100));
+    fireEvent(handle, pointer("pointermove", 50));
+    expect(cols[1]?.style.width).toBe("300px");
+    fireEvent(handle, pointer("pointerup", 30));
+    expect(cols[1]?.style.width).toBe("320px");
+    fireEvent(handle, pointer("pointermove", 200));
+    expect(cols[1]?.style.width).toBe("320px");
+    await vi.advanceTimersByTimeAsync(301);
+    expect(set).toHaveBeenLastCalledWith(
+      "plugin.outside.resize",
+      expect.objectContaining({
+        columnSizing: { id: 120, __nexus_actions: 320 },
+        columnOrder: ["id"],
+      }),
+    );
+    fireEvent.keyDown(handle, { key: "Home" });
+    expect(cols[1]?.style.width).toBe("144px");
+    fireEvent.keyDown(handle, { key: "End" });
+    expect(cols[1]?.style.width).toBe("640px");
+    mount.dispose();
+  });
 });

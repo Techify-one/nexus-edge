@@ -355,3 +355,17 @@ movam ou substituam o botão Voltar, título global, tema ou ações do host. O
 slot pertence ao host, é removido ao sair do plugin e tem rolagem horizontal
 em telas estreitas. Desmonte o portal no dispose; se o slot estiver ausente
 (host antigo), renderize a navegação local como fallback.
+
+## Actions column sizing
+
+Use the shared configurable table unchanged. Actions stays pinned on the right,
+not reorderable, hideable or sortable, but supports independent resizing from
+144 to 640 px (default 240). Width is saved per user/table under the reserved
+`columnSizing.__nexus_actions` key. Do not reuse this key for data columns.
+
+Keep action buttons in the shared wrapping container, including groups of three
+or more actions and long translated labels. Test mouse/touch/keyboard resize,
+unchanged neighboring widths, reload/reset, dark/mobile layouts and button
+bounds in a real browser. Never hardcode a feature-local Actions width or hide
+an overflowing action. Existing plugins with bundled assets need a rebuilt,
+versioned release to adopt shared component fixes.

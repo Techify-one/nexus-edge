@@ -84,3 +84,10 @@ export const assertPluginTableId = (
 
 export type { PluginTableColumnV1, PluginTableLabelsV1 } from "./table.js";
 export { mountConfigurableDataTable } from "./table.js";
+export {
+  TABLE_ACTIONS_KEY,
+  TABLE_ACTIONS_DEFAULT_WIDTH,
+  TABLE_ACTIONS_MIN_WIDTH,
+  TABLE_ACTIONS_MAX_WIDTH,
+  tableActionsWidth,
+} from "./table-layout.js";

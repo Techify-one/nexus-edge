@@ -358,4 +358,126 @@ describe("configurable data table", () => {
       sorting: [{ id: "name", desc: false }],
     });
   });
+  it("resizes pinned Actions independently, persists, reloads and resets its width", async () => {
+    let stored: unknown = null;
+    const requests: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: unknown, init?: RequestInit) => {
+        if (init?.method === "PUT") {
+          stored = JSON.parse(String(init.body));
+          requests.push(stored);
+        }
+        if (init?.method === "DELETE") stored = null;
+        return Response.json({
+          tableId: "core.action-test",
+          config: stored,
+          updatedAt: null,
+        });
+      }),
+    );
+    const onOpen = vi.fn(),
+      action = vi.fn();
+    const mount = () =>
+      render(
+        <QueryClientProvider
+          client={
+            new QueryClient({
+              defaultOptions: {
+                queries: { retry: false },
+                mutations: { retry: false },
+              },
+            })
+          }
+        >
+          <I18nProvider>
+            <ConfigurableDataTable
+              tableId="core.action-test"
+              rows={[{ id: "1", name: "Alice" }]}
+              onOpen={onOpen}
+              columns={[
+                {
+                  key: "name",
+                  label: "Name",
+                  render: (r) => r.name,
+                  sortValue: (r) => r.name,
+                  size: 200,
+                  minSize: 80,
+                  maxSize: 800,
+                },
+              ]}
+              actions={() => (
+                <div>
+                  <button onClick={action}>Edit</button>
+                  <button>Pause</button>
+                  <button>End</button>
+                </div>
+              )}
+            />
+          </I18nProvider>
+        </QueryClientProvider>,
+      );
+    let mounted = mount();
+    await screen.findByRole("table");
+    let cols = mounted.container.querySelectorAll("col");
+    expect(cols[1]?.style.width).toBe("240px");
+    let handle = screen.getByRole("separator", {
+      name: /Redimensionar coluna Ações|Resize Actions column/,
+    });
+    fireEvent.keyDown(handle, { key: "ArrowRight" });
+    expect(cols[1]?.style.width).toBe("250px");
+    expect(cols[0]?.style.width).toBe("200px");
+    // jsdom needs an explicit PointerEvent implementation for pointer coordinates.
+    const pointer = (type: string, x: number) => {
+      const event = new MouseEvent(type, {
+        bubbles: true,
+        clientX: x,
+        button: 0,
+      });
+      Object.defineProperty(event, "pointerId", { value: 1 });
+      return event;
+    };
+    fireEvent(handle, pointer("pointerdown", 500));
+    fireEvent(document, pointer("pointermove", 400));
+    expect(cols[1]?.style.width).toBe("350px");
+    fireEvent(document, pointer("pointerup", 380));
+    expect(cols[1]?.style.width).toBe("370px");
+    fireEvent(document, pointer("pointermove", 700));
+    expect(cols[1]?.style.width).toBe("370px");
+    expect(cols[0]?.style.width).toBe("200px");
+    await waitFor(() => expect(requests.length).toBeGreaterThan(0));
+    expect(stored).toMatchObject({
+      columnSizing: { name: 200, __nexus_actions: 370 },
+      columnOrder: ["name"],
+    });
+    fireEvent.keyDown(screen.getByRole("button", { name: "Edit" }), {
+      key: "Enter",
+    });
+    expect(onOpen).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    expect(action).toHaveBeenCalledTimes(1);
+    mounted.unmount();
+    mounted = mount();
+    await screen.findByRole("table");
+    cols = mounted.container.querySelectorAll("col");
+    expect(cols[1]?.style.width).toBe("370px");
+    handle = screen.getByRole("separator", {
+      name: /Redimensionar coluna Ações|Resize Actions column/,
+    });
+    fireEvent.keyDown(handle, { key: "Home" });
+    expect(cols[1]?.style.width).toBe("144px");
+    fireEvent.keyDown(handle, { key: "ArrowLeft" });
+    expect(cols[1]?.style.width).toBe("144px");
+    fireEvent.keyDown(handle, { key: "End" });
+    expect(cols[1]?.style.width).toBe("640px");
+    const settings = screen.getByRole("button", {
+      name: /^(Colunas|Columns)$/,
+    });
+    expect(settings.closest("th")?.dataset.columnKey).toBe("__nexus_actions");
+    fireEvent.pointerDown(settings, { button: 0, ctrlKey: false });
+    fireEvent.click(
+      screen.getByRole("button", { name: /Restaurar padrão|Restore defaults/ }),
+    );
+    await waitFor(() => expect(cols[1]?.style.width).toBe("240px"));
+  });
 });

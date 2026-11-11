@@ -17,20 +17,20 @@ Do not copy the component into a feature and do not build a parallel table abstr
 
 ## Required behavior
 
-| Capability    | Required implementation                                                                                                                                                                                                       |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Column order  | Drag by the grip in the header. Save the resulting stable column-key order per user.                                                                                                                                          |
-| Visibility    | The icon-only settings trigger is inside the fixed `Ações` header. Its menu shows every hideable data column and prevents hiding the final visible data column.                                                               |
-| Sorting       | Every data column supplies `sortValue`. Header clicks cycle the single-column sort state, which is saved per user.                                                                                                            |
-| Resizing      | Use `columnResizeMode: "onChange"`. The width follows the held pointer continuously and stops exactly at release. Use exact widths/`colgroup`; do not stretch the table in a way that changes a neighboring column.           |
-| Persistence   | Debounce writes to the authenticated preference API and flush pending state on page exit. Never make another user's preferences visible and never use shared/global state or `localStorage` as the source of truth.           |
-| Reset         | Delete the authenticated user's saved preference for that `tableId` and restore declared defaults.                                                                                                                            |
-| Actions       | Keep `Ações` fixed outside data-column ordering, hiding, sorting, and resizing. The column-settings control contains only the icon, plus accessible `aria-label` and `title`. Do not create a separate toolbar row for it.    |
-| Accessibility | Preserve semantic table markup, keyboard row opening with Enter/Space, focus styling, accessible sorting state, drag labels, and resize separators.                                                                           |
-| States        | Preserve the standard loading skeleton and translated empty state.                                                                                                                                                            |
-| Contrast      | Use the canonical semantic surfaces: a distinct header, alternating row backgrounds, clear dividers, and a shared hover/focus highlight in both light and dark themes. Do not override these with plugin-specific row colors. |
+| Capability    | Required implementation                                                                                                                                                                                                                               |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Column order  | Drag by the grip in the header. Save the resulting stable column-key order per user.                                                                                                                                                                  |
+| Visibility    | The icon-only settings trigger is inside the fixed `Ações` header. Its menu shows every hideable data column and prevents hiding the final visible data column.                                                                                       |
+| Sorting       | Every data column supplies `sortValue`. Header clicks cycle the single-column sort state, which is saved per user.                                                                                                                                    |
+| Resizing      | Use `columnResizeMode: "onChange"`. The width follows the held pointer continuously and stops exactly at release. Use exact widths/`colgroup`; do not stretch the table in a way that changes a neighboring column.                                   |
+| Persistence   | Debounce writes to the authenticated preference API and flush pending state on page exit. Never make another user's preferences visible and never use shared/global state or `localStorage` as the source of truth.                                   |
+| Reset         | Delete the authenticated user's saved preference for that `tableId` and restore declared defaults.                                                                                                                                                    |
+| Actions       | Keep `Ações` pinned outside data-column ordering, hiding and sorting, but allow independent live resizing. The column-settings control contains only the icon, plus accessible `aria-label` and `title`. Do not create a separate toolbar row for it. |
+| Accessibility | Preserve semantic table markup, keyboard row opening with Enter/Space, focus styling, accessible sorting state, drag labels, and resize separators.                                                                                                   |
+| States        | Preserve the standard loading skeleton and translated empty state.                                                                                                                                                                                    |
+| Contrast      | Use the canonical semantic surfaces: a distinct header, alternating row backgrounds, clear dividers, and a shared hover/focus highlight in both light and dark themes. Do not override these with plugin-specific row colors.                         |
 
-The component always renders the fixed `Ações` column so the settings icon remains available even for a read-only list with no per-row action buttons.
+The component always renders the pinned `Ações` column so the settings icon remains available even for a read-only list with no per-row action buttons.
 
 Numeric values that need emphasis should use the shared `DataValue` component
 with an intentional `accent`, `success`, `info`, or `warning` tone. Summary
@@ -67,6 +67,26 @@ the standard controls fit on one line.
 The authenticated shell supplies compact page insets. Feature pages must not
 add a second outer top padding around record lists.
 
+## Actions sizing and containment
+
+Pinned position does not mean fixed width. Actions default to 240 px, clamp to
+144..640 px, and persist under the reserved `columnSizing.__nexus_actions` key.
+Never use `__nexus_actions` as a data-column key or include it in order,
+visibility or sorting. Old preferences without it receive the default width.
+Reset restores that default without renaming a table or deleting other users'
+preferences.
+
+The Actions header includes an accessible resize separator inside its visible
+edge. Mouse/touch changes only that width in real time; release uses the final
+pointer coordinate. Arrow keys adjust 10 px (Shift: 40), Home/End select bounds.
+The settings icon remains in this header, including read-only tables.
+
+Render actions inside the canonical wrapping container. Groups and buttons
+must stay inside their cell at both bounds, with long labels wrapping rather
+than clipping. Do not fix overflow by hiding a button or using a feature-local
+width override. Test real-browser button bounds, narrow viewports, horizontal
+scroll, both themes, persistence, reset, and an unchanged neighboring column.
+
 ## Stable identifiers and persistence
 
 Each table needs an immutable ID:
@@ -89,7 +109,7 @@ Plugins use exactly the same visual component and behavior as Core tables. There
 - Use `tableId="plugin.<manifest-id>.<resource>"`. The manifest ID segment must match the plugin's `manifest.json` ID.
 - Continue using the shared Core preference API. Do not add a preference table to plugin migrations and do not expose a plugin preference route.
 - The authenticated Core user ID remains the owner of the preference, so two users automatically receive independent plugin-table layouts.
-- Keep the same fixed `Ações` column and icon-only settings trigger. Plugin branding must not move, restyle, or replace this control.
+- Keep the same pinned, independently resizable `Ações` column and icon-only settings trigger. Plugin branding must not move, restyle, or replace this control.
 - Register plugin pages in `plugins/<plugin-id>/frontend/registry.ts`, compose
   that contribution in the plugin manifest, and follow the UI
   checklist in `plugins/template/README.md`.
@@ -161,7 +181,7 @@ For every new or migrated table:
 1. Use `ConfigurableDataTable` with a unique stable `tableId`.
 2. Define stable column keys, translations, rendering, sorting, and all three widths.
 3. Keep row actions inside the component's `actions` callback.
-4. Verify reorder, show/hide, sort, live resize, exact release position, reset, and reload persistence.
+4. Verify reorder, show/hide, sort, live resize (including Actions), exact release position, reset, and reload persistence.
 5. Verify two users can keep different configurations.
 6. Test that resizing one column does not change its neighbor.
 7. Test that the icon-only settings trigger is inside the `Ações` header and no separate settings row exists.

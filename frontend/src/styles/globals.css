@@ -143,6 +143,22 @@ html.dark .app-switch-thumb {
   background-color: inherit;
   border-color: var(--border-strong);
 }
+.app-table-actions-content,
+.app-table-actions-content > :where(div, span) {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.25rem;
+}
+.app-table-actions-content :where(button, a) {
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 
 .metric-card {
   --metric-background: #eff6ff;

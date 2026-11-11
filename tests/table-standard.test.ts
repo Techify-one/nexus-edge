@@ -85,6 +85,11 @@ describe("repository data-table standard", () => {
     expect(source).toContain("/api/v1/me/table-preferences/");
     expect(source).toContain('aria-label={t("table.columns")}');
     expect(source).toContain('t("common.actions")');
+    expect(source).toContain("TABLE_ACTIONS_KEY");
+    expect(source).toContain("startActionsResize");
+    expect(source).toContain("app-table-actions-content");
+    expect(source).not.toContain("const actionsWidth = 144");
+    expect(source).not.toContain("z-20 w-36");
   });
 
   it("requires plugin tables to use the plugin preference namespace", () => {

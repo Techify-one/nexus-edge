@@ -1,4 +1,11 @@
 import {
+  TABLE_ACTIONS_KEY,
+  TABLE_ACTIONS_DEFAULT_WIDTH,
+  TABLE_ACTIONS_MIN_WIDTH,
+  TABLE_ACTIONS_MAX_WIDTH,
+  tableActionsWidth,
+} from "./table-layout.js";
+import {
   assertPluginTableId,
   type PluginHostV1,
   type PluginTablePreferenceV1,
@@ -24,12 +31,14 @@ export type PluginTableLabelsV1 = {
   sortAscending: (column: string) => string;
   sortDescending: (column: string) => string;
   dragColumn: (column: string) => string;
+  resizeColumn: (column: string) => string;
 };
 
 const defaultLabels = (locale: PluginHostV1["locale"]): PluginTableLabelsV1 =>
   locale === "en"
     ? {
         actions: "Actions",
+        resizeColumn: (column) => `Resize ${column} column`,
         columns: "Columns",
         reset: "Reset columns",
         empty: "No records found.",
@@ -40,6 +49,7 @@ const defaultLabels = (locale: PluginHostV1["locale"]): PluginTableLabelsV1 =>
       }
     : {
         actions: "Ações",
+        resizeColumn: (column) => `Redimensionar coluna ${column}`,
         columns: "Colunas",
         reset: "Redefinir colunas",
         empty: "Nenhum registro encontrado.",
@@ -60,12 +70,15 @@ const defaultsFor = <Row>(
   columnVisibility: Object.fromEntries(
     columns.map((column) => [column.key, true]),
   ),
-  columnSizing: Object.fromEntries(
-    columns.map((column) => [
-      column.key,
-      clamp(column.size, column.minSize, column.maxSize),
-    ]),
-  ),
+  columnSizing: {
+    ...Object.fromEntries(
+      columns.map((column) => [
+        column.key,
+        clamp(column.size, column.minSize, column.maxSize),
+      ]),
+    ),
+    [TABLE_ACTIONS_KEY]: TABLE_ACTIONS_DEFAULT_WIDTH,
+  },
   sorting: [],
 });
 
@@ -104,6 +117,9 @@ const normalize = <Row>(
       ),
     ]),
   );
+  columnSizing[TABLE_ACTIONS_KEY] = tableActionsWidth(
+    stored.columnSizing[TABLE_ACTIONS_KEY],
+  );
   const sorting = stored.sorting.filter(({ id }) => byKey.has(id)).slice(0, 1);
   return { version: 1, columnOrder, columnVisibility, columnSizing, sorting };
 };
@@ -117,7 +133,7 @@ const cellContent = (value: Node | string | number | null | undefined): Node =>
 
 /**
  * Framework-neutral implementation of the Nexus configurable data-table
- * contract. The action column remains fixed outside preference state.
+ * contract. Actions stay pinned, with width stored separately from data columns.
  */
 export async function mountConfigurableDataTable<
   Row extends { id: string },
@@ -138,6 +154,7 @@ export async function mountConfigurableDataTable<
     new Set(columns.map((column) => column.key)).size !== columns.length ||
     columns.some(
       (column) =>
+        column.key === TABLE_ACTIONS_KEY ||
         !/^[A-Za-z][A-Za-z0-9_.-]{0,99}$/u.test(column.key) ||
         column.minSize <= 0 ||
         column.maxSize < column.minSize,
@@ -147,6 +164,7 @@ export async function mountConfigurableDataTable<
   const labels = { ...defaultLabels(host.locale), ...input.labels };
   let disposed = false;
   let saveTimer: number | undefined;
+  const resizeCleanups = new Set<() => void>();
   const loading = document.createElement("p");
   loading.className = "nexus-table-loading";
   loading.setAttribute("role", "status");
@@ -176,6 +194,7 @@ export async function mountConfigurableDataTable<
 
   const render = (): void => {
     if (disposed) return;
+    for (const cleanup of resizeCleanups) cleanup();
     container.replaceChildren();
     const visible = state.columnOrder
       .filter((key) => state.columnVisibility[key] !== false)
@@ -204,7 +223,7 @@ export async function mountConfigurableDataTable<
     table.style.width = `${visible.reduce(
       (total, column) =>
         total + (state.columnSizing[column.key] ?? column.size),
-      144,
+      tableActionsWidth(state.columnSizing[TABLE_ACTIONS_KEY]),
     )}px`;
     const colgroup = document.createElement("colgroup");
     const columnElements = new Map<string, HTMLTableColElement>();
@@ -215,11 +234,118 @@ export async function mountConfigurableDataTable<
       colgroup.appendChild(element);
     }
     const actionCol = document.createElement("col");
-    actionCol.style.width = "144px";
+    actionCol.style.width = `${tableActionsWidth(state.columnSizing[TABLE_ACTIONS_KEY])}px`;
     colgroup.appendChild(actionCol);
     table.appendChild(colgroup);
     const head = document.createElement("thead");
     const headerRow = document.createElement("tr");
+    const applyWidth = (
+      key: string,
+      value: number,
+      min: number,
+      max: number,
+    ) => {
+      const width = clamp(value, min, max);
+      state = {
+        ...state,
+        columnSizing: { ...state.columnSizing, [key]: width },
+      };
+      const element =
+        key === TABLE_ACTIONS_KEY ? actionCol : columnElements.get(key);
+      if (element) element.style.width = `${width}px`;
+      table.style.width = `${visible.reduce((total, item) => total + (state.columnSizing[item.key] ?? item.size), tableActionsWidth(state.columnSizing[TABLE_ACTIONS_KEY]))}px`;
+      table
+        .querySelectorAll<HTMLElement>(`[data-resize-key="${key}"]`)
+        .forEach((handle) =>
+          handle.setAttribute("aria-valuenow", String(width)),
+        );
+    };
+    const makeResize = (
+      key: string,
+      label: string,
+      min: number,
+      max: number,
+    ) => {
+      const resize = document.createElement("span");
+      resize.className =
+        key === TABLE_ACTIONS_KEY
+          ? "nexus-table-resize nexus-table-actions-resize"
+          : "nexus-table-resize";
+      resize.dataset.resizeKey = key;
+      resize.setAttribute("role", "separator");
+      resize.setAttribute("aria-label", labels.resizeColumn(label));
+      resize.setAttribute("aria-orientation", "vertical");
+      resize.setAttribute("aria-valuemin", String(min));
+      resize.setAttribute("aria-valuemax", String(max));
+      resize.setAttribute(
+        "aria-valuenow",
+        String(state.columnSizing[key] ?? min),
+      );
+      resize.tabIndex = 0;
+      resize.addEventListener("keydown", (event) => {
+        const width = state.columnSizing[key] ?? min;
+        const step = event.shiftKey ? 40 : 10;
+        const next =
+          event.key === "ArrowRight"
+            ? width + step
+            : event.key === "ArrowLeft"
+              ? width - step
+              : event.key === "Home"
+                ? min
+                : event.key === "End"
+                  ? max
+                  : null;
+        if (next === null) return;
+        event.preventDefault();
+        event.stopPropagation();
+        applyWidth(key, next, min, max);
+        save();
+      });
+      resize.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        event.stopPropagation();
+        resize.setPointerCapture?.(event.pointerId);
+        const startX = event.clientX;
+        const startWidth = state.columnSizing[key] ?? min;
+        const move = (pointer: PointerEvent) => {
+          if (pointer.pointerId === event.pointerId)
+            applyWidth(
+              key,
+              startWidth +
+                (key === TABLE_ACTIONS_KEY
+                  ? startX - pointer.clientX
+                  : pointer.clientX - startX),
+              min,
+              max,
+            );
+        };
+        const cleanup = () => {
+          resize.removeEventListener("pointermove", move);
+          resize.removeEventListener("pointerup", finish);
+          resize.removeEventListener("pointercancel", cancel);
+          if (resize.hasPointerCapture?.(event.pointerId))
+            resize.releasePointerCapture(event.pointerId);
+          resizeCleanups.delete(cleanup);
+        };
+        const finish = (pointer: PointerEvent) => {
+          if (pointer.pointerId !== event.pointerId) return;
+          move(pointer);
+          cleanup();
+          save();
+        };
+        const cancel = (pointer: PointerEvent) => {
+          if (pointer.pointerId !== event.pointerId) return;
+          cleanup();
+          save();
+        };
+        resizeCleanups.add(cleanup);
+        resize.addEventListener("pointermove", move);
+        resize.addEventListener("pointerup", finish);
+        resize.addEventListener("pointercancel", cancel);
+      });
+      return resize;
+    };
     let draggedKey: string | null = null;
     for (const column of visible) {
       const th = document.createElement("th");
@@ -274,43 +400,12 @@ export async function mountConfigurableDataTable<
         save();
         render();
       });
-      const resize = document.createElement("span");
-      resize.className = "nexus-table-resize";
-      resize.setAttribute("role", "separator");
-      resize.setAttribute("aria-orientation", "vertical");
-      resize.addEventListener("pointerdown", (event) => {
-        event.preventDefault();
-        resize.setPointerCapture(event.pointerId);
-        const startX = event.clientX;
-        const startWidth = state.columnSizing[column.key] ?? column.size;
-        const move = (moveEvent: PointerEvent) => {
-          const width = clamp(
-            startWidth + moveEvent.clientX - startX,
-            column.minSize,
-            column.maxSize,
-          );
-          state = {
-            ...state,
-            columnSizing: { ...state.columnSizing, [column.key]: width },
-          };
-          const element = columnElements.get(column.key);
-          if (element) element.style.width = `${width}px`;
-          table.style.width = `${visible.reduce(
-            (total, item) =>
-              total + (state.columnSizing[item.key] ?? item.size),
-            144,
-          )}px`;
-        };
-        const finish = () => {
-          resize.removeEventListener("pointermove", move);
-          resize.removeEventListener("pointerup", finish);
-          resize.removeEventListener("pointercancel", finish);
-          save();
-        };
-        resize.addEventListener("pointermove", move);
-        resize.addEventListener("pointerup", finish);
-        resize.addEventListener("pointercancel", finish);
-      });
+      const resize = makeResize(
+        column.key,
+        column.label,
+        column.minSize,
+        column.maxSize,
+      );
       th.appendChild(resize);
       headerRow.appendChild(th);
     }
@@ -362,6 +457,14 @@ export async function mountConfigurableDataTable<
     settingsPanel.appendChild(reset);
     settings.appendChild(settingsPanel);
     actionHeader.appendChild(settings);
+    actionHeader.appendChild(
+      makeResize(
+        TABLE_ACTIONS_KEY,
+        labels.actions,
+        TABLE_ACTIONS_MIN_WIDTH,
+        TABLE_ACTIONS_MAX_WIDTH,
+      ),
+    );
     headerRow.appendChild(actionHeader);
     head.appendChild(headerRow);
     table.appendChild(head);
@@ -395,8 +498,14 @@ export async function mountConfigurableDataTable<
       actionCell.className = "nexus-table-actions";
       actionCell.addEventListener("click", (event) => event.stopPropagation());
       const renderedActions = actions?.(row);
+      const actionContent = document.createElement("div");
+      actionContent.className = "nexus-table-actions-content";
+      actionContent.addEventListener("keydown", (event) =>
+        event.stopPropagation(),
+      );
       if (renderedActions !== undefined && renderedActions !== null)
-        actionCell.appendChild(cellContent(renderedActions));
+        actionContent.appendChild(cellContent(renderedActions));
+      actionCell.appendChild(actionContent);
       tr.appendChild(actionCell);
       body.appendChild(tr);
     }
@@ -408,6 +517,7 @@ export async function mountConfigurableDataTable<
   return {
     dispose() {
       disposed = true;
+      for (const cleanup of resizeCleanups) cleanup();
       if (saveTimer !== undefined) {
         window.clearTimeout(saveTimer);
         void host.tablePreferences.set(tableId, state).catch(() => undefined);
