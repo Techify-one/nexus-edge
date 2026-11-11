@@ -60,7 +60,7 @@ import {
   TABLE_ACTIONS_MIN_WIDTH,
   TABLE_ACTIONS_MAX_WIDTH,
   tableActionsWidth,
-} from "@nexus/plugin-sdk";
+} from "../../../../packages/plugin-sdk/src/table-layout.js";
 import { ApiError, api } from "../../lib/api/core-client.js";
 import { useI18n } from "../../i18n/index.js";
 import { EmptyState, Skeleton } from "./index.js";
